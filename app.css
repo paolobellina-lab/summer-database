@@ -407,3 +407,25 @@ dialog::backdrop { background: rgba(8, 20, 18, .45); }
 .login-msg { margin: 0; }
 .login-note { margin: 0; font-size: 12.5px; color: var(--muted); }
 .login-btn { padding: 11px 14px; font-size: 15px; }
+
+/* telefono in orizzontale o schermi bassi: filtri richiudibili e scorrevoli, calendario sempre visibile */
+@media (max-height: 560px) {
+  :root { --top-h: 44px; }
+  .topbar { padding-block: 2px; }
+  .brand span, .sync { display: none; }
+  .filters-toggle { display: inline-flex; }
+  .toolbar { padding-block: 6px; gap: 6px 10px; flex-wrap: wrap; }
+  .toolbar .field > span { display: none; }
+  .toolbar .more, .toolbar .legend { display: none; }
+  .toolbar.open .more { display: contents; }
+  .toolbar.open .legend { display: flex; }
+  .toolbar.open .field > span { display: block; }
+  .toolbar.open { max-height: 55vh; overflow-y: auto; overscroll-behavior: contain; }
+  .toolbar .f-search { flex: 1 1 140px; max-width: 220px; }
+  .toolbar .count { margin-left: auto; }
+  .seg button { padding: 5px 8px; }
+  .cal { min-height: 160px; }
+}
+@media (max-width: 760px) {
+  .toolbar.open { max-height: 60vh; overflow-y: auto; overscroll-behavior: contain; }
+}
