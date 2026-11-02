@@ -538,3 +538,15 @@ dialog::backdrop { background: rgba(8, 20, 18, .45); }
   .sp-group { break-inside: avoid; border-color: #bbb; }
   .sp-group summary::before { display: none; }
 }
+
+/* ---------- menu sul telefono: riga a tutta larghezza sotto il nome, voci tutte visibili ---------- */
+.nav a .l-short { display: none; }
+@media (max-width: 760px) {
+  .topbar { flex-wrap: wrap; row-gap: 0; padding-block: 6px 0; }
+  .topbar .brand { flex: 1; }
+  .topbar #install { margin-left: auto; }
+  .nav { order: 3; width: 100%; margin-left: 0; display: grid; grid-template-columns: 1.3fr 1fr 1fr 1.1fr 1fr; overflow: visible; border-top: 1px solid var(--line-soft); }
+  .nav a { text-align: center; font-size: 11px; letter-spacing: .03em; padding: 10px 2px 9px; white-space: nowrap; overflow: hidden; text-overflow: clip; }
+  .nav a .l-full { display: none; }
+  .nav a .l-short { display: inline; }
+}

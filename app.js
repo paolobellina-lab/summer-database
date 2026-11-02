@@ -71,11 +71,11 @@ window.SDBStore.ready.then(function () {
     <header class="topbar">
       <div class="brand"><b id="brand-name"></b><span>Ville · Disponibilità & listini</span></div>
       <nav class="nav" aria-label="Sezioni">
-        <a href="#disponibilita" data-r="disponibilita">Disponibilità</a>
+        <a href="#disponibilita" data-r="disponibilita"><span class="l-full">Disponibilità</span><span class="l-short">Calendario</span></a>
         <a href="#ville" data-r="ville">Ville</a>
         <a href="#spese" data-r="spese">Spese</a>
         <a href="#appunti" data-r="appunti">Appunti</a>
-        <a href="#impostazioni" data-r="impostazioni">Impostazioni</a>
+        <a href="#impostazioni" data-r="impostazioni"><span class="l-full">Impostazioni</span><span class="l-short">Impost.</span></a>
       </nav>
       <button class="btn small primary" id="install" hidden>Installa app</button>
       <div class="sync" id="sync"><i></i><span></span></div>
@@ -93,7 +93,8 @@ window.SDBStore.ready.then(function () {
   const goSpese = (opts) => { Object.assign(ui, { spVilla: '', spPren: '', spQ: '' }, opts); saveUI(); location.hash = 'spese'; };
   // pulsante "Installa app" (Chrome/Edge su Android, Windows, Mac)
   let installEvt = window.__sdbInstall || null;
-  const showInstall = () => { const b = $('#install'); if (b) b.hidden = !installEvt; };
+  const isInstalled = () => { try { return window.matchMedia('(display-mode: standalone)').matches || window.matchMedia('(display-mode: minimal-ui)').matches || navigator.standalone === true; } catch (_) { return false; } };
+  const showInstall = () => { const b = $('#install'); if (b) b.hidden = !installEvt || isInstalled(); };
   window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; showInstall(); });
   window.addEventListener('appinstalled', () => { installEvt = null; showInstall(); toast('App installata'); });
   $('#install').addEventListener('click', async () => { if (!installEvt) return; installEvt.prompt(); try { await installEvt.userChoice; } catch (_) {} installEvt = null; showInstall(); });
