@@ -73,6 +73,7 @@ window.SDBStore.ready.then(function () {
       <nav class="nav" aria-label="Sezioni">
         <a href="#disponibilita" data-r="disponibilita">Disponibilità</a>
         <a href="#ville" data-r="ville">Ville</a>
+        <a href="#spese" data-r="spese">Spese</a>
         <a href="#appunti" data-r="appunti">Appunti</a>
         <a href="#impostazioni" data-r="impostazioni">Impostazioni</a>
       </nav>
@@ -82,6 +83,14 @@ window.SDBStore.ready.then(function () {
     <main id="main"></main>
     <dialog id="dlg"></dialog>`;
   const main = $('#main');
+  // scontrini dell'app Scontrini: sola lettura, un unico ascolto in tempo reale
+  const spese = { list: [], ready: false, error: null };
+  let spesePage = null; const speseHooks = new Set();
+  const speseChanged = () => { if (spesePage) spesePage.render(); speseHooks.forEach(f => { try { f(); } catch (_) {} }); };
+  if (store.mode === 'online' && store.listenScontrini && window.SDBSpese) {
+    store.listenScontrini(l => { spese.list = l; spese.ready = true; spese.error = null; speseChanged(); }, err => { spese.error = err; speseChanged(); });
+  }
+  const goSpese = (opts) => { Object.assign(ui, { spVilla: '', spPren: '', spQ: '' }, opts); saveUI(); location.hash = 'spese'; };
   // pulsante "Installa app" (Chrome/Edge su Android, Windows, Mac)
   let installEvt = window.__sdbInstall || null;
   const showInstall = () => { const b = $('#install'); if (b) b.hidden = !installEvt; };
@@ -101,9 +110,11 @@ window.SDBStore.ready.then(function () {
   /* ---------- router ---------- */
   function route() {
     const h = (location.hash || '#disponibilita').slice(1);
+    spesePage = null; speseHooks.clear();
     if (h.startsWith('villa-')) { refreshShell('villa'); return viewVilla(h.slice(6)); }
     refreshShell(h);
     if (h === 'ville') return viewVillas();
+    if (h === 'spese' && window.SDBSpese) { spesePage = window.SDBSpese.mount(main, { ui, saveUI, esc, data, spese, store, $, $$, toast }); return; }
     if (h === 'appunti') return viewNotes();
     if (h === 'impostazioni') return viewSettings();
     return viewAvail();
@@ -384,6 +395,7 @@ window.SDBStore.ready.then(function () {
         <label class="field"><span>Acquisto concordato €</span><input id="b-buy" inputmode="numeric" value="${typeof b.prezzoAcquisto === 'number' ? esc(fmtNum(b.prezzoAcquisto)) : ''}"></label>
       </div>
       <div class="pricehint" id="b-hint"></div>
+      <div id="b-spese"></div>
       </section>
       <section class="dsec sec-srv"><h4>Servizi</h4>
       <div class="flags three">
@@ -459,6 +471,16 @@ window.SDBStore.ready.then(function () {
       paint();
     };
     f.addEventListener('input', check); f.addEventListener('change', check); check();
+    if (existing && store.mode === 'online' && window.SDBSpese) {
+      const drawSp = () => {
+        const el = $('#b-spese'); if (!el) return;
+        if (!spese.ready) { el.innerHTML = ''; return; }
+        const t = window.SDBSpese.totaleBooking(spese.list, data().bookings, b.id);
+        el.innerHTML = `<div class="sp-inline"><span>Spese: <b>${window.SDBSpese.euro(t.tot)}</b> · ${t.n} ${t.n === 1 ? 'scontrino' : 'scontrini'}</span>${t.n ? '<button type="button" class="btn small" id="b-spese-go">Vedi spese</button>' : ''}</div>`;
+        const g = $('#b-spese-go'); if (g) g.onclick = () => { dlg.close(); goSpese({ spVilla: b.villaId, spPren: b.id, spPeriodo: 'tutto' }); };
+      };
+      drawSp(); speseHooks.add(drawSp);
+    }
     $('#b-cancel').addEventListener('click', () => dlg.close());
     f.addEventListener('submit', e => {
       e.preventDefault(); check(); const x = read(); if (!(S.diffDays(x.from, x.to) > 0) || blocked) return;
@@ -621,7 +643,7 @@ window.SDBStore.ready.then(function () {
     main.innerHTML = `<div class="page"><div class="wrap">
       <a class="crumb" href="#disponibilita">← Disponibilità</a>
       <div class="head">
-        <div><h1 id="v-title">${esc(v.name)}</h1><div class="sub">${esc([v.location, v.seafront, v.proprietario && 'Prop. ' + v.proprietario].filter(Boolean).join(' · '))}</div></div>
+        <div><h1 id="v-title">${esc(v.name)}</h1><div class="sub">${esc([v.location, v.seafront, v.proprietario && 'Prop. ' + v.proprietario].filter(Boolean).join(' · '))}</div><div id="v-spese"></div></div>
         <div class="actions"><span class="saved" id="saved" aria-live="polite"></span>
           <button class="btn" id="v-book">+ Periodo</button><button class="btn" id="v-dup">Duplica</button><button class="btn danger" id="v-del">Elimina villa</button></div>
       </div>
@@ -699,6 +721,16 @@ window.SDBStore.ready.then(function () {
         : '<div class="note">Nessun periodo inserito. Usa “+ Periodo” o clicca sul calendario.</div>';
     };
     drawBookings();
+    if (store.mode === 'online' && window.SDBSpese) {
+      const anno = new Date().getFullYear();
+      const drawSp = () => {
+        const el = $('#v-spese'); if (!el || !spese.ready) return;
+        const t = window.SDBSpese.totaleVillaAnno(spese.list, v.id, anno);
+        el.innerHTML = `<div class="sp-inline">Spese ${anno}: <b>${window.SDBSpese.euro(t.tot)}</b> · ${t.n} ${t.n === 1 ? 'scontrino' : 'scontrini'} <button type="button" class="btn small" id="v-spese-go">Vedi spese</button></div>`;
+        $('#v-spese-go').onclick = () => goSpese({ spVilla: v.id, spPeriodo: 'anno' });
+      };
+      drawSp(); speseHooks.add(drawSp);
+    }
     $('#v-blist').addEventListener('click', e => { const it = e.target.closest('[data-b]'); if (it) openBooking({ id: it.dataset.b }); });
     $('#v-blist').addEventListener('keydown', e => { if (e.key === 'Enter') { const it = e.target.closest('[data-b]'); if (it) openBooking({ id: it.dataset.b }); } });
     $('#v-book').addEventListener('click', () => openBooking({ villaId: v.id, from: '2027-07-04', to: '2027-07-11' }));

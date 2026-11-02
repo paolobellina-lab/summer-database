@@ -136,7 +136,12 @@
         emit('local');
         return { villas: (d.villas || []).length, bookings: (d.bookings || []).length };
       },
-      resetToSeed() { return Promise.reject(new Error('non disponibile online')); }
+      resetToSeed() { return Promise.reject(new Error('non disponibile online')); },
+      // SOLA LETTURA delle collezioni dell'app Scontrini: nessuna scrittura qui, mai.
+      listenScontrini(cb, onErr) {
+        return db.collection('scontrini').onSnapshot(snap => cb(snap.docs.map(d => Object.assign({}, d.data(), { id: d.id }))), onErr);
+      },
+      getFoto(id) { return db.collection('scontrini_foto').doc(id).get().then(d => (d.exists ? (d.data() || {}).img || null : null)); }
     });
 
     api.ready = new Promise(resolve => {

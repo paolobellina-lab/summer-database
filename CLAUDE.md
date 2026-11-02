@@ -15,5 +15,8 @@ Nello stesso progetto e database ci sono anche le app **Scontrini** e **Spese Vi
 
 Se una modifica richiesta va contro questi vincoli, avvisare prima di procedere.
 
+## Pagina Spese
+`spese.js`: riepilogo scontrini in sola lettura (villa → prenotazione → scontrini). Lettura tramite `store.listenScontrini` (solo `scontrini`) e `store.getFoto` (un documento `scontrini_foto` quando si apre la foto). Collegamento alle prenotazioni con `trovaPren`, nell'ordine: ID → stesse date → copia "non più in calendario" → spese generali.
+
 ## Dati
 Nessun dato reale nel repository: `seed.js`, file Excel e backup sono in `.gitignore`.
