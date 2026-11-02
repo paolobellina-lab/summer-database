@@ -709,7 +709,7 @@ window.SDBStore.ready.then(function () {
     });
     $('#v-del').addEventListener('click', () => {
       const n = data().bookings.filter(b => b.villaId === v.id).length;
-      $('#v-confirm').innerHTML = `<div class="confirm-bar">Eliminare ${esc(v.name)}${n ? ` e i suoi ${n} periodi` : ''}? L'operazione non si può annullare. <button class="btn small danger solid" id="vd-ok">Elimina</button><button class="btn small" id="vd-no">Annulla</button></div>`;
+      $('#v-confirm').innerHTML = `<div class="confirm-bar"><div><b>Eliminare ${esc(v.name)}?</b> ${n ? `Verranno eliminati anche i suoi <b>${n} periodi</b> dal calendario. ` : ''}Gli scontrini collegati restano nell'app Scontrini, ma non saranno più agganciati ${n ? 'a queste prenotazioni' : 'a questa villa'}. L'operazione non si può annullare.</div><button class="btn small danger solid" id="vd-ok">Elimina</button><button class="btn small" id="vd-no">Annulla</button></div>`;
       $('#vd-ok').addEventListener('click', () => { clearTimeout(saveT); store.removeVilla(v.id); toast('Villa eliminata'); location.hash = 'ville'; });
       $('#vd-no').addEventListener('click', () => { $('#v-confirm').innerHTML = ''; });
     });
@@ -748,11 +748,12 @@ window.SDBStore.ready.then(function () {
         <p class="note">${store.mode === 'online' ? `Dati online, condivisi tra gli account autorizzati. Accesso come <b>${esc(store.user || '')}</b>. Esporta comunque un backup ogni tanto.` : 'I dati sono salvati solo in questo browser. Esporta un backup ogni tanto.'}</p>
         <div style="display:flex;flex-wrap:wrap;gap:8px">
           <button class="btn" id="s-export">Esporta backup (.json)</button>
-          <label class="btn" for="s-import">Importa backup</label><input type="file" id="s-import" accept=".json,.txt,application/json,text/plain,*/*" hidden>
+          <label class="btn" for="s-import" title="Aggiunge e aggiorna ville e periodi. Non cancella nulla.">Importa backup</label><input type="file" id="s-import" accept=".json,.txt,application/json,text/plain,*/*" hidden>
           <button class="btn" id="s-copy">Copia backup negli appunti</button>
-          ${window.SDB_SEED ? `<button class="btn danger" id="s-reset">Ripristina dati dall'Excel</button>` : ''}
+          ${window.SDB_SEED && store.mode === 'local' ? `<button class="btn danger" id="s-reset">Ripristina dati dall'Excel</button>` : ''}
           ${store.mode === 'online' ? `<button class="btn" id="s-logout">Esci da questo dispositivo</button>` : ''}
         </div>
+        <p class="note">L'importazione aggiunge e aggiorna ville e periodi presenti nel file. Non cancella nulla e non tocca gli scontrini.</p>
         <div id="s-msg"></div>
       </section>
     </div></div>`;
@@ -794,7 +795,7 @@ window.SDBStore.ready.then(function () {
         let d; try { d = JSON.parse(r.result); if (!Array.isArray(d.villas)) throw new Error('formato'); }
         catch (err) { msg('<p class="note">Questo file non è un backup valido di Summer Database.</p>'); return; }
         msg('<p class="note">Importazione in corso…</p>');
-        Promise.resolve(store.replaceAll(d)).then(() => { toast('Backup importato'); viewSettings(); }, err => msg(`<p class="note">Importazione non riuscita: ${esc(err.message || err)}</p>`));
+        Promise.resolve(store.mergeAll(d)).then(r => { toast(`Backup importato: ${r.villas} ville e ${r.bookings} periodi aggiunti o aggiornati`); viewSettings(); }, err => msg(`<p class="note">Importazione non riuscita: ${esc(err.message || err)}</p>`));
       };
       r.readAsText(f);
     });

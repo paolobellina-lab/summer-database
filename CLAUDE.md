@@ -5,7 +5,7 @@ App web (GitHub Pages) per disponibilità e listini ville. Dati su Firebase, pro
 ## Vincoli: il database è condiviso con altre app
 Nello stesso progetto e database ci sono anche le app **Scontrini** e **Spese Ville**, che leggono i dati di questa app e ne scrivono di propri.
 
-1. **Collezioni da non toccare**: `scontrini` e `scontrini_foto`. Mai leggerle, modificarle, cancellarle o includerle in reset, import, ripristino o pulizia. Ogni funzione che cancella o riscrive dati agisce solo su `villas`, `bookings`, `meta` (vedi `replaceAll` in `store.js`).
+1. **Collezioni degli scontrini**: `scontrini` e `scontrini_foto` appartengono all'app Scontrini. Questa app può solo **leggerle** (pagina Spese). Mai scriverle, modificarle, cancellarle o includerle in reset, import, ripristino o pulizia. `scontrini_foto` si legge solo quando l'utente apre una foto. Ogni funzione che scrive dati agisce solo su `villas`, `bookings`, `meta` (vedi `mergeAll` in `store.js`: l'import aggiunge/aggiorna, non cancella).
 2. **Regole Firestore**: ogni modifica a `firestore.rules` deve mantenere le righe `match /scontrini/{id}` e `match /scontrini_foto/{id}`. Le email autorizzate reali non stanno in questo repository pubblico: le regole pubblicate sono quelle della console Firebase.
 3. **Campi letti dalle altre app, da non rinominare** senza avvisare prima il proprietario:
    - `villas`: ID documento (es. `v11`) e campo `name`;

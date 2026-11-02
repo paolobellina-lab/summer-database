@@ -6,7 +6,7 @@
  *
  * Interfaccia comune (usata da app.js):
  *   ready (Promise)  get()  upsertVilla(v)  removeVilla(id)  upsertBooking(b)  removeBooking(id)
- *   setSettings(s)  setNotes(t)  replaceAll(data)  resetToSeed()  subscribe(fn)  signOut()
+ *   setSettings(s)  setNotes(t)  mergeAll(data)  resetToSeed() [solo locale]  subscribe(fn)  signOut()
  *   mode: 'local' | 'online'   user: email dell'account collegato
  */
 (function () {
@@ -54,6 +54,15 @@
       setSettings(s) { state.settings = s; persist(); },
       setNotes(t) { state.notes = t; persist(); },
       replaceAll(data) { state = Object.assign(emptyState(), clone(data)); if (!state.settings) state.settings = window.SDB.defaultSettings(); persist(); },
+      mergeAll(data) {
+        const d = clone(data);
+        (d.villas || []).forEach(v => v && v.id && upsert(state.villas, v));
+        (d.bookings || []).forEach(b => b && b.id && upsert(state.bookings, b));
+        if (d.settings) state.settings = d.settings;
+        if (typeof d.notes === 'string') state.notes = d.notes;
+        persist();
+        return { villas: (d.villas || []).length, bookings: (d.bookings || []).length };
+      },
       resetToSeed() { state = fromSeed(); persist(); },
       subscribe(fn) { subs.add(fn); return () => subs.delete(fn); },
       signOut() {}
@@ -106,24 +115,28 @@
       removeBooking(id) { state.bookings = state.bookings.filter(b => b.id !== id); db.collection('bookings').doc(id).delete().catch(fail); emit('local'); },
       setSettings(s) { state.settings = s; db.collection('meta').doc('settings').set(strip(s)).catch(fail); emit('local'); },
       setNotes(t) { state.notes = t; db.collection('meta').doc('notes').set({ text: t }).catch(fail); emit('local'); },
+      // Import di un backup: AGGIUNGE e AGGIORNA ville e prenotazioni, non cancella mai nulla (ID stabili, scontrini collegati al sicuro).
       // Agisce SOLO su villas, bookings e meta. Le collezioni scontrini / scontrini_foto (altre app) non vanno mai toccate.
-      async replaceAll(data) {
-        const d = Object.assign(emptyState(), clone(data));
+      async mergeAll(data) {
+        const d = clone(data);
         const ops = [];
-        state.villas.forEach(v => { if (!d.villas.some(x => x.id === v.id)) ops.push(['del', 'villas', v.id]); });
-        state.bookings.forEach(b => { if (!d.bookings.some(x => x.id === b.id)) ops.push(['del', 'bookings', b.id]); });
-        d.villas.forEach(v => ops.push(['set', 'villas', v.id, v]));
-        d.bookings.forEach(b => ops.push(['set', 'bookings', b.id, b]));
-        ops.push(['set', 'meta', 'settings', d.settings || window.SDB.defaultSettings()]);
-        ops.push(['set', 'meta', 'notes', { text: d.notes || '' }]);
+        (d.villas || []).forEach(v => { if (v && v.id) ops.push(['villas', v.id, v]); });
+        (d.bookings || []).forEach(b => { if (b && b.id) ops.push(['bookings', b.id, b]); });
+        if (d.settings) ops.push(['meta', 'settings', d.settings]);
+        if (typeof d.notes === 'string') ops.push(['meta', 'notes', { text: d.notes }]);
         for (let i = 0; i < ops.length; i += 400) {
           const batch = db.batch();
-          ops.slice(i, i + 400).forEach(([op, col, id, val]) => op === 'del' ? batch.delete(db.collection(col).doc(id)) : batch.set(db.collection(col).doc(id), strip(val)));
+          ops.slice(i, i + 400).forEach(([col, id, val]) => batch.set(db.collection(col).doc(id), strip(val)));
           await batch.commit();
         }
-        state = d; emit('local');
+        (d.villas || []).forEach(v => v && v.id && upsertLocal(state.villas, v));
+        (d.bookings || []).forEach(b => b && b.id && upsertLocal(state.bookings, b));
+        if (d.settings) state.settings = Object.assign(window.SDB.defaultSettings(), d.settings);
+        if (typeof d.notes === 'string') state.notes = d.notes;
+        emit('local');
+        return { villas: (d.villas || []).length, bookings: (d.bookings || []).length };
       },
-      resetToSeed() { return api.replaceAll(fromSeed()); }
+      resetToSeed() { return Promise.reject(new Error('non disponibile online')); }
     });
 
     api.ready = new Promise(resolve => {
