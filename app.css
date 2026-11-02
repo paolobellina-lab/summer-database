@@ -1,63 +1,66 @@
 /* Layout: barra superiore fissa + vista a tutta altezza; il calendario è un'unica area scorrevole con colonna ville e intestazione giorni bloccate. */
 :root {
-  --bg: #f3f5f4;
+  /* palette dal sito: avorio, blu notte, oro sabbia */
+  --bg: #f6f6f1;
   --surface: #ffffff;
-  --surface-2: #e9eeec;
-  --line: #d5ddda;
-  --line-soft: #e6ecea;
-  --fg: #17211f;
-  --muted: #5b6b67;
-  --accent: #0b7a75;      /* verde smeraldo, Costa Smeralda */
+  --surface-2: #efede6;
+  --line: #d7d4cd;
+  --line-soft: #e8e6df;
+  --fg: #051c2c;
+  --muted: #60707a;
+  --accent: #b29362;      /* oro del pulsante CERCA */
   --accent-ink: #ffffff;
-  --accent-soft: #d5ecea;
-  --weekend: rgba(11, 122, 117, .07);
-  --danger: #c62828;
+  --accent-soft: #f2ebdd;
+  --navy: #142861;
+  --weekend: rgba(178, 147, 98, .09);
+  --danger: #b3261e;
   --st-occupato: #d93025;
   --st-confermato: #3f9b3a;
   --st-opzione: #f0a000;
   --st-richiesta: #f2d73a;
   --st-owner: #5c4a72;
   --st-ink-dark: #2a2300;
-  --m1: #cfe0f3; --m2: #d6ebc8; --m3: #fbe9a6; --m4: #f8d1b4; --m5: #f6d3ea; --m6: #dedede;
-  --shadow: 0 8px 30px rgba(10, 30, 28, .14);
-  --field: #f7faf9;
-  --field-shadow: inset 0 1px 2px rgba(10, 30, 28, .08);
-  --sec-date: #e8f0fb; --sec-date-ink: #23408e;
-  --sec-cli: #e6f3ef; --sec-cli-ink: #0b6560;
-  --sec-srv: #fbf1dc; --sec-srv-ink: #8a5a00;
-  --sec-look: #f1ecf7; --sec-look-ink: #5c4a72;
-  --font-ui: "Archivo", "Helvetica Neue", Arial, sans-serif;
-  --font-grid: "Archivo Narrow", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
-  --font-display: "DM Serif Display", Georgia, "Times New Roman", serif;
+  --m1: #e3e8ef; --m2: #e5eadf; --m3: #f1e9d7; --m4: #eedfcd; --m5: #ece1e4; --m6: #e6e4de;
+  --shadow: 0 10px 34px rgba(5, 28, 44, .12);
+  --field: #fbfaf7;
+  --field-shadow: inset 0 1px 2px rgba(5, 28, 44, .07);
+  --sec-date: #e9edf3; --sec-date-ink: #142861;
+  --sec-cli: #f4eee2; --sec-cli-ink: #7d6237;
+  --sec-srv: #e9eee6; --sec-srv-ink: #48613f;
+  --sec-look: #f0e9ea; --sec-look-ink: #6b4a55;
+  --font-ui: "Jost", "Futura", "Century Gothic", "Helvetica Neue", Arial, sans-serif;
+  --font-grid: "Jost", "Futura", "Helvetica Neue", Arial, sans-serif;
+  --font-display: "Cormorant Garamond", "Cormorant", Garamond, "Times New Roman", serif;
+  --radius: 2px;
   --top-h: 52px;
   --name-w: 168px;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #0f1514; --surface: #172020; --surface-2: #1e2928; --line: #2d3a38; --line-soft: #233030;
-    --fg: #e4ecea; --muted: #93a6a2; --accent: #3cc2b9; --accent-ink: #062321; --accent-soft: #173b39;
-    --weekend: rgba(60, 194, 185, .08);
-    --m1: #23364c; --m2: #2a3d25; --m3: #4a4220; --m4: #4a3122; --m5: #48293c; --m6: #333;
-    --shadow: 0 8px 30px rgba(0, 0, 0, .5);
-    --field: #121a19; --field-shadow: inset 0 1px 3px rgba(0,0,0,.5);
-    --sec-date: #1b2638; --sec-date-ink: #9db8f0;
-    --sec-cli: #15302d; --sec-cli-ink: #7fd6cd;
-    --sec-srv: #33291a; --sec-srv-ink: #f0c56a;
-    --sec-look: #2a2333; --sec-look-ink: #c6b2e3;
+    --bg: #07131c; --surface: #0d1d29; --surface-2: #132735; --line: #24394a; --line-soft: #1a2e3c;
+    --fg: #eeece4; --muted: #94a3ad; --accent: #c9ab78; --accent-ink: #1a1408; --accent-soft: #2c281e; --navy: #9fb3e8;
+    --weekend: rgba(201, 171, 120, .08);
+    --m1: #172a3d; --m2: #1d2b22; --m3: #2e291b; --m4: #33261c; --m5: #2e2229; --m6: #22282d;
+    --shadow: 0 10px 34px rgba(0, 0, 0, .5);
+    --field: #0a1822; --field-shadow: inset 0 1px 3px rgba(0,0,0,.5);
+    --sec-date: #14223a; --sec-date-ink: #a9bdf0;
+    --sec-cli: #2a2416; --sec-cli-ink: #e2c38c;
+    --sec-srv: #1a2a1d; --sec-srv-ink: #a8c79c;
+    --sec-look: #2a1f25; --sec-look-ink: #d9b3c1;
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #0f1514; --surface: #172020; --surface-2: #1e2928; --line: #2d3a38; --line-soft: #233030;
-  --fg: #e4ecea; --muted: #93a6a2; --accent: #3cc2b9; --accent-ink: #062321; --accent-soft: #173b39;
-  --weekend: rgba(60, 194, 185, .08);
-  --m1: #23364c; --m2: #2a3d25; --m3: #4a4220; --m4: #4a3122; --m5: #48293c; --m6: #333;
-  --shadow: 0 8px 30px rgba(0, 0, 0, .5);
-  --field: #121a19; --field-shadow: inset 0 1px 3px rgba(0,0,0,.5);
-  --sec-date: #1b2638; --sec-date-ink: #9db8f0;
-  --sec-cli: #15302d; --sec-cli-ink: #7fd6cd;
-  --sec-srv: #33291a; --sec-srv-ink: #f0c56a;
-  --sec-look: #2a2333; --sec-look-ink: #c6b2e3;
+  --bg: #07131c; --surface: #0d1d29; --surface-2: #132735; --line: #24394a; --line-soft: #1a2e3c;
+  --fg: #eeece4; --muted: #94a3ad; --accent: #c9ab78; --accent-ink: #1a1408; --accent-soft: #2c281e; --navy: #9fb3e8;
+  --weekend: rgba(201, 171, 120, .08);
+  --m1: #172a3d; --m2: #1d2b22; --m3: #2e291b; --m4: #33261c; --m5: #2e2229; --m6: #22282d;
+  --shadow: 0 10px 34px rgba(0, 0, 0, .5);
+  --field: #0a1822; --field-shadow: inset 0 1px 3px rgba(0,0,0,.5);
+  --sec-date: #14223a; --sec-date-ink: #a9bdf0;
+  --sec-cli: #2a2416; --sec-cli-ink: #e2c38c;
+  --sec-srv: #1a2a1d; --sec-srv-ink: #a8c79c;
+  --sec-look: #2a1f25; --sec-look-ink: #d9b3c1;
   color-scheme: dark;
 }
 
@@ -429,3 +432,52 @@ dialog::backdrop { background: rgba(8, 20, 18, .45); }
 @media (max-width: 760px) {
   .toolbar.open { max-height: 60vh; overflow-y: auto; overscroll-behavior: contain; }
 }
+
+/* ---------- stile del sito: angoli netti, etichette spaziate, serif per i titoli ---------- */
+.btn, .seg, input[type=text], input[type=number], input[type=date], input[type=search], input:not([type]), select, textarea,
+.card, .vcard, .dsec, .flag, .bitem, .params, .vc-stats, .confirm-bar, .warn, .swatch-prev, .login-card, dialog, .toast, .nav a { border-radius: var(--radius); }
+.btn.primary { font-family: var(--font-display); font-weight: 600; text-transform: uppercase; letter-spacing: .18em; font-size: 14px; padding: 8px 16px; }
+.btn.primary.small { font-size: 12px; padding: 5px 11px; }
+.btn.primary:hover { filter: brightness(1.05); }
+.brand b { font-family: var(--font-display); font-weight: 500; font-size: 24px; letter-spacing: .02em; }
+.head h1 { font-family: var(--font-display); font-weight: 500; font-size: 44px; line-height: 1.05; }
+.dlg h3 { font-family: var(--font-display); font-weight: 500; font-size: 30px; }
+.vc-title h3 { font-family: var(--font-display); font-weight: 600; font-size: 26px; }
+.login-brand b { font-family: var(--font-display); font-weight: 500; font-size: 34px; }
+.nav a { font-family: var(--font-display); font-weight: 500; font-size: 15px; text-transform: uppercase; letter-spacing: .14em; color: var(--muted); padding: 8px 10px; background: transparent; }
+.nav a.on { color: var(--navy); background: transparent; box-shadow: inset 0 -2px 0 var(--navy); }
+.field > span, .card h2, .dsec h4, .corner, .months div, .vc-price .lbl, .vc-stats span { letter-spacing: .16em; font-weight: 500; }
+.card h2 { color: var(--navy); }
+.seg button.on { background: var(--navy); color: #fff; }
+:root[data-theme="dark"] .seg button.on { color: #07131c; }
+.tabs button.on, .loc-chips button.on { background: var(--navy); border-color: var(--navy); color: #fff; }
+.vname b { font-weight: 600; letter-spacing: .03em; }
+.vc-stats b, .vc-price b, table.prices td.sale { font-family: var(--font-ui); font-weight: 500; }
+.topbar { border-bottom-color: var(--line); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .seg button.on, :root:not([data-theme="light"]) .tabs button.on, :root:not([data-theme="light"]) .loc-chips button.on { color: #07131c; } }
+@media (max-width: 760px) { .head h1 { font-size: 34px; } .nav a { font-size: 13px; letter-spacing: .1em; padding: 8px 7px; } }
+
+/* ---------- schede villa nello stile del sito ---------- */
+.vcard { border-color: var(--line); box-shadow: none; }
+.vcard:hover, .vcard:focus-visible { transform: none; box-shadow: var(--shadow); }
+.vc-body { padding: 22px 24px 18px; gap: 14px; }
+.vc-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.vc-loc { display: inline-flex; align-items: center; gap: 6px; font: 500 11px/1 var(--font-ui); letter-spacing: .06em; padding: 6px 9px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); }
+.vc-loc i { width: 8px; height: 8px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(0,0,0,.15); }
+.vc-title h3 { font-family: var(--font-display); font-weight: 500; font-size: 30px; line-height: 1.1; color: var(--fg); letter-spacing: .005em; }
+.vc-title small { display: block; margin-top: 6px; font-size: 14px; color: var(--muted); }
+.vc-stats { display: flex; flex-wrap: wrap; gap: 8px 28px; border: 0; }
+.vc-stats .st { padding: 0; border: 0; text-align: left; }
+.vc-stats .st span { display: block; font: 500 12px/1.2 var(--font-display); letter-spacing: .02em; text-transform: none; color: var(--muted); margin-bottom: 4px; }
+.vc-stats .st b { font: 400 16px/1.1 var(--font-ui); color: var(--fg); }
+.vcard hr { border: 0; border-top: 1px solid var(--line); margin: 2px 0; width: 100%; }
+.vc-price .lbl { font: 500 12px/1.2 var(--font-display); letter-spacing: .02em; text-transform: none; color: var(--muted); margin-bottom: 4px; }
+.vc-price b { font-family: var(--font-display); font-weight: 500; font-size: 24px; letter-spacing: .02em; }
+.spark i { background: var(--navy); opacity: .75; }
+.spark i.busy { background: var(--st-occupato); opacity: 1; }
+.vc-foot { display: flex; flex-wrap: wrap; gap: 10px; padding: 16px 24px 18px; border-top: 1px solid var(--line); }
+.vc-foot .btn { font-family: var(--font-ui); font-weight: 400; font-size: 14px; padding: 9px 13px; border-color: var(--line); }
+.btn.dark { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.btn.dark:hover { filter: brightness(1.15); }
+.tag { background: var(--accent-soft); border-radius: var(--radius); }
+.vcards { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 24px; }

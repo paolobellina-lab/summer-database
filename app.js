@@ -544,12 +544,13 @@ window.SDBStore.ready.then(function () {
         const tags = [['pool', 'Piscina'], ['spa', 'Spa'], ['gym', 'Palestra']].filter(([k]) => v[k] && String(v[k]).trim() && !/^no$/i.test(String(v[k]).trim())).map(([, l]) => `<span class="tag">${l}</span>`).join('');
         const freePct = s.total ? Math.round(s.free / s.total * 100) : 0;
         return `<article class="vcard" data-id="${esc(v.id)}" tabindex="0">
-          <header style="--tone:${tone}"><span>${esc(v.location || 'Senza zona')}</span>${v.seafront ? `<span class="sea">${esc(v.seafront)}</span>` : ''}</header>
           <div class="vc-body">
-            <div class="vc-title"><h3>${esc(v.name)}</h3>${v.proprietario ? `<small>Prop. ${esc(v.proprietario)}</small>` : ''}</div>
-            ${statList.length ? `<div class="vc-stats" style="grid-template-columns:repeat(${statList.length},1fr)">${statList.map(([x, l]) => `<div class="st"><b>${esc(x)}</b><span>${l}</span></div>`).join('')}</div>` : '<div class="vc-missing">Caratteristiche da completare</div>'}
+            <div class="vc-tags"><span class="vc-loc"><i style="background:${tone}"></i>${esc(v.location || 'Senza zona')}</span>${v.seafront ? `<span class="vc-loc">${esc(v.seafront)}</span>` : ''}</div>
+            <div class="vc-title"><h3>${esc(v.name)}</h3>${v.proprietario ? `<small>Proprietario: ${esc(v.proprietario)}</small>` : ''}</div>
+            ${statList.length ? `<div class="vc-stats">${statList.map(([x, l]) => `<div class="st"><span>${l}</span><b>${esc(x)}</b></div>`).join('')}</div>` : '<div class="vc-missing">Caratteristiche da completare</div>'}
+            <hr>
             <div class="vc-price">
-              <div><span class="lbl">Settimana</span><b${mn === null ? ' class="missing"' : ''}>${mn === null ? 'Prezzi da inserire' : mn === mx ? S.money(mn) : `${S.short(mn)} – ${S.short(mx)} €`}</b></div>
+              <div><span class="lbl">Affitto settimanale</span><b${mn === null ? ' class="missing"' : ''}>${mn === null ? 'Prezzi da inserire' : mn === mx ? S.money(mn) : `€ ${S.short(mn)} – ${S.short(mx)}`}</b></div>
               <div class="spark" aria-hidden="true">${bars}</div>
             </div>
             <div class="vc-avail">
@@ -558,6 +559,11 @@ window.SDBStore.ready.then(function () {
             </div>
             ${tags ? `<div class="tags">${tags}</div>` : ''}
           </div>
+          <footer class="vc-foot">
+            <button type="button" class="btn dark" data-act="open">Scheda ↗</button>
+            <button type="button" class="btn" data-act="book">Prenota</button>
+            <button type="button" class="btn" data-act="cal">Calendario</button>
+          </footer>
         </article>`;
       }).join('') : '<div class="empty">Nessuna villa trovata.</div>';
     };
@@ -565,7 +571,13 @@ window.SDBStore.ready.then(function () {
     let t; $('#vl-q').addEventListener('input', e => { ui.q = e.target.value; saveUI(); clearTimeout(t); t = setTimeout(draw, 100); });
     $('#vl-sort').addEventListener('change', e => { ui.vsort = e.target.value; saveUI(); draw(); });
     $('#vl-locs').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; ui.vloc = b.dataset.l; saveUI(); $$('#vl-locs button').forEach(x => x.classList.toggle('on', x === b)); draw(); });
-    const go = e => { const c = e.target.closest('.vcard'); if (c) location.hash = 'villa-' + c.dataset.id; };
+    const go = e => {
+      const c = e.target.closest('.vcard'); if (!c) return;
+      const act = e.target.closest('[data-act]'); const v = villaById(c.dataset.id);
+      if (act && act.dataset.act === 'book') { openBooking({ villaId: v.id, from: '2027-07-04', to: '2027-07-11' }); return; }
+      if (act && act.dataset.act === 'cal') { ui.q = v.name; saveUI(); location.hash = 'disponibilita'; return; }
+      location.hash = 'villa-' + c.dataset.id;
+    };
     body.addEventListener('click', go);
     body.addEventListener('keydown', e => { if (e.key === 'Enter') go(e); });
     $('#vl-add').addEventListener('click', newVilla);
