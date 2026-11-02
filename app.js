@@ -76,11 +76,19 @@ window.SDBStore.ready.then(function () {
         <a href="#appunti" data-r="appunti">Appunti</a>
         <a href="#impostazioni" data-r="impostazioni">Impostazioni</a>
       </nav>
+      <button class="btn small primary" id="install" hidden>Installa app</button>
       <div class="sync" id="sync"><i></i><span></span></div>
     </header>
     <main id="main"></main>
     <dialog id="dlg"></dialog>`;
   const main = $('#main');
+  // pulsante "Installa app" (Chrome/Edge su Android, Windows, Mac)
+  let installEvt = window.__sdbInstall || null;
+  const showInstall = () => { const b = $('#install'); if (b) b.hidden = !installEvt; };
+  window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; showInstall(); });
+  window.addEventListener('appinstalled', () => { installEvt = null; showInstall(); toast('App installata'); });
+  $('#install').addEventListener('click', async () => { if (!installEvt) return; installEvt.prompt(); try { await installEvt.userChoice; } catch (_) {} installEvt = null; showInstall(); });
+  showInstall();
 
   function refreshShell(route) {
     $('#brand-name').textContent = settings().seasonName || 'Summer 2027';
