@@ -1,0 +1,24 @@
+rules_version = '2';
+// Regole di sicurezza di Cloud Firestore per Summer Database.
+// Solo gli account Google elencati possono leggere o scrivere. Tutti gli altri, anche se
+// conoscono l'indirizzo dell'app o la configurazione, ricevono "permesso negato".
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function autorizzato() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email.lower() in [
+          'EMAIL-TUA@gmail.com',
+          'EMAIL-COLLEGA@gmail.com'
+        ];
+    }
+
+    match /villas/{id}    { allow read, write: if autorizzato(); }
+    match /bookings/{id}  { allow read, write: if autorizzato(); }
+    match /meta/{id}      { allow read, write: if autorizzato(); }
+
+    // qualsiasi altra raccolta: chiusa
+    match /{document=**}  { allow read, write: if false; }
+  }
+}

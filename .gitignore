@@ -1,0 +1,7 @@
+# Dati reali: non devono mai finire su GitHub
+seed.js
+*.xlsm
+*.xlsx
+*backup*.json
+dati-*.json
+.DS_Store
