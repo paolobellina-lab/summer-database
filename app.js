@@ -728,7 +728,7 @@ window.SDBStore.ready.then(function () {
         <p class="note">${store.mode === 'online' ? `Dati online, condivisi tra gli account autorizzati. Accesso come <b>${esc(store.user || '')}</b>. Esporta comunque un backup ogni tanto.` : 'I dati sono salvati solo in questo browser. Esporta un backup ogni tanto.'}</p>
         <div style="display:flex;flex-wrap:wrap;gap:8px">
           <button class="btn" id="s-export">Esporta backup (.json)</button>
-          <label class="btn" for="s-import">Importa backup</label><input type="file" id="s-import" accept="application/json,.json" hidden>
+          <label class="btn" for="s-import">Importa backup</label><input type="file" id="s-import" accept=".json,.txt,application/json,text/plain,*/*" hidden>
           <button class="btn" id="s-copy">Copia backup negli appunti</button>
           ${window.SDB_SEED ? `<button class="btn danger" id="s-reset">Ripristina dati dall'Excel</button>` : ''}
           ${store.mode === 'online' ? `<button class="btn" id="s-logout">Esci da questo dispositivo</button>` : ''}
