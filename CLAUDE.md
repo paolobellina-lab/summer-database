@@ -21,6 +21,9 @@ Se una modifica richiesta va contro questi vincoli, avvisare prima di procedere.
 ## Periodi tariffari
 `S.periodsFor(settings, villa, tariffa)` in `core.js`. Settimanale: segue il giorno di cambio (`settings.cambio` o `villa.cambio`, sabato/domenica). Bisettimanale/mensile/bimensile: `villa.periodi[tariffa]` → `settings.periodiPredefiniti[tariffa]` → date automatiche dell'Excel spostate in base al giorno di cambio. Il numero dei periodi è fisso (i prezzi sono collegati per posizione).
 
+## Località
+Elenco condiviso in `meta/settings` → `localita` (maiuscolo). Nella scheda villa la località si sceglie da un menu (con "+ Nuova località"); in Impostazioni si aggiungono, rinominano e uniscono (aggiorna il campo `location` delle ville interessate, un documento per villa).
+
 ## Foto e preferiti
 - Foto delle ville in `villas_foto/{id}` (`villaId`, `img`, `thumb`, `ordine`) e copertina in `villas_thumb/{villaId}` (`thumb`, `fotoId`). Mai dentro `villas`, che le altre app leggono per intero.
 - Elenchi preferiti condivisi in `meta/preferiti` (`liste: [{ id, nome, ville: [villaId] }]`).

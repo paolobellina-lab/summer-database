@@ -669,3 +669,15 @@ dialog:has(.assign) { width: min(640px, calc(100vw - 32px)); }
 
 .per-edit { display: flex; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
 .per-edit input { width: 150px; padding: 4px 6px; font-weight: 400; }
+
+/* località */
+.loc-pick select { width: 100%; }
+.loc-new { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.loc-new input { flex: 1 1 200px; max-width: 320px; }
+.loc-admin { display: flex; flex-direction: column; }
+.loc-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 8px 0; border-bottom: 1px solid var(--line-soft); }
+.loc-row b { min-width: 140px; }
+.loc-act { display: flex; gap: 6px; margin-left: auto; flex-wrap: wrap; }
+.loc-edit { width: 100%; display: flex; gap: 6px; flex-wrap: wrap; }
+.loc-edit:empty { display: none; }
+.loc-edit input, .loc-edit select { max-width: 260px; }

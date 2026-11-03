@@ -233,9 +233,22 @@ window.SDBStore.ready.then(function () {
     });
   }
 
+  const normLoc = s => String(s || '').trim().replace(/\s+/g, ' ').toUpperCase();
+  // elenco località (Impostazioni → Località), condiviso; comprende anche quelle già usate dalle ville
+  function locList() {
+    const set = new Set((settings().localita || []).map(normLoc).filter(Boolean));
+    data().villas.forEach(v => { const l = normLoc(v.location); if (l) set.add(l); });
+    return Array.from(set).sort((x, y) => x.localeCompare(y, 'it'));
+  }
   function locations() {
-    const set = new Set(); data().villas.forEach(v => { const l = String(v.location || '').trim().toUpperCase(); if (l) set.add(l); });
+    const set = new Set(); data().villas.forEach(v => { const l = normLoc(v.location); if (l) set.add(l); });
     return Array.from(set).sort();
+  }
+  function addLocation(name) {
+    const n = normLoc(name); if (!n) return '';
+    const st = JSON.parse(JSON.stringify(settings())); st.localita = locList();
+    if (!st.localita.includes(n)) { st.localita.push(n); st.localita.sort((x, y) => x.localeCompare(y, 'it')); store.setSettings(st); }
+    return n;
   }
 
   function viewAvail() {
@@ -757,6 +770,7 @@ window.SDBStore.ready.then(function () {
       const p = v.pricing[t.key];
       ['acquisto', 'rettifica', 'fisso'].forEach(k => { p[k] = p[k] || []; while (p[k].length < n) p[k].push(k === 'rettifica' ? 0 : null); });
     });
+    const locSelect = () => `<label class="field"><span>Location</span><div class="loc-pick"><select id="v-loc"><option value="">— scegli —</option>${locList().map(l => `<option ${normLoc(v.location) === l ? 'selected' : ''}>${esc(l)}</option>`).join('')}<option value="__new">+ Nuova località…</option></select></div><div class="loc-new" id="v-loc-new" hidden><input id="v-loc-in" placeholder="Nome della località, es. PORTO CERVO"><button type="button" class="btn small primary" id="v-loc-add">Aggiungi</button><button type="button" class="btn small" id="v-loc-x">Annulla</button></div></label>`;
     const inp = (k, label, wide) => `<label class="field"${wide ? ' style="grid-column:1/-1"' : ''}><span>${label}</span><input data-k="${k}" value="${esc(v[k])}"></label>`;
     const linkInp = (k, label) => {
       const val = String(v[k] || ''); const isUrl = /^https?:\/\//i.test(val.trim());
@@ -772,7 +786,7 @@ window.SDBStore.ready.then(function () {
       </div>
       <div id="v-confirm"></div>
       <div class="cols2">
-        <section class="card"><h2>Anagrafica</h2><div class="grid wide">${FIELDS.anagrafica.map(([k, l]) => inp(k, l)).join('')}</div></section>
+        <section class="card"><h2>Anagrafica</h2><div class="grid wide">${FIELDS.anagrafica.map(([k, l]) => k === 'location' ? locSelect() : inp(k, l)).join('')}</div></section>
         <section class="card"><h2>Servizi e note</h2>
           <label class="field"><span>Servizi inclusi</span><textarea data-k="servizi" rows="4">${esc(v.servizi)}</textarea></label>
           <label class="field"><span>Note</span><textarea data-k="note" rows="4">${esc(v.note)}</textarea></label></section>
@@ -798,6 +812,26 @@ window.SDBStore.ready.then(function () {
       if (el.dataset.k === 'name') $('#v-title').textContent = el.value || 'Senza nome';
       save();
     }));
+    const locSel = $('#v-loc');
+    if (locSel) {
+      const showNew = on => { $('#v-loc-new').hidden = !on; if (on) $('#v-loc-in').focus(); };
+      locSel.addEventListener('change', () => {
+        if (locSel.value === '__new') { showNew(true); return; }
+        showNew(false); v.location = locSel.value; save();
+      });
+      const addIt = () => {
+        const n = $('#v-loc-in').value; const norm = normLoc(n); if (!norm) { $('#v-loc-in').focus(); return; }
+        const similar = locList().find(l => l !== norm && (l.replace(/[^A-Z]/g, '') === norm.replace(/[^A-Z]/g, '') || l.replace(/^P\.?\s*/, 'PORTO ') === norm || norm.replace(/^P\.?\s*/, 'PORTO ') === l));
+        if (similar && !$('#v-loc-new').dataset.ok) { $('#v-loc-new').dataset.ok = '1'; toast(`Esiste già "${similar}": premi di nuovo Aggiungi per crearla comunque`); return; }
+        const val = addLocation(norm); v.location = val; save();
+        locSel.insertAdjacentHTML('beforeend', ''); // l'elenco si aggiorna al prossimo disegno
+        const opt = document.createElement('option'); opt.textContent = val; locSel.insertBefore(opt, locSel.querySelector('option[value="__new"]')); locSel.value = val;
+        showNew(false); toast('Località aggiunta');
+      };
+      $('#v-loc-add').onclick = addIt;
+      $('#v-loc-in').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); addIt(); } };
+      $('#v-loc-x').onclick = () => { showNew(false); locSel.value = normLoc(v.location) || ''; };
+    }
 
     drawPrices();
     function drawPrices() {
@@ -976,6 +1010,11 @@ window.SDBStore.ready.then(function () {
         <label class="field"><span>Nome</span><input id="s-name" value="${esc(st.seasonName)}"></label>
         <label class="field"><span>Inizio calendario</span><input type="date" id="s-start" value="${esc(st.seasonStart)}"></label>
         <label class="field"><span>Fine calendario</span><input type="date" id="s-end" value="${esc(st.seasonEnd)}"></label></div></section>
+      <section class="card"><h2>Località</h2>
+        <p class="note">È l'elenco da cui scegli la località nella scheda di ogni villa e che usi come filtro. Se due nomi indicano lo stesso posto (es. P.CERVO e PORTO CERVO), usa "Unisci in…": tutte le ville passano al nome scelto.</p>
+        <div id="loc-list" class="loc-admin"></div>
+        <div class="loc-new"><input id="loc-add-in" placeholder="Nuova località"><button type="button" class="btn small" id="loc-add">Aggiungi</button></div>
+      </section>
       <section class="card"><h2>Giorno di cambio</h2>
         <div class="field"><span>Le settimane predefinite vanno</span><div class="seg" id="s-cambio">${[['sabato', 'Da sabato a sabato'], ['domenica', 'Da domenica a domenica']].map(([k, l]) => `<button type="button" data-c="${k}" class="${(st.cambio || 'domenica') === k ? 'on' : ''}">${l}</button>`).join('')}</div></div>
         <p class="note">Vale per tutte le ville. Nella scheda di ogni villa, sopra il listino prezzi, puoi scegliere un giorno diverso solo per quella villa. Anche le tariffe bisettimanali, mensili e bimensili seguono lo stesso giorno. I prezzi già inseriti restano collegati alla stessa settimana.</p>
@@ -1035,6 +1074,37 @@ window.SDBStore.ready.then(function () {
       if (!(p.to > p.from)) { p[el.dataset.pk] = prev; toast('Il check-out deve essere dopo il check-in'); drawPerDef(); return; }
       save(); drawPerDef();
     });
+    const drawLocs = () => {
+      const list = locList(); const count = l => data().villas.filter(v => normLoc(v.location) === l).length;
+      $('#loc-list').innerHTML = list.length ? list.map(l => `<div class="loc-row" data-l="${esc(l)}"><b>${esc(l)}</b><span class="note">${count(l)} ville</span>
+        <span class="loc-act"><button type="button" class="btn small" data-lact="ren">Rinomina</button>${list.length > 1 ? `<button type="button" class="btn small" data-lact="merge">Unisci in…</button>` : ''}${count(l) ? '' : '<button type="button" class="btn small danger" data-lact="del">Togli</button>'}</span><div class="loc-edit"></div></div>`).join('') : '<p class="note">Nessuna località.</p>';
+    };
+    // rinomina/unisci: aggiorna il campo "location" delle ville interessate (un documento per villa) e l'elenco
+    const renameLoc = (from, to) => {
+      const t = normLoc(to); if (!t || t === from) return;
+      data().villas.filter(v => normLoc(v.location) === from).forEach(v => store.upsertVilla(Object.assign(JSON.parse(JSON.stringify(v)), { location: t })));
+      const s2 = JSON.parse(JSON.stringify(settings())); s2.localita = locList().filter(x => x !== from); if (!s2.localita.includes(t)) s2.localita.push(t); s2.localita.sort((x, y) => x.localeCompare(y, 'it'));
+      store.setSettings(s2); Object.assign(st, { localita: s2.localita });
+      if (ui.loc === from) { ui.loc = t; saveUI(); } if (ui.vloc === from) { ui.vloc = t; saveUI(); }
+      drawLocs();
+    };
+    drawLocs();
+    $('#loc-list').addEventListener('click', e => {
+      const b = e.target.closest('[data-lact]'); if (!b) return;
+      const row = b.closest('.loc-row'); const l = row.dataset.l; const ed = row.querySelector('.loc-edit');
+      if (b.dataset.lact === 'ren') {
+        ed.innerHTML = `<input value="${esc(l)}"><button type="button" class="btn small primary">Salva</button>`;
+        const inp = ed.querySelector('input'); inp.focus(); inp.select();
+        ed.querySelector('button').onclick = () => { const t = normLoc(inp.value); if (locList().includes(t) && t !== l) { toast('Esiste già: usa "Unisci in…"'); return; } renameLoc(l, t); toast('Località rinominata'); };
+      } else if (b.dataset.lact === 'merge') {
+        ed.innerHTML = `<select>${locList().filter(x => x !== l).map(x => `<option>${esc(x)}</option>`).join('')}</select><button type="button" class="btn small primary">Unisci</button>`;
+        ed.querySelector('button').onclick = () => { const t = ed.querySelector('select').value; renameLoc(l, t); toast(`Unita in ${t}`); };
+      } else if (b.dataset.lact === 'del') {
+        const s2 = JSON.parse(JSON.stringify(settings())); s2.localita = locList().filter(x => x !== l); store.setSettings(s2); Object.assign(st, { localita: s2.localita }); drawLocs();
+      }
+    });
+    const addLocUi = () => { const n = $('#loc-add-in').value; if (!normLoc(n)) return; const val = addLocation(n); st.localita = locList(); $('#loc-add-in').value = ''; drawLocs(); toast(`Aggiunta ${val}`); };
+    $('#loc-add').onclick = addLocUi; $('#loc-add-in').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); addLocUi(); } };
     const cambioNote = () => { const n = data().villas.filter(v => v.cambio && v.cambio !== (st.cambio || 'domenica')).length; $('#s-cambio-n').textContent = n ? `${n} ${n === 1 ? 'villa usa' : 'ville usano'} un giorno diverso, impostato ${n === 1 ? 'nella sua scheda' : 'nelle loro schede'}.` : ''; };
     cambioNote();
     $('#s-cambio').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; st.cambio = b.dataset.c; $$('#s-cambio button').forEach(x => x.classList.toggle('on', x === b)); save(); cambioNote(); drawPerDef(); });
