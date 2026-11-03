@@ -1,16 +1,16 @@
 /* Layout: barra superiore fissa + vista a tutta altezza; il calendario è un'unica area scorrevole con colonna ville e intestazione giorni bloccate. */
 :root {
   /* palette dal sito: avorio, blu notte, oro sabbia */
-  --bg: #f6f6f1;
-  --surface: #ffffff;
-  --surface-2: #efede6;
-  --line: #d7d4cd;
-  --line-soft: #e8e6df;
+  --bg: #f5eee0;          /* panna */
+  --surface: #fffcf6;
+  --surface-2: #efe6d4;
+  --line: #dfd3bc;
+  --line-soft: #ece3d1;
   --fg: #051c2c;
   --muted: #60707a;
   --accent: #b29362;      /* oro del pulsante CERCA */
   --accent-ink: #ffffff;
-  --accent-soft: #f2ebdd;
+  --accent-soft: #f1e5cc;
   --navy: #142861;
   --weekend: rgba(178, 147, 98, .09);
   --danger: #b3261e;
@@ -22,7 +22,7 @@
   --st-ink-dark: #2a2300;
   --m1: #e3e8ef; --m2: #e5eadf; --m3: #f1e9d7; --m4: #eedfcd; --m5: #ece1e4; --m6: #e6e4de;
   --shadow: 0 10px 34px rgba(5, 28, 44, .12);
-  --field: #fbfaf7;
+  --field: #fffdf9;
   --field-shadow: inset 0 1px 2px rgba(5, 28, 44, .07);
   --sec-date: #e9edf3; --sec-date-ink: #142861;
   --sec-cli: #f4eee2; --sec-cli-ink: #7d6237;
@@ -550,3 +550,15 @@ dialog::backdrop { background: rgba(8, 20, 18, .45); }
   .nav a .l-full { display: none; }
   .nav a .l-short { display: inline; }
 }
+
+/* ---------- tocco più elegante: Filtri oro come "Installa app", fondo panna ---------- */
+.btn.filters-toggle { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-family: var(--font-display); font-weight: 600; text-transform: uppercase; letter-spacing: .16em; font-size: 13px; }
+.btn.filters-toggle[aria-expanded="true"] { background: transparent; color: var(--accent); }
+.toolbar, .topbar, body::before { background: var(--bg); }
+.cal, .corner, .vname, .cal-head { background: var(--bg); }
+.vrow:hover .vname { background: var(--surface-2); }
+input[type=text], input[type=number], input[type=date], input[type=search], input:not([type]), select, textarea { background: var(--field); border-color: var(--line); }
+.btn:not(.primary):not(.dark):not(.danger):not(.filters-toggle) { background: var(--surface); border-color: var(--line); }
+.btn:not(.primary):not(.dark):not(.filters-toggle):hover { border-color: var(--accent); color: var(--fg); }
+.seg { border-color: var(--line); background: var(--surface); }
+.card, .vcard, .sp-group, .sp-summary { border-color: var(--line); background: var(--surface); }
