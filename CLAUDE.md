@@ -18,6 +18,9 @@ Se una modifica richiesta va contro questi vincoli, avvisare prima di procedere.
 ## Pagina Spese
 `spese.js`: riepilogo scontrini con modifica (storico barrato in rosso) e cancellazione (villa → prenotazione → scontrini). Lettura tramite `store.listenScontrini` (solo `scontrini`) e `store.getFoto` (un documento `scontrini_foto` quando si apre la foto). Collegamento alle prenotazioni con `trovaPren`, nell'ordine: ID → stesse date → copia "non più in calendario" → spese generali.
 
+## Periodi tariffari
+`S.periodsFor(settings, villa, tariffa)` in `core.js`. Settimanale: segue il giorno di cambio (`settings.cambio` o `villa.cambio`, sabato/domenica). Bisettimanale/mensile/bimensile: `villa.periodi[tariffa]` → `settings.periodiPredefiniti[tariffa]` → date automatiche dell'Excel spostate in base al giorno di cambio. Il numero dei periodi è fisso (i prezzi sono collegati per posizione).
+
 ## Foto e preferiti
 - Foto delle ville in `villas_foto/{id}` (`villaId`, `img`, `thumb`, `ordine`) e copertina in `villas_thumb/{villaId}` (`thumb`, `fotoId`). Mai dentro `villas`, che le altre app leggono per intero.
 - Elenchi preferiti condivisi in `meta/preferiti` (`liste: [{ id, nome, ville: [villaId] }]`).

@@ -67,8 +67,8 @@
      così i prezzi restano collegati al periodo giusto. villa.cambio vince sul predefinito. */
   const _perCache = {};
   function cambioDi(settings, villa) { return (villa && (villa.cambio === 'sabato' || villa.cambio === 'domenica') && villa.cambio) || (settings && settings.cambio) || 'domenica'; }
-  function periodsFor(settings, villa, tariff) {
-    const cambio = cambioDi(settings, villa); const key = cambio + '|' + tariff;
+  function autoPeriods(cambio, tariff) {
+    const key = cambio + '|' + tariff;
     if (_perCache[key]) return _perCache[key];
     const base = defaultPeriods()[tariff] || [];
     const out = cambio === 'domenica' ? base : base.map(p => {
@@ -76,6 +76,26 @@
       return { label: tariff === 'settimanale' ? dm(from) + ' – ' + dm(to) : p.label, from, to };
     });
     return (_perCache[key] = out);
+  }
+  /* Ordine di precedenza per bisettimanale/mensile/bimensile:
+     1) periodi personalizzati della villa (villa.periodi[tariffa])
+     2) periodi predefiniti modificati in Impostazioni (settings.periodiPredefiniti[tariffa])
+     3) periodi automatici dell'Excel, spostati in base al giorno di cambio.
+     Il settimanale segue sempre il giorno di cambio. Il numero dei periodi non cambia mai. */
+  const validList = (l, n) => Array.isArray(l) && l.length === n && l.every(p => p && p.from && p.to && p.to > p.from);
+  function periodsFor(settings, villa, tariff) {
+    const auto = autoPeriods(cambioDi(settings, villa), tariff);
+    if (tariff === 'settimanale') return auto;
+    const vp = villa && villa.periodi && villa.periodi[tariff];
+    if (validList(vp, auto.length)) return vp;
+    const sp = settings && settings.periodiPredefiniti && settings.periodiPredefiniti[tariff];
+    if (validList(sp, auto.length)) return sp;
+    return auto;
+  }
+  function autoPeriodsFor(settings, villa, tariff) {
+    if (tariff === 'settimanale') return autoPeriods(cambioDi(settings, villa), tariff);
+    const sp = settings && settings.periodiPredefiniti && settings.periodiPredefiniti[tariff];
+    return validList(sp, autoPeriods('domenica', tariff).length) ? sp : autoPeriods(cambioDi(settings, villa), tariff);
   }
 
   function defaultSettings() {
@@ -146,5 +166,5 @@
   }
   function uid(p) { return (p || 'id') + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 
-  window.SDB = { periodsFor, cambioDi, STATUS_COLOR, PALETTE, inkFor, DAY, MESI, MESI_L, GG, parse, iso, addDays, diffDays, dm, dmy, TARIFFE, STATI, defaultSettings, defaultPeriods, salePrice, priceAt, emptyPricing, money, short, parseMoney, uid };
+  window.SDB = { periodsFor, autoPeriods, autoPeriodsFor, cambioDi, STATUS_COLOR, PALETTE, inkFor, DAY, MESI, MESI_L, GG, parse, iso, addDays, diffDays, dm, dmy, TARIFFE, STATI, defaultSettings, defaultPeriods, salePrice, priceAt, emptyPricing, money, short, parseMoney, uid };
 })();

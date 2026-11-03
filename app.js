@@ -807,6 +807,8 @@ window.SDBStore.ready.then(function () {
         <div class="cambio-row"><span class="lbl">Giorno di cambio</span><div class="seg" id="p-cambio">${[['', 'Predefinito (' + defC + ')'], ['sabato', 'Sabato'], ['domenica', 'Domenica']].map(([k, l]) => `<button type="button" data-c="${k}" class="${(v.cambio || '') === k ? 'on' : ''}">${l}</button>`).join('')}</div>
           <span class="note">${v.cambio ? 'Questa villa usa un giorno diverso dal predefinito.' : 'Segue il giorno impostato in Impostazioni.'}</span></div>
         <div class="tabs" id="p-tabs">${S.TARIFFE.map(x => `<button type="button" data-t="${x.key}" class="${x.key === t ? 'on' : ''}">${x.label}</button>`).join('')}</div>
+        ${t !== 'settimanale' ? `<div class="cambio-row"><span class="lbl">Date dei periodi</span><div class="seg" id="p-perm">${[['def', 'Predefinite'], ['own', 'Personalizzate per questa villa']].map(([k, l]) => `<button type="button" data-m="${k}" class="${(v.periodi && v.periodi[t] ? 'own' : 'def') === k ? 'on' : ''}">${l}</button>`).join('')}</div>
+          <span class="note">${v.periodi && v.periodi[t] ? 'Modifica le date direttamente nella tabella.' : 'Uguali per tutte le ville (Impostazioni).'}</span></div>` : ''}
         <div class="params">
           <label class="field"><span>Spese servizi €</span><input data-p="spese" inputmode="numeric" value="${esc(p.spese)}"></label>
           <label class="field"><span>Arrotonda a €</span><input data-p="arrotonda" inputmode="numeric" value="${esc(p.arrotonda)}"></label>
@@ -814,12 +816,25 @@ window.SDBStore.ready.then(function () {
           <div class="formula">Vendita = acquisto ÷ (1 − margine) + spese, arrotondato per eccesso, + rettifica. Scrivi ND se non disponibile.</div>
         </div>
         <div class="tbl-wrap"><table class="prices"><thead><tr><th>Periodo</th><th>Acquisto (netto)</th><th>Rettifica</th><th style="text-align:right">Vendita (listino)</th><th style="text-align:right">Guadagno</th></tr></thead><tbody>
-          ${per.map((pp, i) => `<tr data-i="${i}"><td class="per">${esc(pp.label)}${pp.label.includes(S.dm(pp.from)) ? '' : `<small>${S.dm(pp.from)} → ${S.dm(pp.to)}</small>`}</td>
+          ${per.map((pp, i) => `<tr data-i="${i}"><td class="per">${t !== 'settimanale' && v.periodi && v.periodi[t] ? `${esc(pp.label)}<span class="per-edit"><input type="date" data-vp="${i}" data-vk="from" value="${esc(pp.from)}"><input type="date" data-vp="${i}" data-vk="to" value="${esc(pp.to)}"></span>` : `${esc(pp.label)}${pp.label.includes(S.dm(pp.from)) ? '' : `<small>${S.dm(pp.from)} → ${S.dm(pp.to)}</small>`}`}</td>
             <td><input data-f="acquisto" data-i="${i}" inputmode="numeric" value="${esc(fmtIn(p.acquisto[i]))}" placeholder="—"></td>
             <td><input class="adj" data-f="rettifica" data-i="${i}" inputmode="numeric" value="${esc(p.rettifica[i] ? fmtIn(p.rettifica[i]) : '')}" placeholder="0"></td>
             <td class="sale" data-sale="${i}"></td><td class="mg" data-mg="${i}"></td></tr>`).join('')}
         </tbody></table></div>`;
       per.forEach((_, i) => upd(i));
+      const pm = $('#p-perm', box);
+      if (pm) pm.addEventListener('click', e => {
+        const b = e.target.closest('button'); if (!b) return;
+        v.periodi = v.periodi || {};
+        if (b.dataset.m === 'own' && !v.periodi[t]) v.periodi[t] = JSON.parse(JSON.stringify(S.autoPeriodsFor(st, v, t)));
+        if (b.dataset.m === 'def') delete v.periodi[t];
+        save(); drawPrices();
+      });
+      $$('[data-vp]', box).forEach(el => el.addEventListener('change', () => {
+        const p = v.periodi[t][Number(el.dataset.vp)]; const prev = p[el.dataset.vk]; if (!el.value) return; p[el.dataset.vk] = el.value;
+        if (!(p.to > p.from)) { p[el.dataset.vk] = prev; toast('Il check-out deve essere dopo il check-in'); drawPrices(); return; }
+        save(); drawPrices();
+      }));
       $('#p-cambio', box).addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; v.cambio = b.dataset.c; save(); drawPrices(); });
       $('#p-tabs', box).addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; villaTab = b.dataset.t; drawPrices(); });
       $$('[data-p]', box).forEach(el => el.addEventListener('input', () => {
@@ -949,6 +964,7 @@ window.SDBStore.ready.then(function () {
   /* =====================================================================
      IMPOSTAZIONI
      ===================================================================== */
+  let perTab = 'bisettimanale';
   function viewSettings() {
     const st = JSON.parse(JSON.stringify(settings()));
     main.innerHTML = `<div class="page"><div class="wrap">
@@ -964,6 +980,11 @@ window.SDBStore.ready.then(function () {
         <div class="field"><span>Le settimane predefinite vanno</span><div class="seg" id="s-cambio">${[['sabato', 'Da sabato a sabato'], ['domenica', 'Da domenica a domenica']].map(([k, l]) => `<button type="button" data-c="${k}" class="${(st.cambio || 'domenica') === k ? 'on' : ''}">${l}</button>`).join('')}</div></div>
         <p class="note">Vale per tutte le ville. Nella scheda di ogni villa, sopra il listino prezzi, puoi scegliere un giorno diverso solo per quella villa. Anche le tariffe bisettimanali, mensili e bimensili seguono lo stesso giorno. I prezzi già inseriti restano collegati alla stessa settimana.</p>
         <p class="note" id="s-cambio-n"></p></section>
+      <section class="card"><h2>Periodi di bisettimanale, mensile e bimensile</h2>
+        <div class="tabs" id="sp-tabs">${S.TARIFFE.filter(x => x.key !== 'settimanale').map(x => `<button type="button" data-t="${x.key}" class="${x.key === perTab ? 'on' : ''}">${x.label}</button>`).join('')}</div>
+        <div id="sp-state" class="cambio-row"></div>
+        <div class="tbl-wrap"><table class="prices ptable"><thead><tr><th>Periodo</th><th>Dal (check-in)</th><th>Al (check-out)</th><th>Notti</th></tr></thead><tbody id="sp-per"></tbody></table></div>
+        <p class="note">Sono le date predefinite per tutte le ville. Nella scheda di una villa puoi sostituirle solo per quella villa. Il numero dei periodi resta fisso, così ogni prezzo resta collegato al suo periodo.</p></section>
       <section class="card"><h2>Valori iniziali per una nuova villa</h2><div class="tbl-wrap"><table class="prices ptable"><thead><tr><th>Tariffa</th><th>Spese servizi €</th><th>Arrotonda a €</th><th>Margine %</th></tr></thead><tbody>
         ${S.TARIFFE.map(x => `<tr><td class="per">${x.label}</td><td><input data-d="${x.key}" data-k="spese" value="${esc(st.defaults[x.key].spese)}"></td><td><input data-d="${x.key}" data-k="arrotonda" value="${esc(st.defaults[x.key].arrotonda)}"></td><td><input data-d="${x.key}" data-k="margine" value="${esc(Math.round(st.defaults[x.key].margine * 1000) / 10)}"></td></tr>`).join('')}
       </tbody></table></div></section>
@@ -995,9 +1016,28 @@ window.SDBStore.ready.then(function () {
     $('#s-name').addEventListener('input', e => { st.seasonName = e.target.value; save(); });
     $('#s-start').addEventListener('change', e => { if (e.target.value) { st.seasonStart = e.target.value; save(); } });
     $('#s-end').addEventListener('change', e => { if (e.target.value) { st.seasonEnd = e.target.value; save(); } });
+    const drawPerDef = () => {
+      const t = perTab; const custom = !!(st.periodiPredefiniti && st.periodiPredefiniti[t]);
+      const list = S.periodsFor(st, null, t);
+      $('#sp-state').innerHTML = custom
+        ? `<span class="note">Date modificate a mano.</span><button type="button" class="btn small" id="sp-reset">Torna alle date automatiche</button>`
+        : `<span class="note">Date automatiche: seguono il giorno di cambio (${esc(st.cambio || 'domenica')}). Modificane una per personalizzarle.</span>`;
+      $('#sp-per').innerHTML = list.map((p, i) => `<tr><td><input data-pi="${i}" data-pk="label" value="${esc(p.label)}"></td><td><input type="date" data-pi="${i}" data-pk="from" value="${esc(p.from)}"></td><td><input type="date" data-pi="${i}" data-pk="to" value="${esc(p.to)}"></td><td class="mg">${S.diffDays(p.from, p.to)}</td></tr>`).join('');
+      const r = $('#sp-reset'); if (r) r.onclick = () => { delete st.periodiPredefiniti[t]; save(); drawPerDef(); };
+    };
+    drawPerDef();
+    $('#sp-tabs').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; perTab = b.dataset.t; $$('#sp-tabs button').forEach(x => x.classList.toggle('on', x === b)); drawPerDef(); });
+    $('#sp-per').addEventListener('change', e => {
+      const el = e.target; if (!el.dataset.pk || !el.value) return;
+      const t = perTab; st.periodiPredefiniti = st.periodiPredefiniti || {};
+      if (!st.periodiPredefiniti[t]) st.periodiPredefiniti[t] = JSON.parse(JSON.stringify(S.periodsFor(st, null, t)));
+      const p = st.periodiPredefiniti[t][Number(el.dataset.pi)]; const prev = p[el.dataset.pk]; p[el.dataset.pk] = el.value;
+      if (!(p.to > p.from)) { p[el.dataset.pk] = prev; toast('Il check-out deve essere dopo il check-in'); drawPerDef(); return; }
+      save(); drawPerDef();
+    });
     const cambioNote = () => { const n = data().villas.filter(v => v.cambio && v.cambio !== (st.cambio || 'domenica')).length; $('#s-cambio-n').textContent = n ? `${n} ${n === 1 ? 'villa usa' : 'ville usano'} un giorno diverso, impostato ${n === 1 ? 'nella sua scheda' : 'nelle loro schede'}.` : ''; };
     cambioNote();
-    $('#s-cambio').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; st.cambio = b.dataset.c; $$('#s-cambio button').forEach(x => x.classList.toggle('on', x === b)); save(); cambioNote(); });
+    $('#s-cambio').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; st.cambio = b.dataset.c; $$('#s-cambio button').forEach(x => x.classList.toggle('on', x === b)); save(); cambioNote(); drawPerDef(); });
     $$('[data-d]').forEach(el => el.addEventListener('input', () => {
       const k = el.dataset.k; let val = k === 'margine' ? Number(el.value.replace(',', '.')) / 100 : S.parseMoney(el.value);
       st.defaults[el.dataset.d][k] = isFinite(val) && val !== null ? val : 0; save();
