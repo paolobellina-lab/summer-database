@@ -11,6 +11,9 @@
   const dataBreve = s => (s ? daIso(s).toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' }) : '');
   const isoLocale = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   const somma = l => l.reduce((t, s) => t + (Number(s.importo) || 0), 0);
+  const CATEGORIE = ['Pulizie', 'Manutenzione', 'Lavanderia', 'Spesa e forniture', 'Utenze', 'Giardino e piscina', 'Benvenuto ospiti', 'Commissioni e tasse', 'Altro'];
+  function parseImporto(v) { v = String(v).trim().replace(/[€\s]/g, ''); if (v.includes(',')) v = v.replace(/\./g, '').replace(',', '.'); return Math.round(parseFloat(v) * 100) / 100; }
+  const quando = x => { try { const d = typeof x === 'string' ? new Date(x) : x && x.toDate ? x.toDate() : null; return d ? d.toLocaleString('it-IT', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''; } catch (_) { return ''; } };
 
   const normPren = b => ({ id: b.id, villaId: b.villaId, cliente: (b.cliente || '').trim() || 'Prenotazione senza nome', from: b.from, to: b.to, status: b.status || '' });
 
@@ -71,10 +74,11 @@
 
     const ville = () => data().villas.slice().sort((a, b) => String(a.name).localeCompare(String(b.name), 'it', { numeric: true }));
     const nomeVilla = id => { const v = data().villas.find(x => x.id === id); return v ? v.name : 'Villa ' + id; };
+    const descPren = o => { const p = trovaPren(o, data().bookings); return nomeVilla(o.villaId) + ' · ' + (p ? p.cliente + ' ' + dataBreve(p.from) : 'spese generali'); };
     const P = [['tutto', 'Tutto'], ['mese', 'Questo mese'], ['3m', 'Ultimi 3 mesi'], ['anno', "Quest'anno"], ['annoprec', 'Anno scorso'], ['custom', 'Scegli date…']];
 
     main.innerHTML = `<div class="page"><div class="wrap">
-      <div class="head"><div><h1>Spese</h1><div class="sub">Scontrini dell'app Scontrini · sola lettura, aggiornati in tempo reale</div></div>
+      <div class="head"><div><h1>Spese</h1><div class="sub">Scontrini dell'app Scontrini · modificabili, aggiornati in tempo reale</div></div>
         <div class="actions no-print">
           <button class="btn" type="button" id="sp-exp">Espandi tutto</button>
           <button class="btn" type="button" id="sp-csv">Esporta per Excel</button>
@@ -163,11 +167,15 @@
             </summary>
             <div class="sp-body">
               <div class="sp-cats">${Object.entries(cats).sort((x, y) => y[1] - x[1]).map(([c, t]) => `<span>${esc(c)} <b>${euro(t)}</b></span>`).join('')}</div>
-              ${l.map(s => `<div class="sp-rc">
+              ${l.map(s => `<div class="sp-rc${Array.isArray(s.storico) && s.storico.length ? ' edited' : ''}">
                 <span class="d">${dataIt(s.data)}</span>
-                <div class="m">${esc(s.motivo || '—')}<small>${esc(s.categoria || '')}${s.creatoDa ? ' · ' + esc(s.creatoDa) : ''}</small></div>
+                <div class="m">${esc(s.motivo || '—')}<small>${esc(s.categoria || '')}${s.creatoDa ? ' · ' + esc(s.creatoDa) : ''}${s.modificatoDa ? ` · <span class="sp-mod">modificato da ${esc(s.modificatoDa)}${s.modificatoIl ? ' il ' + esc(quando(s.modificatoIl)) : ''}</span>` : ''}</small></div>
                 <span class="amount">${euro(s.importo)}</span>
-                <button class="btn small no-print" type="button" data-foto="${esc(s.id)}" ${s.hasFoto ? '' : 'disabled'}>${s.hasFoto ? 'Foto' : 'Nessuna foto'}</button>
+                <div class="sp-act no-print">
+                  <button class="btn small" type="button" data-foto="${esc(s.id)}" ${s.hasFoto ? '' : 'disabled'}>${s.hasFoto ? 'Foto' : 'Nessuna foto'}</button>
+                  <button class="btn small" type="button" data-edit="${esc(s.id)}">Modifica</button>
+                </div>
+                ${Array.isArray(s.storico) && s.storico.length ? `<div class="sp-old">${s.storico.slice().reverse().map(o => `<div class="sp-old-row"><s><span>${dataIt(o.data)}</span> ${esc(o.motivo || '—')} · ${esc(o.categoria || '')}${o.villaId !== s.villaId || (o.prenotazioneId || null) !== (s.prenotazioneId || null) ? ' · ' + esc(descPren(o)) : ''} · <b>${euro(o.importo)}</b></s><small>versione sostituita${o.sostituitoDa ? ' da ' + esc(o.sostituitoDa) : ''}${o.sostituitoIl ? ' il ' + esc(quando(o.sostituitoIl)) : ''}</small></div>`).join('')}</div>` : ''}
               </div>`).join('')}
             </div>
           </details>`;
@@ -199,6 +207,71 @@
       saveOpen(); $('#sp-exp').textContent = apri ? 'Comprimi tutto' : 'Espandi tutto';
     });
     $('#sp-print').addEventListener('click', () => { $$('details.sp-group', out).forEach(d => { d.open = true; }); setTimeout(() => window.print(), 60); });
+
+    // modifica / cancellazione dello scontrino (lo storico conserva la versione precedente)
+    out.addEventListener('click', e => {
+      const b = e.target.closest('[data-edit]'); if (!b) return;
+      const s = spese.list.find(x => x.id === b.dataset.edit); if (s) openEdit(s);
+    });
+    function openEdit(s) {
+      const dlg = $('#dlg');
+      const bookings = data().bookings;
+      const cur = trovaPren(s, bookings);
+      const prenOpts = vid => {
+        const list = bookings.filter(x => x.villaId === vid).slice().sort((x, y) => String(y.from).localeCompare(String(x.from)));
+        const curId = cur && !cur.nonInCalendario && s.villaId === vid ? cur.id : '';
+        return `<option value="">Spese generali della villa</option>` + (cur && cur.nonInCalendario && s.villaId === vid ? `<option value="__keep" selected>${esc(cur.cliente)} · ${dataBreve(cur.from)} → ${dataBreve(cur.to)} (non più in calendario)</option>` : '')
+          + list.map(x => `<option value="${esc(x.id)}" ${x.id === curId ? 'selected' : ''}>${esc((x.cliente || '').trim() || 'Senza nome')} · ${dataBreve(x.from)} → ${dataBreve(x.to)}</option>`).join('');
+      };
+      const cats = CATEGORIE.includes(s.categoria) || !s.categoria ? CATEGORIE : [s.categoria].concat(CATEGORIE);
+      dlg.innerHTML = `<form class="dlg" id="ed-form" autocomplete="off">
+        <h3>Modifica scontrino</h3>
+        <p class="note">La versione attuale resta nello storico, barrata in rosso, dentro lo stesso scontrino.</p>
+        <section class="dsec sec-cli"><h4>Importo e data</h4>
+          <div class="row"><label class="field"><span>Importo €</span><input id="ed-imp" inputmode="decimal" value="${esc(String(s.importo ?? '').replace('.', ','))}" required></label>
+          <label class="field"><span>Data</span><input type="date" id="ed-data" value="${esc(s.data || '')}" required></label></div></section>
+        <section class="dsec sec-srv"><h4>Descrizione</h4>
+          <label class="field"><span>Categoria</span><select id="ed-cat">${cats.map(c => `<option ${c === s.categoria ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></label>
+          <label class="field"><span>Motivo</span><input id="ed-mot" value="${esc(s.motivo || '')}"></label></section>
+        <section class="dsec sec-date"><h4>Villa e prenotazione</h4>
+          <label class="field"><span>Villa</span><select id="ed-villa">${ville().map(v => `<option value="${esc(v.id)}" ${v.id === s.villaId ? 'selected' : ''}>${esc(v.name)}</option>`).join('')}</select></label>
+          <label class="field"><span>Prenotazione</span><select id="ed-pren">${prenOpts(s.villaId)}</select></label></section>
+        <div id="ed-msg"></div>
+        <div class="foot">
+          <button type="button" class="btn danger left" id="ed-del">Elimina</button>
+          <button type="button" class="btn" id="ed-cancel">Annulla</button>
+          <button type="submit" class="btn primary" id="ed-save">Salva</button>
+        </div></form>`;
+      $('#ed-villa').addEventListener('change', e => { $('#ed-pren').innerHTML = prenOpts(e.target.value); });
+      $('#ed-cancel').onclick = () => dlg.close();
+      $('#ed-form').addEventListener('submit', async e => {
+        e.preventDefault();
+        const importo = parseImporto($('#ed-imp').value);
+        if (!(importo > 0)) { $('#ed-msg').innerHTML = '<div class="warn err">Importo non valido.</div>'; return; }
+        const villaId = $('#ed-villa').value, pv = $('#ed-pren').value;
+        let prenotazioneId, prenotazione;
+        if (pv === '__keep') { prenotazioneId = s.prenotazioneId || null; prenotazione = s.prenotazione || null; }
+        else if (pv) { const bk = bookings.find(x => x.id === pv); prenotazioneId = pv; prenotazione = { cliente: (bk.cliente || '').trim() || 'Prenotazione senza nome', from: bk.from, to: bk.to }; }
+        else { prenotazioneId = null; prenotazione = null; }
+        const changes = { importo, data: $('#ed-data').value, categoria: $('#ed-cat').value, motivo: $('#ed-mot').value.trim(), villaId, prenotazioneId, prenotazione };
+        const prevFields = { importo: s.importo, data: s.data, categoria: s.categoria || '', motivo: s.motivo || '', villaId: s.villaId, prenotazioneId: s.prenotazioneId || null, prenotazione: s.prenotazione || null };
+        const same = Object.keys(changes).every(k => JSON.stringify(changes[k] ?? null) === JSON.stringify(prevFields[k] ?? null));
+        if (same) { dlg.close(); return; }
+        const previous = Object.assign({}, prevFields, { autore: s.modificatoDa || s.creatoDa || '', sostituitoDa: store.user || '', sostituitoIl: new Date().toISOString() });
+        $('#ed-save').disabled = true;
+        try { await store.updateScontrino(s.id, changes, previous); dlg.close(); toast('Scontrino modificato'); }
+        catch (x) { $('#ed-save').disabled = false; $('#ed-msg').innerHTML = `<div class="warn err">Salvataggio non riuscito: ${esc(x.message || x)}</div>`; }
+      });
+      $('#ed-del').onclick = () => {
+        $('#ed-msg').innerHTML = `<div class="confirm-bar"><div><b>Eliminare questo scontrino da ${euro(s.importo)}?</b> Sparisce anche dalle app Scontrini e Spese Ville${s.hasFoto ? ', insieme alla sua foto' : ''}. Non si può annullare.</div><button type="button" class="btn small danger solid" id="ed-del-ok">Elimina</button><button type="button" class="btn small" id="ed-del-no">Annulla</button></div>`;
+        $('#ed-del-no').onclick = () => { $('#ed-msg').innerHTML = ''; };
+        $('#ed-del-ok').onclick = async () => {
+          try { await store.deleteScontrino(s.id, !!s.hasFoto); dlg.close(); toast('Scontrino eliminato'); }
+          catch (x) { $('#ed-msg').innerHTML = `<div class="warn err">Eliminazione non riuscita: ${esc(x.message || x)}</div>`; }
+        };
+      };
+      if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', '');
+    }
 
     // foto: letta da scontrini_foto solo adesso
     out.addEventListener('click', async e => {

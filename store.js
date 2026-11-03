@@ -137,11 +137,25 @@
         return { villas: (d.villas || []).length, bookings: (d.bookings || []).length };
       },
       resetToSeed() { return Promise.reject(new Error('non disponibile online')); },
-      // SOLA LETTURA delle collezioni dell'app Scontrini: nessuna scrittura qui, mai.
+      // Scontrini (dell'app Scontrini): lettura, modifica con storico, cancellazione. Nessuna altra scrittura.
       listenScontrini(cb, onErr) {
         return db.collection('scontrini').onSnapshot(snap => cb(snap.docs.map(d => Object.assign({}, d.data(), { id: d.id }))), onErr);
       },
-      getFoto(id) { return db.collection('scontrini_foto').doc(id).get().then(d => (d.exists ? (d.data() || {}).img || null : null)); }
+      getFoto(id) { return db.collection('scontrini_foto').doc(id).get().then(d => (d.exists ? (d.data() || {}).img || null : null)); },
+      // Modifica: aggiorna solo i campi cambiati (update, mai set) e aggiunge la versione precedente a "storico".
+      updateScontrino(id, changes, previous) {
+        const FV = firebase.firestore.FieldValue;
+        const upd = Object.assign({}, strip(changes), { modificatoDa: api.user || '', modificatoIl: FV.serverTimestamp() });
+        if (previous) upd.storico = FV.arrayUnion(strip(previous));
+        return db.collection('scontrini').doc(id).update(upd);
+      },
+      // Cancellazione: lo scontrino e, se c'è, la sua foto (stesso ID).
+      deleteScontrino(id, hasFoto) {
+        const batch = db.batch();
+        batch.delete(db.collection('scontrini').doc(id));
+        if (hasFoto) batch.delete(db.collection('scontrini_foto').doc(id));
+        return batch.commit();
+      }
     });
 
     api.ready = new Promise(resolve => {

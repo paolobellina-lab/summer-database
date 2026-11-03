@@ -563,3 +563,13 @@ input[type=text], input[type=number], input[type=date], input[type=search], inpu
 .btn:not(.primary):not(.dark):not(.filters-toggle):hover { border-color: var(--accent); color: var(--fg); }
 .seg { border-color: var(--line); background: var(--surface); }
 .card, .vcard, .sp-group, .sp-summary { border-color: var(--line); background: var(--surface); }
+
+/* scontrini modificati: versioni precedenti barrate in rosso nella stessa nota */
+.sp-act { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.sp-mod { color: var(--accent); }
+.sp-old { grid-column: 2 / -1; display: flex; flex-direction: column; gap: 4px; padding: 6px 10px; border-left: 2px solid var(--danger); background: color-mix(in srgb, var(--danger) 5%, var(--surface)); }
+.sp-old-row s { color: var(--danger); text-decoration: line-through 1.5px var(--danger); font-size: 13px; }
+.sp-old-row s span { font-variant-numeric: tabular-nums; }
+.sp-old-row small { display: block; color: var(--muted); font-size: 11px; }
+@media (max-width: 760px) { .sp-act { grid-column: 2 / -1; justify-content: flex-start; } .sp-old { grid-column: 1 / -1; } }
+@media print { .sp-old { background: none; } }

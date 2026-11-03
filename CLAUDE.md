@@ -5,7 +5,7 @@ App web (GitHub Pages) per disponibilità e listini ville. Dati su Firebase, pro
 ## Vincoli: il database è condiviso con altre app
 Nello stesso progetto e database ci sono anche le app **Scontrini** e **Spese Ville**, che leggono i dati di questa app e ne scrivono di propri.
 
-1. **Collezioni degli scontrini**: `scontrini` e `scontrini_foto` appartengono all'app Scontrini. Questa app può solo **leggerle** (pagina Spese). Mai scriverle, modificarle, cancellarle o includerle in reset, import, ripristino o pulizia. `scontrini_foto` si legge solo quando l'utente apre una foto. Ogni funzione che scrive dati agisce solo su `villas`, `bookings`, `meta` (vedi `mergeAll` in `store.js`: l'import aggiunge/aggiorna, non cancella).
+1. **Collezioni degli scontrini**: `scontrini` e `scontrini_foto` appartengono all'app Scontrini. Questa app può leggerle, **modificare e cancellare** gli scontrini (pagina Spese), come l'app Scontrini. Le modifiche usano `update` sui soli campi cambiati e aggiungono la versione precedente all'array `storico` dello stesso scontrino; la cancellazione elimina lo scontrino e la sua foto (stesso ID). Mai includerle in reset, import, ripristino o pulizia. `scontrini_foto` si legge solo quando l'utente apre una foto. Le funzioni di import/ripristino agiscono solo su `villas`, `bookings`, `meta` (vedi `mergeAll` in `store.js`: aggiunge/aggiorna, non cancella).
 2. **Regole Firestore**: ogni modifica a `firestore.rules` deve mantenere le righe `match /scontrini/{id}` e `match /scontrini_foto/{id}`. Le email autorizzate reali non stanno in questo repository pubblico: le regole pubblicate sono quelle della console Firebase.
 3. **Campi letti dalle altre app, da non rinominare** senza avvisare prima il proprietario:
    - `villas`: ID documento (es. `v11`) e campo `name`;
@@ -16,7 +16,7 @@ Nello stesso progetto e database ci sono anche le app **Scontrini** e **Spese Vi
 Se una modifica richiesta va contro questi vincoli, avvisare prima di procedere.
 
 ## Pagina Spese
-`spese.js`: riepilogo scontrini in sola lettura (villa → prenotazione → scontrini). Lettura tramite `store.listenScontrini` (solo `scontrini`) e `store.getFoto` (un documento `scontrini_foto` quando si apre la foto). Collegamento alle prenotazioni con `trovaPren`, nell'ordine: ID → stesse date → copia "non più in calendario" → spese generali.
+`spese.js`: riepilogo scontrini con modifica (storico barrato in rosso) e cancellazione (villa → prenotazione → scontrini). Lettura tramite `store.listenScontrini` (solo `scontrini`) e `store.getFoto` (un documento `scontrini_foto` quando si apre la foto). Collegamento alle prenotazioni con `trovaPren`, nell'ordine: ID → stesse date → copia "non più in calendario" → spese generali.
 
 ## Dati
 Nessun dato reale nel repository: `seed.js`, file Excel e backup sono in `.gitignore`.
