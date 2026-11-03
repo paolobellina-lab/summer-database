@@ -93,12 +93,21 @@ window.SDBStore.ready.then(function () {
     <dialog id="dlg"></dialog>`;
   const main = $('#main');
   // scontrini dell'app Scontrini: sola lettura, un unico ascolto in tempo reale
+  // pagine visibili per l'account collegato: meta/accessi → utenti[].pagine (se manca, vede tutto)
+  const PAGES = [['disponibilita', 'Disponibilità'], ['ville', 'Ville'], ['spese', 'Spese'], ['appunti', 'Appunti'], ['impostazioni', 'Impostazioni']];
+  const myEntry = () => { const me = String(store.user || '').toLowerCase(); return (((data().accessi || {}).utenti) || []).find(u => String(u.email).toLowerCase() === me) || null; };
+  const allowedPages = () => { const u = myEntry(); return u && Array.isArray(u.pagine) ? u.pagine : PAGES.map(p => p[0]); };
+  const canSee = p => store.mode !== 'online' || allowedPages().includes(p);
   const spese = { list: [], ready: false, error: null };
   let spesePage = null; const speseHooks = new Set();
   const speseChanged = () => { if (spesePage) spesePage.render(); speseHooks.forEach(f => { try { f(); } catch (_) {} }); };
-  if (store.mode === 'online' && store.listenScontrini && window.SDBSpese) {
-    store.listenScontrini(l => { spese.list = l; spese.ready = true; spese.error = null; speseChanged(); }, err => { spese.error = err; speseChanged(); });
-  }
+  let speseUnsub = null;
+  const startSpese = () => {
+    if (speseUnsub || !(store.mode === 'online' && store.listenScontrini && window.SDBSpese) || !canSee('spese')) return;
+    speseUnsub = store.listenScontrini(l => { spese.list = l; spese.ready = true; spese.error = null; speseChanged(); }, err => { spese.error = err; speseChanged(); });
+  };
+  const stopSpese = () => { if (speseUnsub) { try { speseUnsub(); } catch (_) {} speseUnsub = null; spese.list = []; spese.ready = false; } };
+  startSpese();
   // copertine delle ville (villas_thumb): una sola lettura in tempo reale, solo online
   const thumbs = { map: {}, ready: false, error: null };
   let villasRedraw = null;
@@ -157,7 +166,8 @@ window.SDBStore.ready.then(function () {
 
   function refreshShell(route) {
     $('#brand-name').textContent = settings().seasonName || 'Summer 2027';
-    $$('.nav a').forEach(a => a.classList.toggle('on', a.dataset.r === route || (route === 'villa' && a.dataset.r === 'ville')));
+    $$('.nav a').forEach(a => { a.classList.toggle('on', a.dataset.r === route || (route === 'villa' && a.dataset.r === 'ville')); a.hidden = !canSee(a.dataset.r); });
+    const nv = $('.nav'); if (nv) nv.style.setProperty('--n', $$('.nav a').filter(a => !a.hidden).length);
     const sy = $('#sync');
     sy.className = 'sync ' + store.mode;
     sy.querySelector('span').textContent = store.mode === 'online' ? (store.online === false ? 'Offline · si sincronizza appena torna la rete' : 'Online') : (store.canPersist ? 'Salvato su questo dispositivo' : 'Memoria non disponibile');
@@ -165,8 +175,17 @@ window.SDBStore.ready.then(function () {
 
   /* ---------- router ---------- */
   function route() {
-    const h = (location.hash || '#disponibilita').slice(1);
+    let h = (location.hash || '#disponibilita').slice(1);
     spesePage = null; speseHooks.clear(); villasRedraw = null;
+    if (canSee('spese')) startSpese(); else stopSpese();
+    // pagina non permessa a questo account: vado alla prima consentita
+    const pageOf = h.startsWith('villa-') ? (canSee('ville') ? 'ville' : 'disponibilita') : (PAGES.some(p => p[0] === h) ? h : 'disponibilita');
+    if (!canSee(pageOf)) {
+      const first = allowedPages()[0];
+      if (!first) { refreshShell(''); main.innerHTML = '<div class="page"><div class="wrap"><div class="card"><p class="note">Al tuo account non è stata assegnata nessuna pagina. Chiedi all\'amministratore.</p></div></div></div>'; return; }
+      if (location.hash !== '#' + first) { location.hash = first; return; }
+      h = first;
+    }
     if (h.startsWith('villa-')) { refreshShell('villa'); return viewVilla(h.slice(6)); }
     refreshShell(h);
     if (h === 'ville') return viewVillas();
@@ -487,7 +506,7 @@ window.SDBStore.ready.then(function () {
       </div>
       <div class="pricehint" id="b-hint"></div>
       <div id="b-spese"></div>
-      ${(data().assegnazioni || []).length ? `<div class="field"><span>Assegnata a (app Scontrini)</span><div class="as-mini">${(data().assegnazioni || []).map(ac => `<label class="as-check"><input type="checkbox" data-bacc="${esc(ac.email)}" ${(ac.prenotazioni || []).includes(b.id) || (ac.ville || []).includes(b.villaId) ? 'checked' : ''} ${(ac.ville || []).includes(b.villaId) ? 'disabled title="Ha già tutta la villa"' : ''}> ${esc(ac.nome || ac.email)}</label>`).join('')}</div></div>` : ''}
+      ${canSee('spese') && (data().assegnazioni || []).length ? `<div class="field"><span>Assegnata a (app Scontrini)</span><div class="as-mini">${(data().assegnazioni || []).map(ac => `<label class="as-check"><input type="checkbox" data-bacc="${esc(ac.email)}" ${(ac.prenotazioni || []).includes(b.id) || (ac.ville || []).includes(b.villaId) ? 'checked' : ''} ${(ac.ville || []).includes(b.villaId) ? 'disabled title="Ha già tutta la villa"' : ''}> ${esc(ac.nome || ac.email)}</label>`).join('')}</div></div>` : ''}
       </section>
       <section class="dsec sec-srv"><h4>Servizi</h4>
       <div class="flags three">
@@ -563,7 +582,7 @@ window.SDBStore.ready.then(function () {
       paint();
     };
     f.addEventListener('input', check); f.addEventListener('change', check); check();
-    if (existing && store.mode === 'online' && window.SDBSpese) {
+    if (existing && store.mode === 'online' && window.SDBSpese && canSee('spese')) {
       const drawSp = () => {
         const el = $('#b-spese'); if (!el) return;
         if (!spese.ready) { el.innerHTML = ''; return; }
@@ -901,7 +920,7 @@ window.SDBStore.ready.then(function () {
         : '<div class="note">Nessun periodo inserito. Usa “+ Periodo” o clicca sul calendario.</div>';
     };
     drawBookings();
-    if (store.mode === 'online' && window.SDBSpese) {
+    if (store.mode === 'online' && window.SDBSpese && canSee('spese')) {
       const anno = new Date().getFullYear();
       const drawSp = () => {
         const el = $('#v-spese'); if (!el || !spese.ready) return;
@@ -1089,12 +1108,24 @@ window.SDBStore.ready.then(function () {
     const drawAcc = () => {
       const box = $('#acc-list'); if (!box) return;
       const list = accUsers();
-      box.innerHTML = list.length ? `<div class="tbl-wrap"><table class="prices acc-tbl"><thead><tr><th>Account</th>${APPS.map(([, l]) => `<th>${l}</th>`).join('')}<th></th></tr></thead><tbody>
-        ${list.map((u, i) => `<tr><td><b>${esc(u.nome || u.email)}</b>${u.nome ? `<small class="note">${esc(u.email)}</small>` : ''}</td>${APPS.map(([k]) => `<td><input type="checkbox" data-ui="${i}" data-app="${k}" ${(u.app || []).includes(k) ? 'checked' : ''}></td>`).join('')}<td><button type="button" class="btn small danger" data-urm="${i}">Togli</button></td></tr>`).join('')}
+      box.innerHTML = list.length ? `<div class="tbl-wrap"><table class="prices acc-tbl"><thead><tr><th>Account</th>${APPS.map(([, l]) => `<th>${l}</th>`).join('')}<th>Pagine di Summer Database</th><th></th></tr></thead><tbody>
+        ${list.map((u, i) => `<tr><td><b>${esc(u.nome || u.email)}</b>${u.nome ? `<small class="note">${esc(u.email)}</small>` : ''}</td>${APPS.map(([k]) => `<td><input type="checkbox" data-ui="${i}" data-app="${k}" ${(u.app || []).includes(k) ? 'checked' : ''}></td>`).join('')}
+          <td>${(u.app || []).includes('summer') ? `<div class="pg-chips">${PAGES.map(([k, l]) => `<label class="pg-chip"><input type="checkbox" data-pg="${i}" data-page="${k}" ${!Array.isArray(u.pagine) || u.pagine.includes(k) ? 'checked' : ''}><span>${l}</span></label>`).join('')}</div>` : '<span class="note">—</span>'}</td>
+          <td><button type="button" class="btn small danger" data-urm="${i}">Togli</button></td></tr>`).join('')}
         </tbody></table></div>` : '<p class="note">Nessun account nell\'elenco: per ora entrano solo gli amministratori scritti nelle regole di Firestore.</p>';
     };
     if ($('#acc-card')) {
       drawAcc();
+      $('#acc-list').addEventListener('change', e => {
+        const pg = e.target.closest('[data-pg]'); if (!pg) return;
+        const l = accUsers(); const u = l[Number(pg.dataset.pg)];
+        let pages = Array.isArray(u.pagine) ? u.pagine.slice() : PAGES.map(p => p[0]);
+        pages = pages.filter(x => x !== pg.dataset.page); if (pg.checked) pages.push(pg.dataset.page);
+        if (u.email === String(store.user || '').toLowerCase() && pg.dataset.page === 'impostazioni' && !pg.checked) { pg.checked = true; toast('Non puoi togliere a te stesso la pagina Impostazioni'); return; }
+        if (!pages.length) { pg.checked = true; toast('Lascia almeno una pagina'); return; }
+        u.pagine = PAGES.map(p => p[0]).filter(k => pages.includes(k)); if (u.pagine.length === PAGES.length) delete u.pagine;
+        accSave(l);
+      });
       $('#acc-list').addEventListener('change', e => { const cb = e.target.closest('[data-ui]'); if (!cb) return; const l = accUsers(); const u = l[Number(cb.dataset.ui)];
         if (u.email === String(store.user || '').toLowerCase() && cb.dataset.app === 'summer' && !cb.checked) { cb.checked = true; toast('Non puoi togliere a te stesso l\'accesso a Summer Database'); return; } u.app = (u.app || []).filter(x => x !== cb.dataset.app); if (cb.checked) u.app.push(cb.dataset.app); accSave(l); });
       $('#acc-list').addEventListener('click', e => {

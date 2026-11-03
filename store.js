@@ -179,7 +179,7 @@
       /* Account autorizzati (meta/accessi): le regole Firestore leggono "emails" per decidere chi entra.
          Solo gli amministratori scritti nelle regole possono modificarlo. */
       setAccessi(utenti) {
-        const clean = utenti.map(u => ({ email: String(u.email || '').trim().toLowerCase(), nome: u.nome || '', app: Array.isArray(u.app) ? u.app : [] })).filter(u => u.email);
+        const clean = utenti.map(u => Object.assign({ email: String(u.email || '').trim().toLowerCase(), nome: u.nome || '', app: Array.isArray(u.app) ? u.app : [] }, Array.isArray(u.pagine) ? { pagine: u.pagine } : {})).filter(u => u.email);
         const doc = { utenti: clean, emails: Array.from(new Set(clean.map(u => u.email))), aggiornatoDa: api.user || '', aggiornatoIl: firebase.firestore.FieldValue.serverTimestamp() };
         return db.collection('meta').doc('accessi').set(doc).then(() => { state.accessi = Object.assign({}, doc, { aggiornatoIl: new Date().toISOString() }); emit('local'); });
       },

@@ -29,7 +29,7 @@ Elenco condiviso in `meta/settings` → `localita` (maiuscolo). Nella scheda vil
 - Elenchi preferiti condivisi in `meta/preferiti` (`liste: [{ id, nome, ville: [villaId] }]`).
 
 ## Account autorizzati
-`meta/accessi`: `{ utenti: [{ email, nome, app: ['summer','scontrini'] }], emails: [..] }`. Le regole Firestore leggono `emails` (più gli amministratori scritti nelle regole, unici che possono scrivere `meta/accessi`). Gestito in Impostazioni → Account autorizzati. Un account presente senza `summer` non entra in Summer Database (controllo nell'app).
+`meta/accessi`: `{ utenti: [{ email, nome, app: ['summer','scontrini'] }], emails: [..] }`. Le regole Firestore leggono `emails` (più gli amministratori scritti nelle regole, unici che possono scrivere `meta/accessi`). Gestito in Impostazioni → Account autorizzati. Un account presente senza `summer` non entra in Summer Database (controllo nell'app). `utenti[].pagine` (facoltativo) limita le pagine visibili in Summer Database (`disponibilita`, `ville`, `spese`, `appunti`, `impostazioni`); se manca vede tutto. Senza `spese` l'app non apre nemmeno l'ascolto degli scontrini. È un limite dell'interfaccia, non delle regole.
 
 ## Assegnazioni account (per l'app Scontrini)
 `meta/assegnazioni`: `{ account: [{ email (minuscolo), nome, ville: [villaId], prenotazioni: [bookingId] }], aggiornatoDa, aggiornatoIl }`. Si gestisce dalla pagina Spese ("Account e assegnazioni") e dalla finestra prenotazione. L'app Scontrini deve leggerlo e filtrare; è un filtro di comodità, non una protezione. Gli account si scelgono tra quelli di `meta/accessi` con l'app `scontrini`.
