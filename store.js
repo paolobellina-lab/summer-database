@@ -176,6 +176,13 @@
         return batch.commit();
       },
       setSicurezza(x) { state.sicurezza = x; return db.collection('meta').doc('sicurezza').set(strip(x)); },
+      /* Account autorizzati (meta/accessi): le regole Firestore leggono "emails" per decidere chi entra.
+         Solo gli amministratori scritti nelle regole possono modificarlo. */
+      setAccessi(utenti) {
+        const clean = utenti.map(u => ({ email: String(u.email || '').trim().toLowerCase(), nome: u.nome || '', app: Array.isArray(u.app) ? u.app : [] })).filter(u => u.email);
+        const doc = { utenti: clean, emails: Array.from(new Set(clean.map(u => u.email))), aggiornatoDa: api.user || '', aggiornatoIl: firebase.firestore.FieldValue.serverTimestamp() };
+        return db.collection('meta').doc('accessi').set(doc).then(() => { state.accessi = Object.assign({}, doc, { aggiornatoIl: new Date().toISOString() }); emit('local'); });
+      },
       /* ---- Pulizia di fine stagione: richiesta esplicitamente dal proprietario, protetta da password nell'interfaccia.
          wipeBookings: cancella tutti i documenti di "bookings" (e svuota le prenotazioni assegnate agli account).
          wipeScontrini: cancella tutti gli scontrini e le loro foto (stesso ID). Nessun'altra collezione viene toccata. ---- */
@@ -268,8 +275,12 @@
             el.querySelector('#login-retry').addEventListener('click', () => location.reload());
             return;
           }
-          markOk(user.email);
-          start();
+          // account presente nell'elenco ma abilitato solo all'app Scontrini: non entra in Summer Database
+          db.collection('meta').doc('accessi').get().then(d => {
+            const u = d.exists ? ((d.data() || {}).utenti || []).find(x => String(x.email).toLowerCase() === String(user.email).toLowerCase()) : null;
+            if (u && !(u.app || []).includes('summer')) { block(); return; }
+            markOk(user.email); start();
+          }, () => { markOk(user.email); start(); });
         });
         function start() {
           let got = { villas: false, bookings: false, meta: false };
@@ -291,6 +302,7 @@
               if (d.id === 'preferiti') state.preferiti = (d.data() || {}).liste || [];
               if (d.id === 'assegnazioni') state.assegnazioni = (d.data() || {}).account || [];
               if (d.id === 'sicurezza') state.sicurezza = d.data() || null;
+              if (d.id === 'accessi') state.accessi = d.data() || null;
             });
             got.meta = true;
           });

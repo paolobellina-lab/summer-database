@@ -28,8 +28,11 @@ Elenco condiviso in `meta/settings` → `localita` (maiuscolo). Nella scheda vil
 - Foto delle ville in `villas_foto/{id}` (`villaId`, `img`, `thumb`, `ordine`) e copertina in `villas_thumb/{villaId}` (`thumb`, `fotoId`). Mai dentro `villas`, che le altre app leggono per intero.
 - Elenchi preferiti condivisi in `meta/preferiti` (`liste: [{ id, nome, ville: [villaId] }]`).
 
+## Account autorizzati
+`meta/accessi`: `{ utenti: [{ email, nome, app: ['summer','scontrini'] }], emails: [..] }`. Le regole Firestore leggono `emails` (più gli amministratori scritti nelle regole, unici che possono scrivere `meta/accessi`). Gestito in Impostazioni → Account autorizzati. Un account presente senza `summer` non entra in Summer Database (controllo nell'app).
+
 ## Assegnazioni account (per l'app Scontrini)
-`meta/assegnazioni`: `{ account: [{ email (minuscolo), nome, ville: [villaId], prenotazioni: [bookingId] }], aggiornatoDa, aggiornatoIl }`. Si gestisce dalla pagina Spese ("Account e assegnazioni") e dalla finestra prenotazione. L'app Scontrini deve leggerlo e filtrare; è un filtro di comodità, non una protezione.
+`meta/assegnazioni`: `{ account: [{ email (minuscolo), nome, ville: [villaId], prenotazioni: [bookingId] }], aggiornatoDa, aggiornatoIl }`. Si gestisce dalla pagina Spese ("Account e assegnazioni") e dalla finestra prenotazione. L'app Scontrini deve leggerlo e filtrare; è un filtro di comodità, non una protezione. Gli account si scelgono tra quelli di `meta/accessi` con l'app `scontrini`.
 
 ## Pulizia di fine stagione
 In Impostazioni, protetta da password (impronta SHA-256 con sale in `meta/sicurezza`, mai in chiaro): "Cancella tutte le prenotazioni" (`bookings` + prenotazioni assegnate agli account) e "Cancella tutte le note spese" (`scontrini` + `scontrini_foto`). Prima scarica un archivio JSON. Non tocca mai `villas` (schede e listini), `villas_foto`, `villas_thumb`, `meta/preferiti`, `meta/settings`.

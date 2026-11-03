@@ -212,6 +212,8 @@
     // account dell'app Scontrini: quali ville e prenotazioni vede ciascuno
     $('#sp-assign').addEventListener('click', () => openAssign());
     let selAcc = '';
+    // account abilitati all'app Scontrini (meta/accessi)
+    const scAccounts = () => (((data().accessi || {}).utenti) || []).filter(u => (u.app || []).includes('scontrini'));
     function openAssign() {
       const dlg = $('#dlg');
       let q = '';
@@ -228,9 +230,10 @@
         const nAss = a => (a.ville || []).length + ' ville · ' + (a.prenotazioni || []).length + ' prenotazioni';
         dlg.innerHTML = `<div class="dlg assign">
           <h3>Account e assegnazioni</h3>
-          <p class="note">Nell'app Scontrini un account con assegnazioni vede solo le ville e le prenotazioni scelte qui. Un account non in elenco vede tutto. Serve a fare ordine, non è una protezione: per entrare, l'email deve comunque essere tra quelle autorizzate nelle regole di Firestore.</p>
-          <div class="as-accs">${list.map(a => `<button type="button" class="fav-chip ${a.email === selAcc ? 'on' : ''}" data-acc="${esc(a.email)}">${esc(a.nome || a.email)} <em>${esc(nAss(a))}</em></button>`).join('')}<button type="button" class="fav-chip add" id="as-new">+ Aggiungi account</button></div>
-          <div id="as-form" hidden class="as-form"><input id="as-email" type="email" placeholder="email Google, es. nome@gmail.com"><input id="as-nome" placeholder="Nome (facoltativo)"><button type="button" class="btn small primary" id="as-add">Aggiungi</button><button type="button" class="btn small" id="as-x">Annulla</button></div>
+          <p class="note">Nell'app Scontrini un account con assegnazioni vede solo le ville e le prenotazioni scelte qui. Gli account si scelgono tra quelli autorizzati all'app Scontrini (Impostazioni → Account autorizzati).</p>
+          <div class="as-accs">${list.map(a => `<button type="button" class="fav-chip ${a.email === selAcc ? 'on' : ''}" data-acc="${esc(a.email)}">${esc(a.nome || a.email)} <em>${esc(nAss(a))}</em></button>`).join('')}${scAccounts().filter(u => !list.some(a => a.email === u.email)).length ? '<button type="button" class="fav-chip add" id="as-new">+ Aggiungi account</button>' : ''}</div>
+          <div id="as-form" hidden class="as-form"><select id="as-pick">${scAccounts().filter(u => !list.some(a => a.email === u.email)).map(u => `<option value="${esc(u.email)}">${esc(u.nome ? u.nome + ' · ' + u.email : u.email)}</option>`).join('')}</select><button type="button" class="btn small primary" id="as-add">Aggiungi</button><button type="button" class="btn small" id="as-x">Annulla</button></div>
+          ${!scAccounts().length ? '<div class="warn">Nessun account autorizzato all\'app Scontrini. Aggiungili in Impostazioni → Account autorizzati.</div>' : ''}
           ${acc ? `<div class="as-head"><div><b>${esc(acc.nome || acc.email)}</b><small>${esc(acc.email)}</small></div><button type="button" class="btn small danger" id="as-rm">Rimuovi account</button></div>
           <input type="search" id="as-q" placeholder="Cerca villa o cliente" value="${esc(q)}">
           <div class="as-list">${vl.map(v => {
@@ -243,13 +246,13 @@
           <div class="foot"><button type="button" class="btn primary" id="as-ok">Fatto</button></div></div>`;
         const upd = fn => { const l = JSON.parse(JSON.stringify(accs())); const a = l.find(x => x.email === selAcc); if (!a) return; a.ville = a.ville || []; a.prenotazioni = a.prenotazioni || []; fn(a); save(l); draw(); };
         $$('#dlg [data-acc]').forEach(b => b.onclick = () => { selAcc = b.dataset.acc; draw(); });
-        $('#as-new').onclick = () => { $('#as-form').hidden = false; $('#as-email').focus(); };
+        const nb = $('#as-new'); if (nb) nb.onclick = () => { $('#as-form').hidden = false; $('#as-pick').focus(); };
         const x = $('#as-x'); if (x) x.onclick = () => { $('#as-form').hidden = true; };
-        $('#as-add').onclick = () => {
-          const email = $('#as-email').value.trim().toLowerCase();
-          if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { $('#as-email').focus(); toast('Email non valida'); return; }
+        const ad = $('#as-add'); if (ad) ad.onclick = () => {
+          const email = $('#as-pick').value; if (!email) return;
+          const u = scAccounts().find(x => x.email === email);
           if (accs().some(a => a.email === email)) { selAcc = email; draw(); return; }
-          save(accs().concat([{ email, nome: $('#as-nome').value.trim(), ville: [], prenotazioni: [] }])); selAcc = email; draw();
+          save(accs().concat([{ email, nome: (u && u.nome) || '', ville: [], prenotazioni: [] }])); selAcc = email; draw();
         };
         const rm = $('#as-rm'); if (rm) rm.onclick = () => {
           rm.outerHTML = `<span class="as-rmq">Rimuovere? Vedrà di nuovo tutto. <button type="button" class="btn small danger solid" id="as-rmok">Rimuovi</button></span>`;

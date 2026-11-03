@@ -4,17 +4,25 @@ rules_version = '2';
 // Le email reali sono solo nella console Firebase (questo repository è pubblico).
 service cloud.firestore {
   match /databases/{database}/documents {
-    function autorizzato() {
+    function emailUtente() { return request.auth.token.email.lower(); }
+    // amministratori: entrano sempre e sono gli unici che possono modificare l'elenco degli account
+    function amministratore() {
       return request.auth != null
         && request.auth.token.email_verified == true
-        && request.auth.token.email.lower() in [
-          'EMAIL-1@gmail.com',
-          'EMAIL-2@gmail.com'
-        ];
+        && emailUtente() in ['EMAIL-1@gmail.com', 'EMAIL-2@gmail.com'];
+    }
+    // account autorizzati: amministratori + elenco gestito dall'app (meta/accessi, campo "emails")
+    function autorizzato() {
+      return amministratore()
+        || (request.auth != null
+          && request.auth.token.email_verified == true
+          && exists(/databases/$(database)/documents/meta/accessi)
+          && emailUtente() in get(/databases/$(database)/documents/meta/accessi).data.emails);
     }
     match /villas/{id}   { allow read, write: if autorizzato(); }
     match /bookings/{id} { allow read, write: if autorizzato(); }
-    match /meta/{id}     { allow read, write: if autorizzato(); }
+    match /meta/accessi  { allow read: if autorizzato(); allow write: if amministratore(); }
+    match /meta/{id}     { allow read, write: if autorizzato() && id != 'accessi'; }
     match /villas_foto/{id}  { allow read, write: if autorizzato(); }
     match /villas_thumb/{id} { allow read, write: if autorizzato(); }
     match /scontrini/{id}      { allow read, write: if autorizzato(); }

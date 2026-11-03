@@ -1,5 +1,5 @@
 /* Permette di aprire l'app anche senza connessione. Cambia VERSION a ogni aggiornamento. */
-const VERSION = 'sdb-v27';
+const VERSION = 'sdb-v28';
 const FILES = ['./', 'index.html', 'app.css', 'core.js', 'firebase-config.js', 'store.js', 'spese.js', 'app.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/maskable-192.png', 'icons/maskable-512.png', 'icons/apple-touch-icon.png', 'icons/favicon-48.png', 'icons/logo-240.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(VERSION).then(c => c.addAll(FILES))); self.skipWaiting(); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== VERSION).map(k => caches.delete(k))))); self.clients.claim(); });

@@ -1010,6 +1010,12 @@ window.SDBStore.ready.then(function () {
         <label class="field"><span>Nome</span><input id="s-name" value="${esc(st.seasonName)}"></label>
         <label class="field"><span>Inizio calendario</span><input type="date" id="s-start" value="${esc(st.seasonStart)}"></label>
         <label class="field"><span>Fine calendario</span><input type="date" id="s-end" value="${esc(st.seasonEnd)}"></label></div></section>
+      ${store.mode === 'online' ? `<section class="card" id="acc-card"><h2>Account autorizzati</h2>
+        <p class="note">Chi è in questo elenco può accedere con il proprio account Google. Scegli per ognuno a quale app può entrare. Solo gli amministratori possono modificare l'elenco.</p>
+        <div id="acc-list"></div>
+        <form class="loc-new" id="acc-add" autocomplete="off"><input id="acc-email" type="email" placeholder="email Google"><input id="acc-nome" placeholder="Nome (facoltativo)"><button class="btn small">Aggiungi account</button></form>
+        <div id="acc-msg"></div>
+      </section>` : ''}
       <section class="card"><h2>Località</h2>
         <p class="note">È l'elenco da cui scegli la località nella scheda di ogni villa e che usi come filtro. Se due nomi indicano lo stesso posto (es. P.CERVO e PORTO CERVO), usa "Unisci in…": tutte le ville passano al nome scelto.</p>
         <div id="loc-list" class="loc-admin"></div>
@@ -1074,6 +1080,35 @@ window.SDBStore.ready.then(function () {
       if (!(p.to > p.from)) { p[el.dataset.pk] = prev; toast('Il check-out deve essere dopo il check-in'); drawPerDef(); return; }
       save(); drawPerDef();
     });
+    // ---- account autorizzati (meta/accessi) ----
+    const APPS = [['summer', 'Summer Database'], ['scontrini', 'Scontrini']];
+    const accUsers = () => JSON.parse(JSON.stringify((data().accessi && data().accessi.utenti) || []));
+    const accSave = list => Promise.resolve(store.setAccessi(list)).then(() => { $('#acc-msg').innerHTML = ''; drawAcc(); toast('Account aggiornati'); }, err => {
+      $('#acc-msg').innerHTML = `<div class="warn err">${err && err.code === 'permission-denied' ? 'Non puoi modificare l\'elenco: serve un account amministratore, e le regole di Firestore devono essere aggiornate (vedi istruzioni).' : 'Salvataggio non riuscito: ' + esc(err.message || err)}</div>`;
+    });
+    const drawAcc = () => {
+      const box = $('#acc-list'); if (!box) return;
+      const list = accUsers();
+      box.innerHTML = list.length ? `<div class="tbl-wrap"><table class="prices acc-tbl"><thead><tr><th>Account</th>${APPS.map(([, l]) => `<th>${l}</th>`).join('')}<th></th></tr></thead><tbody>
+        ${list.map((u, i) => `<tr><td><b>${esc(u.nome || u.email)}</b>${u.nome ? `<small class="note">${esc(u.email)}</small>` : ''}</td>${APPS.map(([k]) => `<td><input type="checkbox" data-ui="${i}" data-app="${k}" ${(u.app || []).includes(k) ? 'checked' : ''}></td>`).join('')}<td><button type="button" class="btn small danger" data-urm="${i}">Togli</button></td></tr>`).join('')}
+        </tbody></table></div>` : '<p class="note">Nessun account nell\'elenco: per ora entrano solo gli amministratori scritti nelle regole di Firestore.</p>';
+    };
+    if ($('#acc-card')) {
+      drawAcc();
+      $('#acc-list').addEventListener('change', e => { const cb = e.target.closest('[data-ui]'); if (!cb) return; const l = accUsers(); const u = l[Number(cb.dataset.ui)]; u.app = (u.app || []).filter(x => x !== cb.dataset.app); if (cb.checked) u.app.push(cb.dataset.app); accSave(l); });
+      $('#acc-list').addEventListener('click', e => {
+        const b = e.target.closest('[data-urm]'); if (!b) return;
+        const l = accUsers(); const u = l[Number(b.dataset.urm)];
+        b.outerHTML = `<span class="as-rmq">Togliere ${esc(u.email)}? Non potrà più entrare. <button type="button" class="btn small danger solid" data-urmok="${b.dataset.urm}">Togli</button></span>`;
+      });
+      $('#acc-list').addEventListener('click', e => { const b = e.target.closest('[data-urmok]'); if (!b) return; const l = accUsers(); l.splice(Number(b.dataset.urmok), 1); accSave(l); });
+      $('#acc-add').addEventListener('submit', e => {
+        e.preventDefault(); const email = $('#acc-email').value.trim().toLowerCase();
+        if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { toast('Email non valida'); $('#acc-email').focus(); return; }
+        const l = accUsers(); if (l.some(u => u.email === email)) { toast('Account già presente'); return; }
+        l.push({ email, nome: $('#acc-nome').value.trim(), app: ['scontrini'] }); $('#acc-email').value = ''; $('#acc-nome').value = ''; accSave(l);
+      });
+    }
     const drawLocs = () => {
       const list = locList(); const count = l => data().villas.filter(v => normLoc(v.location) === l).length;
       $('#loc-list').innerHTML = list.length ? list.map(l => `<div class="loc-row" data-l="${esc(l)}"><b>${esc(l)}</b><span class="note">${count(l)} ville</span>
