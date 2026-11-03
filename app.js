@@ -186,6 +186,17 @@ window.SDBStore.ready.then(function () {
   /* =====================================================================
      DISPONIBILITÀ
      ===================================================================== */
+  /* Quale listino usare per una villa con la tariffa scelta:
+     - Settimanale: serve almeno un prezzo settimanale, altrimenti la villa non si affitta a settimana e non compare.
+     - Altre tariffe: se la villa ha prezzi per quella tariffa li uso; se non li ha ma ha prezzi settimanali,
+       mostro quelli (si sommano le settimane); se non ha né l'una né l'altra, non compare. */
+  const hasNumPrice = (v, t) => (settings().periods[t] || []).some((p, i) => typeof S.priceAt(v, t, i, 'netto') === 'number' || typeof S.priceAt(v, t, i, 'listino') === 'number');
+  function tariffFor(v, t) {
+    if (hasNumPrice(v, t)) return t;
+    if (t !== 'settimanale' && hasNumPrice(v, 'settimanale')) return 'settimanale';
+    return null;
+  }
+  let hiddenNoPrice = 0;
   function filteredVillas() {
     const st = settings();
     const per = st.periods[ui.tariff] || [];
@@ -195,7 +206,11 @@ window.SDBStore.ready.then(function () {
     const hasRange = ui.dal && ui.al && ui.al > ui.dal;
     const priceFilter = (typeof da === 'number') || (typeof a === 'number');
     const bookings = data().bookings;
+    hiddenNoPrice = 0;
     return sortedVillas().filter(v => {
+      const tv = tariffFor(v, ui.tariff);
+      if (!tv) { hiddenNoPrice++; return false; }
+      const perV = st.periods[tv] || [];
       if (q && !(`${v.name} ${v.nomeReale} ${v.proprietario} ${v.location} ${v.indirizzo}`.toLowerCase().includes(q))) return false;
       if (ui.loc && String(v.location || '').trim().toUpperCase() !== ui.loc) return false;
       if (ui.fav) { const fl = favLists().find(l => l.id === ui.fav); if (fl && !(fl.ville || []).includes(v.id)) return false; }
@@ -203,13 +218,13 @@ window.SDBStore.ready.then(function () {
       if (bd !== null) { const vb = num(v.totalBedrooms) ?? num(v.guestBedrooms); if (vb === null || vb < bd) return false; }
       if (hasRange) {
         if (bookings.some(b => b.villaId === v.id && blocks(b.status) && b.from < ui.al && b.to > ui.dal)) return false;
-        if (ndSpans(v, ui.tariff).some(s => s.from < ui.al && s.to > ui.dal)) return false;
+        if (ndSpans(v, tv).some(s => s.from < ui.al && s.to > ui.dal)) return false;
       }
       if (priceFilter) {
         let hit = false;
-        per.forEach((p, i) => {
+        perV.forEach((p, i) => {
           if (hasRange && !(p.from < ui.al && p.to > ui.dal)) return;
-          const pr = S.priceAt(v, ui.tariff, i, ui.mode);
+          const pr = S.priceAt(v, tv, i, ui.mode);
           if (typeof pr === 'number' && (typeof da !== 'number' || pr >= da) && (typeof a !== 'number' || pr <= a)) hit = true;
         });
         if (!hit) return false;
@@ -310,6 +325,9 @@ window.SDBStore.ready.then(function () {
     const X = d => S.diffDays(start, d) * W;
 
     const rows = vs.map(v => {
+      const tv = tariffFor(v, ui.tariff) || ui.tariff;
+      const perV = st.periods[tv] || [];
+      const fallback = tv !== ui.tariff;
       const spans = [];
       const bars = (byVilla[v.id] || []).map(b => {
         let l = X(b.from) + (b.earlyIn ? 0 : W / 2), r = X(b.to) + (b.lateOut ? W : W / 2);
@@ -327,23 +345,23 @@ window.SDBStore.ready.then(function () {
         const tip = [statoLabel(b.status), S.dm(b.from) + ' → ' + S.dm(b.to), b.cliente, typeof b.prezzoVendita === 'number' ? 'Vendita ' + S.money(b.prezzoVendita) : '', typeof b.prezzoAcquisto === 'number' ? 'Acquisto ' + S.money(b.prezzoAcquisto) : '', b.earlyIn ? 'Early check-in' : '', b.lateOut ? 'Late check-out' : ''].concat(extras).filter(Boolean).join(' · ');
         return `<div class="bar" data-b="${esc(b.id)}" style="left:${l}px;width:${w}px;background:${esc(col)};color:${S.inkFor(col)}" title="${esc(tip)}"><span class="who">${esc(txt)}</span>${tot ? `<span class="tot">${esc(tot)}</span>` : ''}</div>`;
       }).join('');
-      const nds = ndSpans(v, ui.tariff).map(s => {
+      const nds = ndSpans(v, tv).map(s => {
         const l = Math.max(X(s.from) + W / 2, 0), r = Math.min(X(s.to) + W / 2, width);
         if (r <= 0 || l >= width) return '';
         spans.push({ l, r, ink: '#fff', nd: true });
         return `<div class="bar ndbar" data-nd="${esc(v.id)}" style="left:${l}px;width:${r - l}px" title="Non disponibile da listino · ${S.dm(s.from)} → ${S.dm(s.to)}"><span class="tot">ND</span></div>`;
       }).join('');
       // il prezzo resta sullo sfondo; se il periodo è impegnato il testo prende il colore leggibile sopra la barra
-      const pills = per.map((p, i) => {
-        const pr = S.priceAt(v, ui.tariff, i, ui.mode); if (pr === null) return '';
+      const pills = perV.map((p, i) => {
+        const pr = S.priceAt(v, tv, i, ui.mode); if (pr === null) return '';
         const l = X(p.from), w = Math.max(X(p.to) - l, W);
         const hit = priceFilter && typeof pr === 'number' && (typeof da !== 'number' || pr >= da) && (typeof a !== 'number' || pr <= a);
         const txt = pr === 'ND' ? 'ND' : (w >= 74 ? S.money(pr) : S.short(pr));
         const mid = l + w / 2; const cov = spans.find(s => s.l <= mid && s.r >= mid);
         if (cov || pr === 'ND') return ''; // periodo impegnato o ND: niente prezzo settimanale sotto
-        return `<div class="pill${pr === 'ND' ? ' nd' : ''}${hit ? ' hit' : ''}${cov ? ' on' : ''}" data-from="${p.from}" data-to="${p.to}" style="left:${l}px;width:${w}px${cov ? ';color:' + cov.ink : ''}"${cov ? '' : ` role="button" tabindex="0" aria-label="Prenota ${esc(v.name)} ${esc(p.label)}" title="Prenota ${esc(p.label)}"`}>${esc(txt)}</div>`;
+        return `<div class="pill${pr === 'ND' ? ' nd' : ''}${hit ? ' hit' : ''}${cov ? ' on' : ''}${fallback ? ' wk' : ''}" data-from="${p.from}" data-to="${p.to}" style="left:${l}px;width:${w}px${cov ? ';color:' + cov.ink : ''}"${cov ? '' : ` role="button" tabindex="0" aria-label="Prenota ${esc(v.name)} ${esc(p.label)}" title="${fallback ? 'Solo prezzo settimanale · ' : ''}Prenota ${esc(p.label)}"`}>${esc(txt)}${fallback && w >= 60 ? '<small>/sett.</small>' : ''}</div>`;
       }).join('');
-      const sub = [v.location, v.guests || v.pax ? (v.guests || v.pax) + ' osp.' : '', v.totalBedrooms ? v.totalBedrooms + ' cam.' : ''].filter(Boolean).join(' · ');
+      const sub = [fallback ? 'solo settimanale' : '', v.location, v.guests || v.pax ? (v.guests || v.pax) + ' osp.' : '', v.totalBedrooms ? v.totalBedrooms + ' cam.' : ''].filter(Boolean).join(' · ');
       return `<div class="vrow" data-v="${esc(v.id)}">
         <div class="vname" data-open="${esc(v.id)}" title="Apri scheda ${esc(v.name)}"><b>${esc(v.name)}</b><small>${esc(sub || ' ')}</small></div>
         <div class="track" style="${trackBg}">${mLines}<div class="lane-a">${nds}${bars}${pills}</div></div>
@@ -360,7 +378,7 @@ window.SDBStore.ready.then(function () {
         <div class="hover-col" hidden></div><div class="hover-tag" hidden></div>
       </div>`;
     cal.scrollLeft = keepX; cal.scrollTop = keepY;
-    $('#count').textContent = `${vs.length} di ${data().villas.length} ville`;
+    $('#count').textContent = `${vs.length} di ${data().villas.length} ville` + (hiddenNoPrice ? ` · ${hiddenNoPrice} senza prezzo ${ui.tariff === 'settimanale' ? 'settimanale' : S.TARIFFE.find(t => t.key === ui.tariff).label.toLowerCase() + ' né settimanale'} non mostrate` : '');
     const er = $('#empty-reset'); if (er) er.addEventListener('click', () => $('#f-reset').click());
     bindCalendar(cal, { W, start, nDays, nameW });
   }
