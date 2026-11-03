@@ -78,7 +78,7 @@
   function loginScreen(html) {
     const el = document.getElementById('app');
     el.innerHTML = `<div class="login"><div class="login-card">
-      <div class="login-brand"><b>Summer Database</b><span>Ville · Disponibilità & listini</span></div>${html}</div></div>`;
+      <div class="login-brand"><img src="icons/logo-240.png" alt="Esmeralda Luxury Villas" width="120" height="120"><b>Summer Database</b><span>Ville · Disponibilità & listini</span></div>${html}</div></div>`;
     return el;
   }
 
