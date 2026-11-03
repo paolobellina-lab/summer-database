@@ -82,11 +82,11 @@
         </div></div>
       <div class="card sp-filters no-print">
         <label class="field"><span>Villa</span><select id="sp-villa"><option value="">Tutte le ville</option>${ville().map(v => `<option value="${esc(v.id)}" ${ui.spVilla === v.id ? 'selected' : ''}>${esc(v.name)}</option>`).join('')}</select></label>
+        <label class="field sp-pren"><span>Prenotazione</span><select id="sp-pren"><option value="">Tutte le prenotazioni</option></select></label>
         <label class="field"><span>Periodo</span><select id="sp-per">${P.map(([k, l]) => `<option value="${k}" ${ui.spPeriodo === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
         <label class="field sp-date" ${ui.spPeriodo === 'custom' ? '' : 'hidden'}><span>Dal</span><input type="date" id="sp-da" value="${esc(ui.spDa || '')}"></label>
         <label class="field sp-date" ${ui.spPeriodo === 'custom' ? '' : 'hidden'}><span>Al</span><input type="date" id="sp-a" value="${esc(ui.spA || '')}"></label>
         <label class="field sp-q"><span>Cerca</span><input type="search" id="sp-q" placeholder="Motivo, categoria o cliente" value="${esc(ui.spQ || '')}"></label>
-        <div id="sp-only"></div>
       </div>
       <div class="sp-summary"><div><b id="sp-tot">€ 0,00</b><span>Totale spese</span></div><div><b id="sp-n">0</b><span>Scontrini</span></div><div><b id="sp-p">0</b><span>Prenotazioni con spese</span></div></div>
       <div id="sp-out"></div>
@@ -111,15 +111,27 @@
         if (da && String(s.data) < da) return false;
         if (a && String(s.data) > a) return false;
         const p = prenDi(s);
-        if (only && (!p || p.id !== only)) return false;
+        if (only === '__gen' && p) return false;
+        if (only && only !== '__gen' && (!p || p.id !== only)) return false;
         if (q && !`${s.motivo || ''} ${s.categoria || ''} ${p ? p.cliente : ''}`.toLowerCase().includes(q)) return false;
         return true;
       });
 
-      // banner "solo questa prenotazione"
-      const ob = only ? (prenById.get(only) || (bookings.find(b => b.id === only) && normPren(bookings.find(b => b.id === only)))) : null;
-      $('#sp-only').innerHTML = only ? `<div class="sp-chip">Solo: <b>${esc(ob ? ob.cliente : 'prenotazione')}</b>${ob ? ` · ${dataBreve(ob.from)} → ${dataBreve(ob.to)}` : ''} <button type="button" class="btn small" id="sp-only-x">Mostra tutte</button></div>` : '';
-      const ox = $('#sp-only-x'); if (ox) ox.onclick = () => { ui.spPren = ''; saveUI(); render(); };
+      // menu "Prenotazione": prenotazioni che hanno scontrini (della villa scelta, se c'è)
+      const opts = new Map(); let hasGen = false;
+      lista.forEach(s => {
+        if (vf && s.villaId !== vf) return;
+        const p = prenDi(s);
+        if (!p) { hasGen = true; return; }
+        if (!opts.has(p.id)) opts.set(p.id, { p, villa: s.villaId });
+      });
+      if (only && only !== '__gen' && !opts.has(only)) { const bb = bookings.find(x => x.id === only); if (bb) opts.set(only, { p: normPren(bb), villa: bb.villaId }); }
+      const ordered = [...opts.values()].sort((x, y) => String(y.p.from).localeCompare(String(x.p.from)));
+      const optHtml = '<option value="">Tutte le prenotazioni</option>'
+        + (hasGen || only === '__gen' ? `<option value="__gen" ${only === '__gen' ? 'selected' : ''}>Spese generali della villa</option>` : '')
+        + ordered.map(({ p, villa }) => `<option value="${esc(p.id)}" ${only === p.id ? 'selected' : ''}>${vf ? '' : esc(nomeVilla(villa)) + ' · '}${esc(p.cliente)} · ${dataBreve(p.from)} → ${dataBreve(p.to)}${p.nonInCalendario ? ' (non più in calendario)' : ''}</option>`).join('');
+      const sel = $('#sp-pren');
+      if (sel && sel.dataset.h !== optHtml) { sel.innerHTML = optHtml; sel.dataset.h = optHtml; sel.value = only || ''; }
 
       const perVilla = new Map();
       righe.forEach(s => {
@@ -172,7 +184,8 @@
 
     // filtri
     const bind = (id, k, ev) => $('#' + id).addEventListener(ev, e => { ui[k] = e.target.value; saveUI(); render(); });
-    bind('sp-villa', 'spVilla', 'change'); bind('sp-da', 'spDa', 'change'); bind('sp-a', 'spA', 'change');
+    $('#sp-villa').addEventListener('change', e => { ui.spVilla = e.target.value; ui.spPren = ''; saveUI(); render(); });
+    bind('sp-pren', 'spPren', 'change'); bind('sp-da', 'spDa', 'change'); bind('sp-a', 'spA', 'change');
     let t; $('#sp-q').addEventListener('input', e => { ui.spQ = e.target.value; saveUI(); clearTimeout(t); t = setTimeout(render, 120); });
     $('#sp-per').addEventListener('change', e => { ui.spPeriodo = e.target.value; saveUI(); $$('.sp-date').forEach(x => { x.hidden = ui.spPeriodo !== 'custom'; }); render(); });
 

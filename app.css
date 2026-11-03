@@ -487,6 +487,7 @@ dialog::backdrop { background: rgba(8, 20, 18, .45); }
 .sp-filters { flex-direction: row; flex-wrap: wrap; align-items: flex-end; gap: 12px; }
 .sp-filters .field { width: 190px; }
 .sp-filters .sp-q { flex: 1 1 220px; width: auto; }
+.sp-filters .sp-pren { width: 300px; }
 #sp-only { width: 100%; }
 #sp-only:empty { display: none; }
 .sp-chip { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 10px; border: 1px solid var(--accent); background: var(--accent-soft); font-size: 13px; }
