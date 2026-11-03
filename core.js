@@ -62,11 +62,28 @@
     };
   }
 
+  /* Periodi tariffari per una villa: quelli dell'Excel (cambio di domenica) oppure gli stessi
+     anticipati di un giorno (cambio di sabato). Il numero e l'ordine dei periodi non cambia,
+     così i prezzi restano collegati al periodo giusto. villa.cambio vince sul predefinito. */
+  const _perCache = {};
+  function cambioDi(settings, villa) { return (villa && (villa.cambio === 'sabato' || villa.cambio === 'domenica') && villa.cambio) || (settings && settings.cambio) || 'domenica'; }
+  function periodsFor(settings, villa, tariff) {
+    const cambio = cambioDi(settings, villa); const key = cambio + '|' + tariff;
+    if (_perCache[key]) return _perCache[key];
+    const base = defaultPeriods()[tariff] || [];
+    const out = cambio === 'domenica' ? base : base.map(p => {
+      const from = addDays(p.from, -1), to = addDays(p.to, -1);
+      return { label: tariff === 'settimanale' ? dm(from) + ' – ' + dm(to) : p.label, from, to };
+    });
+    return (_perCache[key] = out);
+  }
+
   function defaultSettings() {
     return {
       seasonName: 'Summer 2027',
       seasonStart: '2027-05-01',
       seasonEnd: '2027-10-31',
+      cambio: 'domenica',   // giorno di cambio predefinito: 'sabato' o 'domenica'
       periods: defaultPeriods(),
       defaults: {
         settimanale: { spese: 2500, arrotonda: 5000, margine: 0.2 },
@@ -129,5 +146,5 @@
   }
   function uid(p) { return (p || 'id') + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 
-  window.SDB = { STATUS_COLOR, PALETTE, inkFor, DAY, MESI, MESI_L, GG, parse, iso, addDays, diffDays, dm, dmy, TARIFFE, STATI, defaultSettings, defaultPeriods, salePrice, priceAt, emptyPricing, money, short, parseMoney, uid };
+  window.SDB = { periodsFor, cambioDi, STATUS_COLOR, PALETTE, inkFor, DAY, MESI, MESI_L, GG, parse, iso, addDays, diffDays, dm, dmy, TARIFFE, STATI, defaultSettings, defaultPeriods, salePrice, priceAt, emptyPricing, money, short, parseMoney, uid };
 })();

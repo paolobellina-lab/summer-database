@@ -649,3 +649,8 @@ dialog:has(.assign) { width: min(640px, calc(100vw - 32px)); }
 /* prezzo settimanale mostrato al posto di una tariffa mancante */
 .pill.wk { font-style: italic; color: var(--muted); }
 .pill.wk small { font-size: 9px; margin-left: 2px; font-style: normal; opacity: .8; }
+
+.cambio-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.cambio-row .lbl { font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+
+.field > .seg { align-self: flex-start; max-width: 100%; flex-wrap: wrap; }

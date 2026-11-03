@@ -9,7 +9,7 @@ window.SDBStore.ready.then(function () {
   const bookingColor = b => b.color || S.STATUS_COLOR[b.status] || S.STATUS_COLOR.occupato;
   // periodi ND del listino trasformati in "prenotazioni simulate" grigie (non salvate, calcolate dal listino)
   function ndSpans(v, tariff) {
-    const per = (settings().periods[tariff] || []); const out = [];
+    const per = S.periodsFor(settings(), v, tariff); const out = [];
     per.forEach((p, i) => {
       if (S.priceAt(v, tariff, i, 'netto') !== 'ND') return;
       const last = out[out.length - 1];
@@ -22,10 +22,10 @@ window.SDBStore.ready.then(function () {
     if (!v || !from || !to) return null;
     const st = settings(); const order = [ui.tariff].concat(S.TARIFFE.map(t => t.key).filter(k => k !== ui.tariff));
     for (const t of order) {
-      const i = st.periods[t].findIndex(p => p.from === from && p.to === to);
-      if (i >= 0) { const s = S.priceAt(v, t, i, 'listino'), n = S.priceAt(v, t, i, 'netto'); if (typeof s === 'number') return { sale: s, net: typeof n === 'number' ? n : null, label: S.TARIFFE.find(x => x.key === t).label + ' · ' + st.periods[t][i].label }; }
+      const pt = S.periodsFor(st, v, t); const i = pt.findIndex(p => p.from === from && p.to === to);
+      if (i >= 0) { const s = S.priceAt(v, t, i, 'listino'), n = S.priceAt(v, t, i, 'netto'); if (typeof s === 'number') return { sale: s, net: typeof n === 'number' ? n : null, label: S.TARIFFE.find(x => x.key === t).label + ' · ' + pt[i].label }; }
     }
-    const wk = st.periods.settimanale; let d = from, sale = 0, net = 0, k = 0;
+    const wk = S.periodsFor(st, v, 'settimanale'); let d = from, sale = 0, net = 0, k = 0;
     while (d < to) {
       const i = wk.findIndex(p => p.from === d); if (i < 0) return null;
       const s = S.priceAt(v, 'settimanale', i, 'listino'), n = S.priceAt(v, 'settimanale', i, 'netto');
@@ -36,7 +36,7 @@ window.SDBStore.ready.then(function () {
   // stima per date non allineate: somma delle settimane di listino in cui cadono almeno 4 notti del soggiorno
   function listinoApprox(v, from, to) {
     const ex = listinoFor(v, from, to); if (ex) return ex;
-    const wk = settings().periods.settimanale; let sale = 0, k = 0;
+    const wk = S.periodsFor(settings(), v, 'settimanale'); let sale = 0, k = 0;
     wk.forEach((p, i) => {
       const a = p.from > from ? p.from : from, b = p.to < to ? p.to : to;
       if (S.diffDays(a, b) >= 4) { const s = S.priceAt(v, 'settimanale', i, ui.mode); if (typeof s === 'number') { sale += s; k++; } }
@@ -190,7 +190,7 @@ window.SDBStore.ready.then(function () {
      - Settimanale: serve almeno un prezzo settimanale, altrimenti la villa non si affitta a settimana e non compare.
      - Altre tariffe: se la villa ha prezzi per quella tariffa li uso; se non li ha ma ha prezzi settimanali,
        mostro quelli (si sommano le settimane); se non ha né l'una né l'altra, non compare. */
-  const hasNumPrice = (v, t) => (settings().periods[t] || []).some((p, i) => typeof S.priceAt(v, t, i, 'netto') === 'number' || typeof S.priceAt(v, t, i, 'listino') === 'number');
+  const hasNumPrice = (v, t) => S.periodsFor(settings(), v, t).some((p, i) => typeof S.priceAt(v, t, i, 'netto') === 'number' || typeof S.priceAt(v, t, i, 'listino') === 'number');
   function tariffFor(v, t) {
     if (hasNumPrice(v, t)) return t;
     if (t !== 'settimanale' && hasNumPrice(v, 'settimanale')) return 'settimanale';
@@ -210,7 +210,7 @@ window.SDBStore.ready.then(function () {
     return sortedVillas().filter(v => {
       const tv = tariffFor(v, ui.tariff);
       if (!tv) { hiddenNoPrice++; return false; }
-      const perV = st.periods[tv] || [];
+      const perV = S.periodsFor(st, v, tv);
       if (q && !(`${v.name} ${v.nomeReale} ${v.proprietario} ${v.location} ${v.indirizzo}`.toLowerCase().includes(q))) return false;
       if (ui.loc && String(v.location || '').trim().toUpperCase() !== ui.loc) return false;
       if (ui.fav) { const fl = favLists().find(l => l.id === ui.fav); if (fl && !(fl.ville || []).includes(v.id)) return false; }
@@ -326,7 +326,7 @@ window.SDBStore.ready.then(function () {
 
     const rows = vs.map(v => {
       const tv = tariffFor(v, ui.tariff) || ui.tariff;
-      const perV = st.periods[tv] || [];
+      const perV = S.periodsFor(st, v, tv);
       const fallback = tv !== ui.tariff;
       const spans = [];
       const bars = (byVilla[v.id] || []).map(b => {
@@ -444,6 +444,7 @@ window.SDBStore.ready.then(function () {
   /* =====================================================================
      PRENOTAZIONE (finestra)
      ===================================================================== */
+  const julyWeek = v => { const wk = S.periodsFor(settings(), v, 'settimanale'); const p = wk.find(x => x.from >= '2027-07-01') || wk[0]; return p ? { from: p.from, to: p.to } : { from: '2027-07-04', to: '2027-07-11' }; };
   const fmtNum = x => new Intl.NumberFormat('it-IT').format(x);
   function openBooking(init) {
     const dlg = $('#dlg');
@@ -593,7 +594,7 @@ window.SDBStore.ready.then(function () {
   }
   const LOC_TONES = ['--m1', '--m2', '--m3', '--m4', '--m5', '--m6'];
   function villaStats(v) {
-    const st = settings(); const wk = st.periods.settimanale;
+    const st = settings(); const wk = S.periodsFor(st, v, 'settimanale');
     const bks = data().bookings.filter(b => b.villaId === v.id);
     let free = 0, nd = 0, booked = 0;
     const prices = wk.map((p, i) => {
@@ -717,7 +718,7 @@ window.SDBStore.ready.then(function () {
       const c = e.target.closest('.vcard'); if (!c) return;
       const act = e.target.closest('[data-act]'); const v = villaById(c.dataset.id);
       if (act && act.dataset.act === 'fav') { e.stopPropagation(); openFav(v.id, () => { drawLists(); draw(); }); return; }
-      if (act && act.dataset.act === 'book') { openBooking({ villaId: v.id, from: '2027-07-04', to: '2027-07-11' }); return; }
+      if (act && act.dataset.act === 'book') { openBooking(Object.assign({ villaId: v.id }, julyWeek(v))); return; }
       if (act && act.dataset.act === 'cal') { ui.q = v.name; saveUI(); location.hash = 'disponibilita'; return; }
       location.hash = 'villa-' + c.dataset.id;
     };
@@ -800,8 +801,11 @@ window.SDBStore.ready.then(function () {
 
     drawPrices();
     function drawPrices() {
-      const box = $('#prices'); const t = villaTab; const p = v.pricing[t]; const per = st.periods[t];
+      const box = $('#prices'); const t = villaTab; const p = v.pricing[t]; const per = S.periodsFor(st, v, t);
+      const defC = st.cambio || 'domenica';
       box.innerHTML = `<h2>Listino prezzi</h2>
+        <div class="cambio-row"><span class="lbl">Giorno di cambio</span><div class="seg" id="p-cambio">${[['', 'Predefinito (' + defC + ')'], ['sabato', 'Sabato'], ['domenica', 'Domenica']].map(([k, l]) => `<button type="button" data-c="${k}" class="${(v.cambio || '') === k ? 'on' : ''}">${l}</button>`).join('')}</div>
+          <span class="note">${v.cambio ? 'Questa villa usa un giorno diverso dal predefinito.' : 'Segue il giorno impostato in Impostazioni.'}</span></div>
         <div class="tabs" id="p-tabs">${S.TARIFFE.map(x => `<button type="button" data-t="${x.key}" class="${x.key === t ? 'on' : ''}">${x.label}</button>`).join('')}</div>
         <div class="params">
           <label class="field"><span>Spese servizi €</span><input data-p="spese" inputmode="numeric" value="${esc(p.spese)}"></label>
@@ -816,6 +820,7 @@ window.SDBStore.ready.then(function () {
             <td class="sale" data-sale="${i}"></td><td class="mg" data-mg="${i}"></td></tr>`).join('')}
         </tbody></table></div>`;
       per.forEach((_, i) => upd(i));
+      $('#p-cambio', box).addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; v.cambio = b.dataset.c; save(); drawPrices(); });
       $('#p-tabs', box).addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; villaTab = b.dataset.t; drawPrices(); });
       $$('[data-p]', box).forEach(el => el.addEventListener('input', () => {
         const k = el.dataset.p; let val = S.parseMoney(el.value);
@@ -859,7 +864,7 @@ window.SDBStore.ready.then(function () {
     }
     $('#v-blist').addEventListener('click', e => { const it = e.target.closest('[data-b]'); if (it) openBooking({ id: it.dataset.b }); });
     $('#v-blist').addEventListener('keydown', e => { if (e.key === 'Enter') { const it = e.target.closest('[data-b]'); if (it) openBooking({ id: it.dataset.b }); } });
-    $('#v-book').addEventListener('click', () => openBooking({ villaId: v.id, from: '2027-07-04', to: '2027-07-11' }));
+    $('#v-book').addEventListener('click', () => openBooking(Object.assign({ villaId: v.id }, julyWeek(v))));
     $('#v-fav').addEventListener('click', () => openFav(v.id, () => { const f = isFav(v.id); const b = $('#v-fav'); if (b) { b.classList.toggle('on', f); b.innerHTML = HEART(f) + ' Preferiti'; } }));
     // foto della villa
     let foto = [];
@@ -944,11 +949,10 @@ window.SDBStore.ready.then(function () {
   /* =====================================================================
      IMPOSTAZIONI
      ===================================================================== */
-  let setTab = 'settimanale';
   function viewSettings() {
     const st = JSON.parse(JSON.stringify(settings()));
     main.innerHTML = `<div class="page"><div class="wrap">
-      <div class="head"><div><h1>Impostazioni</h1><div class="sub">Stagione, periodi tariffari, valori per le nuove ville, backup.</div></div><div class="actions"><span class="saved" id="saved"></span></div></div>
+      <div class="head"><div><h1>Impostazioni</h1><div class="sub">Aspetto, stagione, giorno di cambio, valori per le nuove ville, backup.</div></div><div class="actions"><span class="saved" id="saved"></span></div></div>
       <section class="card"><h2>Aspetto</h2>
         <div class="field"><span>Tema</span><div class="seg" id="s-theme">${[['light', 'Chiaro (panna)'], ['dark', 'Scuro'], ['auto', 'Come il dispositivo']].map(([k, l]) => `<button type="button" data-v="${k}" class="${ui.theme === k ? 'on' : ''}">${l}</button>`).join('')}</div></div>
         <p class="note">La scelta vale solo per questo dispositivo.</p></section>
@@ -956,10 +960,10 @@ window.SDBStore.ready.then(function () {
         <label class="field"><span>Nome</span><input id="s-name" value="${esc(st.seasonName)}"></label>
         <label class="field"><span>Inizio calendario</span><input type="date" id="s-start" value="${esc(st.seasonStart)}"></label>
         <label class="field"><span>Fine calendario</span><input type="date" id="s-end" value="${esc(st.seasonEnd)}"></label></div></section>
-      <section class="card"><h2>Periodi tariffari</h2>
-        <div class="tabs" id="s-tabs">${S.TARIFFE.map(x => `<button type="button" data-t="${x.key}" class="${x.key === setTab ? 'on' : ''}">${x.label}</button>`).join('')}</div>
-        <div class="tbl-wrap"><table class="prices ptable"><thead><tr><th>Nome periodo</th><th>Dal (check-in)</th><th>Al (check-out)</th></tr></thead><tbody id="s-per"></tbody></table></div>
-        <p class="note">Il numero dei periodi resta quello dell'Excel, così i prezzi inseriti restano collegati al periodo giusto. Puoi cambiare nomi e date.</p></section>
+      <section class="card"><h2>Giorno di cambio</h2>
+        <div class="field"><span>Le settimane predefinite vanno</span><div class="seg" id="s-cambio">${[['sabato', 'Da sabato a sabato'], ['domenica', 'Da domenica a domenica']].map(([k, l]) => `<button type="button" data-c="${k}" class="${(st.cambio || 'domenica') === k ? 'on' : ''}">${l}</button>`).join('')}</div></div>
+        <p class="note">Vale per tutte le ville. Nella scheda di ogni villa, sopra il listino prezzi, puoi scegliere un giorno diverso solo per quella villa. Anche le tariffe bisettimanali, mensili e bimensili seguono lo stesso giorno. I prezzi già inseriti restano collegati alla stessa settimana.</p>
+        <p class="note" id="s-cambio-n"></p></section>
       <section class="card"><h2>Valori iniziali per una nuova villa</h2><div class="tbl-wrap"><table class="prices ptable"><thead><tr><th>Tariffa</th><th>Spese servizi €</th><th>Arrotonda a €</th><th>Margine %</th></tr></thead><tbody>
         ${S.TARIFFE.map(x => `<tr><td class="per">${x.label}</td><td><input data-d="${x.key}" data-k="spese" value="${esc(st.defaults[x.key].spese)}"></td><td><input data-d="${x.key}" data-k="arrotonda" value="${esc(st.defaults[x.key].arrotonda)}"></td><td><input data-d="${x.key}" data-k="margine" value="${esc(Math.round(st.defaults[x.key].margine * 1000) / 10)}"></td></tr>`).join('')}
       </tbody></table></div></section>
@@ -982,12 +986,9 @@ window.SDBStore.ready.then(function () {
     $('#s-name').addEventListener('input', e => { st.seasonName = e.target.value; save(); });
     $('#s-start').addEventListener('change', e => { if (e.target.value) { st.seasonStart = e.target.value; save(); } });
     $('#s-end').addEventListener('change', e => { if (e.target.value) { st.seasonEnd = e.target.value; save(); } });
-    const drawPer = () => {
-      $('#s-per').innerHTML = st.periods[setTab].map((p, i) => `<tr><td><input data-pi="${i}" data-pk="label" value="${esc(p.label)}"></td><td><input type="date" data-pi="${i}" data-pk="from" value="${esc(p.from)}"></td><td><input type="date" data-pi="${i}" data-pk="to" value="${esc(p.to)}"></td></tr>`).join('');
-    };
-    drawPer();
-    $('#s-tabs').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; setTab = b.dataset.t; $$('#s-tabs button').forEach(x => x.classList.toggle('on', x === b)); drawPer(); });
-    $('#s-per').addEventListener('input', e => { const el = e.target; if (!el.dataset.pk || !el.value) return; st.periods[setTab][Number(el.dataset.pi)][el.dataset.pk] = el.value; save(); });
+    const cambioNote = () => { const n = data().villas.filter(v => v.cambio && v.cambio !== (st.cambio || 'domenica')).length; $('#s-cambio-n').textContent = n ? `${n} ${n === 1 ? 'villa usa' : 'ville usano'} un giorno diverso, impostato ${n === 1 ? 'nella sua scheda' : 'nelle loro schede'}.` : ''; };
+    cambioNote();
+    $('#s-cambio').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; st.cambio = b.dataset.c; $$('#s-cambio button').forEach(x => x.classList.toggle('on', x === b)); save(); cambioNote(); });
     $$('[data-d]').forEach(el => el.addEventListener('input', () => {
       const k = el.dataset.k; let val = k === 'margine' ? Number(el.value.replace(',', '.')) / 100 : S.parseMoney(el.value);
       st.defaults[el.dataset.d][k] = isFinite(val) && val !== null ? val : 0; save();
