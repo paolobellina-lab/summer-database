@@ -979,6 +979,15 @@ window.SDBStore.ready.then(function () {
         <p class="note">L'importazione aggiunge e aggiorna ville e periodi presenti nel file. Non cancella nulla e non tocca gli scontrini.</p>
         <div id="s-msg"></div>
       </section>
+      <section class="card danger-card"><h2>Pulizia per la nuova stagione</h2>
+        <p class="note">Svuota il calendario e le note spese per ripartire con l'anno successivo. <b>Le schede delle ville restano intatte</b>: dati, prezzi settimanali, bisettimanali, mensili e bimensili, foto, preferiti e impostazioni. Prima di cancellare l'app scarica un archivio con tutto quello che sta per eliminare. Serve la password di pulizia.</p>
+        <div id="wipe-pass"></div>
+        <div class="wipe-btns">
+          <button class="btn danger" id="w-book">Cancella tutte le prenotazioni (${data().bookings.length})</button>
+          ${store.mode === 'online' ? `<button class="btn danger" id="w-sc">Cancella tutte le note spese${spese.ready ? ' (' + spese.list.length + ')' : ''}</button>` : ''}
+        </div>
+        <div id="wipe-box"></div>
+      </section>
     </div></div>`;
     $('#s-theme').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; ui.theme = b.dataset.v; saveUI(); applyTheme(); $$('#s-theme button').forEach(x => x.classList.toggle('on', x === b)); });
     let t;
@@ -994,6 +1003,64 @@ window.SDBStore.ready.then(function () {
       st.defaults[el.dataset.d][k] = isFinite(val) && val !== null ? val : 0; save();
     }));
     const msg = h => { $('#s-msg').innerHTML = h; };
+    // ---- password di pulizia: salvata solo come impronta (SHA-256 con sale), mai in chiaro ----
+    const hashPw = async (pw, salt) => { const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(salt + '|' + pw)); return Array.from(new Uint8Array(buf)).map(x => x.toString(16).padStart(2, '0')).join(''); };
+    const sec = () => data().sicurezza || null;
+    const checkPw = async pw => { const s0 = sec(); return !!(s0 && s0.hash && pw && (await hashPw(pw, s0.salt)) === s0.hash); };
+    const drawPass = () => {
+      const box = $('#wipe-pass'); const has = !!(sec() && sec().hash);
+      box.innerHTML = `<div class="wipe-pass"><span>${has ? 'Password di pulizia impostata.' : '<b>Prima imposta una password di pulizia.</b>'}</span><button type="button" class="btn small" id="pw-set">${has ? 'Cambia password' : 'Imposta password'}</button></div><div id="pw-form"></div>`;
+      $('#pw-set').onclick = () => {
+        $('#pw-form').innerHTML = `<form class="wipe-form" id="pw-f" autocomplete="off">${has ? '<input type="password" id="pw-old" placeholder="Password attuale" autocomplete="current-password">' : ''}<input type="password" id="pw-new" placeholder="Nuova password (almeno 6 caratteri)" autocomplete="new-password"><input type="password" id="pw-new2" placeholder="Ripeti la nuova password" autocomplete="new-password"><button class="btn small primary">Salva password</button><span class="wipe-err" id="pw-err"></span></form>`;
+        $('#pw-f').addEventListener('submit', async e => {
+          e.preventDefault(); const err = $('#pw-err');
+          if (has && !(await checkPw($('#pw-old').value))) { err.textContent = 'La password attuale non è corretta.'; return; }
+          const n1 = $('#pw-new').value, n2 = $('#pw-new2').value;
+          if (n1.length < 6) { err.textContent = 'Usa almeno 6 caratteri.'; return; }
+          if (n1 !== n2) { err.textContent = 'Le due password non coincidono.'; return; }
+          const salt = S.uid('s'); const hash = await hashPw(n1, salt);
+          try { await Promise.resolve(store.setSicurezza({ salt, hash, impostataDa: store.user || '', impostataIl: new Date().toISOString() })); toast('Password di pulizia salvata'); drawPass(); }
+          catch (x) { err.textContent = 'Salvataggio non riuscito: ' + (x.message || x); }
+        });
+      };
+    };
+    drawPass();
+    const downloadJson = (obj, name) => {
+      const blob = new Blob([JSON.stringify(obj, null, 1)], { type: 'application/json' }); const aEl = document.createElement('a');
+      aEl.href = URL.createObjectURL(blob); aEl.download = name; document.body.appendChild(aEl); aEl.click(); aEl.remove(); setTimeout(() => URL.revokeObjectURL(aEl.href), 2000);
+    };
+    const askWipe = (what) => {
+      const box = $('#wipe-box');
+      if (!(sec() && sec().hash)) { box.innerHTML = '<div class="warn err">Imposta prima la password di pulizia.</div>'; return; }
+      const label = what === 'book' ? `tutte le ${data().bookings.length} prenotazioni` : 'tutte le note spese (scontrini e foto), anche nelle app Scontrini e Spese Ville';
+      box.innerHTML = `<form class="wipe-confirm" id="w-f" autocomplete="off"><div><b>Stai per cancellare ${label}.</b> L'operazione non si può annullare. Prima viene scaricato l'archivio${what === 'sc' ? ' (senza le foto)' : ''}.</div>
+        <input type="password" id="w-pw" placeholder="Password di pulizia" autocomplete="off">
+        <div class="wipe-actions"><button class="btn danger solid" id="w-go">Scarica archivio e cancella</button><button type="button" class="btn" id="w-no">Annulla</button></div><span class="wipe-err" id="w-err"></span></form>`;
+      $('#w-pw').focus();
+      $('#w-no').onclick = () => { box.innerHTML = ''; };
+      $('#w-f').addEventListener('submit', async e => {
+        e.preventDefault(); const err = $('#w-err'); const go = $('#w-go');
+        if (!(await checkPw($('#w-pw').value))) { err.textContent = 'Password non corretta.'; $('#w-pw').select(); return; }
+        go.disabled = true; err.textContent = 'Preparazione dell\'archivio…';
+        const day = new Date().toISOString().slice(0, 10);
+        try {
+          if (what === 'book') {
+            downloadJson({ tipo: 'archivio prenotazioni', creatoIl: new Date().toISOString(), da: store.user || '', bookings: data().bookings, assegnazioni: data().assegnazioni || [] }, `archivio-prenotazioni-${day}.json`);
+            err.textContent = 'Cancellazione in corso…';
+            const n = await store.wipeBookings();
+            box.innerHTML = `<div class="warn ok">Cancellate ${n} prenotazioni. L'archivio è stato scaricato.</div>`; toast(`Cancellate ${n} prenotazioni · ville e listini intatti`);
+          } else {
+            const list = await store.listScontriniArchivio();
+            downloadJson({ tipo: 'archivio note spese', creatoIl: new Date().toISOString(), da: store.user || '', nota: 'Le foto degli scontrini non sono incluse.', scontrini: list }, `archivio-note-spese-${day}.json`);
+            err.textContent = 'Cancellazione in corso…';
+            const n = await store.wipeScontrini(list);
+            box.innerHTML = `<div class="warn ok">Cancellate ${n} note spese con le loro foto. L'archivio è stato scaricato.</div>`; toast(`Cancellate ${n} note spese · ville e listini intatti`);
+          }
+        } catch (x) { go.disabled = false; err.textContent = 'Operazione non riuscita: ' + (x.message || x); }
+      });
+    };
+    $('#w-book').addEventListener('click', () => askWipe('book'));
+    if ($('#w-sc')) $('#w-sc').addEventListener('click', () => askWipe('sc'));
     const backup = () => JSON.stringify(Object.assign({ exportedAt: new Date().toISOString() }, data()), null, 1);
     $('#s-export').addEventListener('click', () => {
       try {

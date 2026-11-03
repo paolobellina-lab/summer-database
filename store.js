@@ -54,6 +54,9 @@
       setSettings(s) { state.settings = s; persist(); },
       setNotes(t) { state.notes = t; persist(); },
       setPreferiti(l) { state.preferiti = l; persist(); },
+      setSicurezza(x) { state.sicurezza = x; persist(); },
+      // pulizia di fine stagione (protetta da password nell'interfaccia)
+      wipeBookings() { const n = state.bookings.length; state.bookings = []; (state.assegnazioni || []).forEach(a => { a.prenotazioni = []; }); persist(); return Promise.resolve(n); },
       setAssegnazioni(l) { state.assegnazioni = l; persist(); },
       replaceAll(data) { state = Object.assign(emptyState(), clone(data)); if (!state.settings) state.settings = window.SDB.defaultSettings(); persist(); },
       mergeAll(data) {
@@ -172,6 +175,29 @@
         if (hasFoto) batch.delete(db.collection('scontrini_foto').doc(id));
         return batch.commit();
       },
+      setSicurezza(x) { state.sicurezza = x; return db.collection('meta').doc('sicurezza').set(strip(x)); },
+      /* ---- Pulizia di fine stagione: richiesta esplicitamente dal proprietario, protetta da password nell'interfaccia.
+         wipeBookings: cancella tutti i documenti di "bookings" (e svuota le prenotazioni assegnate agli account).
+         wipeScontrini: cancella tutti gli scontrini e le loro foto (stesso ID). Nessun'altra collezione viene toccata. ---- */
+      async wipeBookings() {
+        const q = await db.collection('bookings').get();
+        const ids = q.docs.map(d => d.id);
+        for (let i = 0; i < ids.length; i += 400) { const b = db.batch(); ids.slice(i, i + 400).forEach(id => b.delete(db.collection('bookings').doc(id))); await b.commit(); }
+        const acc = JSON.parse(JSON.stringify(state.assegnazioni || []));
+        if (acc.some(a => (a.prenotazioni || []).length)) { acc.forEach(a => { a.prenotazioni = []; }); await db.collection('meta').doc('assegnazioni').set({ account: acc, aggiornatoDa: api.user || '', aggiornatoIl: firebase.firestore.FieldValue.serverTimestamp() }); }
+        state.bookings = []; emit('local');
+        return ids.length;
+      },
+      async listScontriniArchivio() {
+        const q = await db.collection('scontrini').get();
+        return q.docs.map(d => { const x = Object.assign({}, d.data(), { id: d.id }); ['creatoIl', 'modificatoIl'].forEach(k => { if (x[k] && x[k].toDate) x[k] = x[k].toDate().toISOString(); }); return x; });
+      },
+      async wipeScontrini(list) {
+        const ids = list.map(x => x.id);
+        // ogni scontrino conta 2 operazioni (scontrino + foto)
+        for (let i = 0; i < ids.length; i += 200) { const b = db.batch(); ids.slice(i, i + 200).forEach(id => { b.delete(db.collection('scontrini').doc(id)); b.delete(db.collection('scontrini_foto').doc(id)); }); await b.commit(); }
+        return ids.length;
+      },
       /* ---- foto delle ville: villas_foto (immagini) e villas_thumb/{villaId} (copertina piccola per le schede) ----
          Non stanno in "villas" per non appesantire le altre app che leggono quella collezione. */
       listenThumbs(cb, onErr) {
@@ -264,6 +290,7 @@
               if (d.id === 'notes') state.notes = d.data().text || '';
               if (d.id === 'preferiti') state.preferiti = (d.data() || {}).liste || [];
               if (d.id === 'assegnazioni') state.assegnazioni = (d.data() || {}).account || [];
+              if (d.id === 'sicurezza') state.sicurezza = d.data() || null;
             });
             got.meta = true;
           });
