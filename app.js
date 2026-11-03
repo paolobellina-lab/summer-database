@@ -455,6 +455,7 @@ window.SDBStore.ready.then(function () {
       </div>
       <div class="pricehint" id="b-hint"></div>
       <div id="b-spese"></div>
+      ${(data().assegnazioni || []).length ? `<div class="field"><span>Assegnata a (app Scontrini)</span><div class="as-mini">${(data().assegnazioni || []).map(ac => `<label class="as-check"><input type="checkbox" data-bacc="${esc(ac.email)}" ${(ac.prenotazioni || []).includes(b.id) || (ac.ville || []).includes(b.villaId) ? 'checked' : ''} ${(ac.ville || []).includes(b.villaId) ? 'disabled title="Ha già tutta la villa"' : ''}> ${esc(ac.nome || ac.email)}</label>`).join('')}</div></div>` : ''}
       </section>
       <section class="dsec sec-srv"><h4>Servizi</h4>
       <div class="flags three">
@@ -543,7 +544,14 @@ window.SDBStore.ready.then(function () {
     $('#b-cancel').addEventListener('click', () => dlg.close());
     f.addEventListener('submit', e => {
       e.preventDefault(); check(); const x = read(); if (!(S.diffDays(x.from, x.to) > 0) || blocked) return;
-      store.upsertBooking(Object.assign(b, x)); dlg.close(); toast(existing ? 'Periodo aggiornato' : 'Periodo inserito'); route();
+      store.upsertBooking(Object.assign(b, x));
+      const accBoxes = $$('[data-bacc]', dlg);
+      if (accBoxes.length) {
+        const l = JSON.parse(JSON.stringify(data().assegnazioni || [])); let changed = false;
+        accBoxes.forEach(cb => { if (cb.disabled) return; const ac = l.find(z => z.email === cb.dataset.bacc); if (!ac) return; ac.prenotazioni = ac.prenotazioni || []; const has = ac.prenotazioni.includes(b.id); if (cb.checked && !has) { ac.prenotazioni.push(b.id); changed = true; } if (!cb.checked && has) { ac.prenotazioni = ac.prenotazioni.filter(z => z !== b.id); changed = true; } });
+        if (changed) store.setAssegnazioni(l);
+      }
+      dlg.close(); toast(existing ? 'Periodo aggiornato' : 'Periodo inserito'); route();
     });
     const del = $('#b-del');
     if (del) del.addEventListener('click', () => {

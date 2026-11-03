@@ -15,7 +15,7 @@
   const strip = x => JSON.parse(JSON.stringify(x, (k, v) => (v === undefined ? null : v)));
 
   function emptyState() {
-    return { version: 1, villas: [], bookings: [], notes: '', preferiti: [], settings: window.SDB.defaultSettings(), updatedAt: Date.now() };
+    return { version: 1, villas: [], bookings: [], notes: '', preferiti: [], assegnazioni: [], settings: window.SDB.defaultSettings(), updatedAt: Date.now() };
   }
   function fromSeed() {
     const s = window.SDB_SEED;
@@ -54,6 +54,7 @@
       setSettings(s) { state.settings = s; persist(); },
       setNotes(t) { state.notes = t; persist(); },
       setPreferiti(l) { state.preferiti = l; persist(); },
+      setAssegnazioni(l) { state.assegnazioni = l; persist(); },
       replaceAll(data) { state = Object.assign(emptyState(), clone(data)); if (!state.settings) state.settings = window.SDB.defaultSettings(); persist(); },
       mergeAll(data) {
         const d = clone(data);
@@ -118,6 +119,8 @@
       setNotes(t) { state.notes = t; db.collection('meta').doc('notes').set({ text: t }).catch(fail); emit('local'); },
       // elenchi dei preferiti, condivisi tra gli account: meta/preferiti
       setPreferiti(l) { state.preferiti = l; db.collection('meta').doc('preferiti').set({ liste: strip(l) }).catch(fail); emit('local'); },
+      // account dell'app Scontrini con le ville/prenotazioni assegnate: meta/assegnazioni (letto anche dall'app Scontrini)
+      setAssegnazioni(l) { state.assegnazioni = l; db.collection('meta').doc('assegnazioni').set({ account: strip(l), aggiornatoDa: api.user || '', aggiornatoIl: firebase.firestore.FieldValue.serverTimestamp() }).catch(fail); emit('local'); },
       // Import di un backup: AGGIUNGE e AGGIORNA ville e prenotazioni, non cancella mai nulla (ID stabili, scontrini collegati al sicuro).
       // Agisce SOLO su villas, bookings e meta. Le collezioni scontrini / scontrini_foto (altre app) non vanno mai toccate.
       async mergeAll(data) {
@@ -226,6 +229,7 @@
             if (d.id === 'settings') state.settings = Object.assign(window.SDB.defaultSettings(), d.data());
             if (d.id === 'notes') state.notes = d.data().text || '';
             if (d.id === 'preferiti') state.preferiti = (d.data() || {}).liste || [];
+            if (d.id === 'assegnazioni') state.assegnazioni = (d.data() || {}).account || [];
           });
           got.meta = true;
           if (started) emit(snap.metadata.hasPendingWrites ? 'local' : 'remote'); else maybeStart();

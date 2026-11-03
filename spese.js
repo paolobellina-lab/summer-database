@@ -80,6 +80,7 @@
     main.innerHTML = `<div class="page"><div class="wrap">
       <div class="head"><div><h1>Spese</h1><div class="sub">Scontrini dell'app Scontrini · modificabili, aggiornati in tempo reale</div></div>
         <div class="actions no-print">
+          <button class="btn" type="button" id="sp-assign">Account e assegnazioni</button>
           <button class="btn" type="button" id="sp-exp">Espandi tutto</button>
           <button class="btn" type="button" id="sp-csv">Esporta per Excel</button>
           <button class="btn" type="button" id="sp-print">Stampa</button>
@@ -207,6 +208,61 @@
       saveOpen(); $('#sp-exp').textContent = apri ? 'Comprimi tutto' : 'Espandi tutto';
     });
     $('#sp-print').addEventListener('click', () => { $$('details.sp-group', out).forEach(d => { d.open = true; }); setTimeout(() => window.print(), 60); });
+
+    // account dell'app Scontrini: quali ville e prenotazioni vede ciascuno
+    $('#sp-assign').addEventListener('click', () => openAssign());
+    let selAcc = '';
+    function openAssign() {
+      const dlg = $('#dlg');
+      let q = '';
+      const accs = () => (data().assegnazioni || []);
+      const save = l => store.setAssegnazioni(l);
+      const draw = () => {
+        const list = accs();
+        if (selAcc && !list.some(a => a.email === selAcc)) selAcc = '';
+        if (!selAcc && list.length) selAcc = list[0].email;
+        const acc = list.find(a => a.email === selAcc);
+        const vSet = new Set(acc ? acc.ville || [] : []), bSet = new Set(acc ? acc.prenotazioni || [] : []);
+        const bookings = data().bookings;
+        const vl = ville().filter(v => !q || String(v.name).toLowerCase().includes(q) || bookings.some(b => b.villaId === v.id && String(b.cliente || '').toLowerCase().includes(q)));
+        const nAss = a => (a.ville || []).length + ' ville · ' + (a.prenotazioni || []).length + ' prenotazioni';
+        dlg.innerHTML = `<div class="dlg assign">
+          <h3>Account e assegnazioni</h3>
+          <p class="note">Nell'app Scontrini un account con assegnazioni vede solo le ville e le prenotazioni scelte qui. Un account non in elenco vede tutto. Serve a fare ordine, non è una protezione: per entrare, l'email deve comunque essere tra quelle autorizzate nelle regole di Firestore.</p>
+          <div class="as-accs">${list.map(a => `<button type="button" class="fav-chip ${a.email === selAcc ? 'on' : ''}" data-acc="${esc(a.email)}">${esc(a.nome || a.email)} <em>${esc(nAss(a))}</em></button>`).join('')}<button type="button" class="fav-chip add" id="as-new">+ Aggiungi account</button></div>
+          <div id="as-form" hidden class="as-form"><input id="as-email" type="email" placeholder="email Google, es. nome@gmail.com"><input id="as-nome" placeholder="Nome (facoltativo)"><button type="button" class="btn small primary" id="as-add">Aggiungi</button><button type="button" class="btn small" id="as-x">Annulla</button></div>
+          ${acc ? `<div class="as-head"><div><b>${esc(acc.nome || acc.email)}</b><small>${esc(acc.email)}</small></div><button type="button" class="btn small danger" id="as-rm">Rimuovi account</button></div>
+          <input type="search" id="as-q" placeholder="Cerca villa o cliente" value="${esc(q)}">
+          <div class="as-list">${vl.map(v => {
+            const bs = bookings.filter(b => b.villaId === v.id && b.status !== 'richiesta').sort((x, y) => String(y.from).localeCompare(String(x.from)));
+            const all = vSet.has(v.id); const nb = bs.filter(b => bSet.has(b.id)).length;
+            return `<details class="as-villa${all || nb ? ' has' : ''}" ${q || nb ? 'open' : ''}><summary><label class="as-check" onclick="event.stopPropagation()"><input type="checkbox" data-av="${esc(v.id)}" ${all ? 'checked' : ''}> <b>${esc(v.name)}</b></label><span>${all ? 'tutta la villa' : nb ? nb + ' prenotazioni' : bs.length ? bs.length + ' prenotazioni' : 'nessuna prenotazione'}</span></summary>
+              ${bs.length ? `<div class="as-bks">${bs.map(b => `<label class="as-check"><input type="checkbox" data-ab="${esc(b.id)}" ${all || bSet.has(b.id) ? 'checked' : ''} ${all ? 'disabled' : ''}> ${esc((b.cliente || '').trim() || 'Senza nome')} · ${dataBreve(b.from)} → ${dataBreve(b.to)}</label>`).join('')}</div>` : ''}
+            </details>`;
+          }).join('')}</div>` : '<p class="note">Aggiungi il primo account per scegliere cosa può vedere.</p>'}
+          <div class="foot"><button type="button" class="btn primary" id="as-ok">Fatto</button></div></div>`;
+        const upd = fn => { const l = JSON.parse(JSON.stringify(accs())); const a = l.find(x => x.email === selAcc); if (!a) return; a.ville = a.ville || []; a.prenotazioni = a.prenotazioni || []; fn(a); save(l); draw(); };
+        $$('#dlg [data-acc]').forEach(b => b.onclick = () => { selAcc = b.dataset.acc; draw(); });
+        $('#as-new').onclick = () => { $('#as-form').hidden = false; $('#as-email').focus(); };
+        const x = $('#as-x'); if (x) x.onclick = () => { $('#as-form').hidden = true; };
+        $('#as-add').onclick = () => {
+          const email = $('#as-email').value.trim().toLowerCase();
+          if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { $('#as-email').focus(); toast('Email non valida'); return; }
+          if (accs().some(a => a.email === email)) { selAcc = email; draw(); return; }
+          save(accs().concat([{ email, nome: $('#as-nome').value.trim(), ville: [], prenotazioni: [] }])); selAcc = email; draw();
+        };
+        const rm = $('#as-rm'); if (rm) rm.onclick = () => {
+          rm.outerHTML = `<span class="as-rmq">Rimuovere? Vedrà di nuovo tutto. <button type="button" class="btn small danger solid" id="as-rmok">Rimuovi</button></span>`;
+          $('#as-rmok').onclick = () => { save(accs().filter(a => a.email !== selAcc)); selAcc = ''; draw(); };
+        };
+        const qi = $('#as-q'); if (qi) qi.oninput = e => { q = e.target.value.trim().toLowerCase(); const pos = e.target.selectionStart; draw(); const n = $('#as-q'); n.focus(); n.setSelectionRange(pos, pos); };
+        $$('#dlg [data-av]').forEach(cb => cb.onchange = () => upd(a => { a.ville = a.ville.filter(id => id !== cb.dataset.av); if (cb.checked) a.ville.push(cb.dataset.av); }));
+        $$('#dlg [data-ab]').forEach(cb => cb.onchange = () => upd(a => { a.prenotazioni = a.prenotazioni.filter(id => id !== cb.dataset.ab); if (cb.checked) a.prenotazioni.push(cb.dataset.ab); }));
+        $('#as-ok').onclick = () => dlg.close();
+      };
+      draw();
+      if (!dlg.open) { if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', ''); }
+    }
 
     // modifica / cancellazione dello scontrino (lo storico conserva la versione precedente)
     out.addEventListener('click', e => {

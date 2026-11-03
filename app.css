@@ -626,3 +626,22 @@ input[type=text], input[type=number], input[type=date], input[type=search], inpu
 .ph-q { font-size: 12px; }
 .ph-tools { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 @media (max-width: 760px) { .fav-tools { margin-left: 0; } .vc-name { font-size: 25px; } }
+
+/* account e assegnazioni */
+dialog:has(.assign) { width: min(640px, calc(100vw - 32px)); }
+.as-accs { display: flex; flex-wrap: wrap; gap: 6px; }
+.as-form { display: flex; flex-wrap: wrap; gap: 8px; }
+.as-form input { flex: 1 1 180px; }
+.as-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 12px; background: var(--sec-date); border-radius: var(--radius); }
+.as-head small { display: block; color: var(--muted); font-size: 12px; }
+.as-list { display: flex; flex-direction: column; gap: 6px; max-height: 46vh; overflow: auto; }
+.as-villa { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.as-villa.has { border-color: var(--accent); }
+.as-villa summary { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 10px; cursor: pointer; list-style: none; }
+.as-villa summary::-webkit-details-marker { display: none; }
+.as-villa summary > span { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.as-bks { display: flex; flex-direction: column; gap: 4px; padding: 4px 12px 10px 34px; font-size: 13px; }
+.as-check { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+.as-check input { accent-color: var(--accent); width: 16px; height: 16px; }
+.as-mini { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.as-rmq { font-size: 12.5px; display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; }

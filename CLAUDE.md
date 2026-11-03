@@ -22,5 +22,8 @@ Se una modifica richiesta va contro questi vincoli, avvisare prima di procedere.
 - Foto delle ville in `villas_foto/{id}` (`villaId`, `img`, `thumb`, `ordine`) e copertina in `villas_thumb/{villaId}` (`thumb`, `fotoId`). Mai dentro `villas`, che le altre app leggono per intero.
 - Elenchi preferiti condivisi in `meta/preferiti` (`liste: [{ id, nome, ville: [villaId] }]`).
 
+## Assegnazioni account (per l'app Scontrini)
+`meta/assegnazioni`: `{ account: [{ email (minuscolo), nome, ville: [villaId], prenotazioni: [bookingId] }], aggiornatoDa, aggiornatoIl }`. Si gestisce dalla pagina Spese ("Account e assegnazioni") e dalla finestra prenotazione. L'app Scontrini deve leggerlo e filtrare; è un filtro di comodità, non una protezione.
+
 ## Dati
 Nessun dato reale nel repository: `seed.js`, file Excel e backup sono in `.gitignore`.
