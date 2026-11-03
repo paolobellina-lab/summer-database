@@ -114,7 +114,7 @@ window.SDBStore.ready.then(function () {
     $$('.nav a').forEach(a => a.classList.toggle('on', a.dataset.r === route || (route === 'villa' && a.dataset.r === 'ville')));
     const sy = $('#sync');
     sy.className = 'sync ' + store.mode;
-    sy.querySelector('span').textContent = store.mode === 'online' ? (store.online === false ? 'Offline · si sincronizza appena torna la rete' : 'Online · ' + (store.user || '')) : (store.canPersist ? 'Salvato su questo dispositivo' : 'Memoria non disponibile');
+    sy.querySelector('span').textContent = store.mode === 'online' ? (store.online === false ? 'Offline · si sincronizza appena torna la rete' : 'Online') : (store.canPersist ? 'Salvato su questo dispositivo' : 'Memoria non disponibile');
   }
 
   /* ---------- router ---------- */
