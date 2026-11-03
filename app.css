@@ -573,3 +573,56 @@ input[type=text], input[type=number], input[type=date], input[type=search], inpu
 .sp-old-row small { display: block; color: var(--muted); font-size: 11px; }
 @media (max-width: 760px) { .sp-act { grid-column: 2 / -1; justify-content: flex-start; } .sp-old { grid-column: 1 / -1; } }
 @media print { .sp-old { background: none; } }
+
+/* ---------- schede villa con foto, come sul sito ---------- */
+.vcards { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 26px; }
+.vc-media { position: relative; aspect-ratio: 3 / 2; max-width: 100%; background: var(--surface-2); overflow: hidden; }
+.vc-media img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .4s ease; }
+.vcard:hover .vc-media img { transform: scale(1.03); }
+.vc-ph { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; background: linear-gradient(160deg, var(--surface-2), var(--accent-soft)); color: var(--accent); }
+.vc-ph span { font: 500 56px/1 var(--font-display); }
+.vc-ph small { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.vc-heart { position: absolute; top: 14px; right: 14px; width: 42px; height: 38px; display: grid; place-items: center; border: 0; background: var(--surface); color: var(--fg); cursor: pointer; border-radius: var(--radius); box-shadow: 0 2px 10px rgba(5, 28, 44, .12); }
+.vc-heart:hover { color: var(--danger); }
+.vc-heart.on { color: var(--danger); }
+.vc-badge { position: absolute; left: 14px; bottom: 14px; background: var(--surface); color: var(--fg); padding: 7px 11px; font: 400 12px/1 var(--font-display); letter-spacing: .02em; border-radius: var(--radius); }
+.vc-body { padding: 22px 24px 18px; gap: 14px; }
+.vc-name { margin: 0; font: 500 28px/1.15 var(--font-display); color: var(--fg); text-wrap: balance; }
+.vc-desc { margin: 0; font-size: 14.5px; line-height: 1.55; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.vc-stats2 { display: flex; flex-wrap: wrap; gap: 10px 30px; }
+.vc-stats2 span { display: block; font: 500 12px/1.2 var(--font-display); color: var(--muted); margin-bottom: 6px; }
+.vc-stats2 b { display: inline-flex; align-items: center; gap: 8px; font: 400 15px/1 var(--font-display); color: var(--fg); }
+.vc-stats2 b svg { color: var(--fg); opacity: .8; }
+.vc-price2 span { display: block; font: 500 12px/1.2 var(--font-display); color: var(--muted); margin-bottom: 4px; }
+.vc-price2 b { font: 500 25px/1.15 var(--font-display); letter-spacing: .02em; color: var(--fg); white-space: nowrap; }
+.vc-price2 b.missing { font: 400 14px/1.2 var(--font-ui); color: var(--muted); }
+
+/* elenchi preferiti */
+.fav-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.fav-lbl { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin-right: 4px; }
+.fav-chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--surface); padding: 6px 11px; cursor: pointer; font-size: 12.5px; font-weight: 500; color: var(--fg); border-radius: var(--radius); }
+.fav-chip svg { width: 13px; height: 13px; color: var(--danger); }
+.fav-chip em { font-style: normal; color: var(--muted); }
+.fav-chip.on { background: var(--navy); border-color: var(--navy); color: #fff; }
+.fav-chip.on em { color: inherit; opacity: .75; }
+.fav-chip.on svg { color: #fff; }
+.fav-chip.add { border-style: dashed; color: var(--accent); }
+.fav-tools { display: inline-flex; gap: 6px; margin-left: auto; }
+.fav-edit { width: 100%; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 8px 0 2px; }
+.fav-edit input { max-width: 320px; }
+.fav-list { display: flex; flex-direction: column; gap: 8px; }
+.fav-new { display: flex; gap: 8px; }
+.btn.vfav svg { width: 16px; height: 16px; }
+.btn.vfav.on { color: var(--danger); border-color: var(--danger); }
+
+/* foto nella scheda villa */
+.ph-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
+.ph-item { margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.ph-open { padding: 0; border: 1px solid var(--line); background: var(--surface-2); cursor: zoom-in; aspect-ratio: 3 / 2; max-width: 100%; overflow: hidden; border-radius: var(--radius); }
+.ph-open img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ph-item.cover .ph-open { border: 2px solid var(--accent); }
+.ph-item figcaption { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.ph-badge { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); font-weight: 600; }
+.ph-q { font-size: 12px; }
+.ph-tools { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+@media (max-width: 760px) { .fav-tools { margin-left: 0; } .vc-name { font-size: 25px; } }

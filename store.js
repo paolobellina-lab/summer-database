@@ -15,7 +15,7 @@
   const strip = x => JSON.parse(JSON.stringify(x, (k, v) => (v === undefined ? null : v)));
 
   function emptyState() {
-    return { version: 1, villas: [], bookings: [], notes: '', settings: window.SDB.defaultSettings(), updatedAt: Date.now() };
+    return { version: 1, villas: [], bookings: [], notes: '', preferiti: [], settings: window.SDB.defaultSettings(), updatedAt: Date.now() };
   }
   function fromSeed() {
     const s = window.SDB_SEED;
@@ -53,6 +53,7 @@
       removeBooking(id) { state.bookings = state.bookings.filter(b => b.id !== id); persist(); },
       setSettings(s) { state.settings = s; persist(); },
       setNotes(t) { state.notes = t; persist(); },
+      setPreferiti(l) { state.preferiti = l; persist(); },
       replaceAll(data) { state = Object.assign(emptyState(), clone(data)); if (!state.settings) state.settings = window.SDB.defaultSettings(); persist(); },
       mergeAll(data) {
         const d = clone(data);
@@ -115,6 +116,8 @@
       removeBooking(id) { state.bookings = state.bookings.filter(b => b.id !== id); db.collection('bookings').doc(id).delete().catch(fail); emit('local'); },
       setSettings(s) { state.settings = s; db.collection('meta').doc('settings').set(strip(s)).catch(fail); emit('local'); },
       setNotes(t) { state.notes = t; db.collection('meta').doc('notes').set({ text: t }).catch(fail); emit('local'); },
+      // elenchi dei preferiti, condivisi tra gli account: meta/preferiti
+      setPreferiti(l) { state.preferiti = l; db.collection('meta').doc('preferiti').set({ liste: strip(l) }).catch(fail); emit('local'); },
       // Import di un backup: AGGIUNGE e AGGIORNA ville e prenotazioni, non cancella mai nulla (ID stabili, scontrini collegati al sicuro).
       // Agisce SOLO su villas, bookings e meta. Le collezioni scontrini / scontrini_foto (altre app) non vanno mai toccate.
       async mergeAll(data) {
@@ -155,6 +158,30 @@
         batch.delete(db.collection('scontrini').doc(id));
         if (hasFoto) batch.delete(db.collection('scontrini_foto').doc(id));
         return batch.commit();
+      },
+      /* ---- foto delle ville: villas_foto (immagini) e villas_thumb/{villaId} (copertina piccola per le schede) ----
+         Non stanno in "villas" per non appesantire le altre app che leggono quella collezione. */
+      listenThumbs(cb, onErr) {
+        return db.collection('villas_thumb').onSnapshot(snap => { const m = {}; snap.docs.forEach(d => { m[d.id] = d.data(); }); cb(m); }, onErr);
+      },
+      listFoto(villaId) {
+        return db.collection('villas_foto').where('villaId', '==', villaId).get()
+          .then(q => q.docs.map(d => Object.assign({}, d.data(), { id: d.id })).sort((a, b) => (a.ordine || 0) - (b.ordine || 0)));
+      },
+      async addFoto(villaId, img, thumb, ordine, makeCover) {
+        const ref = db.collection('villas_foto').doc();
+        await ref.set({ villaId, img, thumb, ordine: ordine || Date.now(), creatoDa: api.user || '', creatoIl: firebase.firestore.FieldValue.serverTimestamp() });
+        if (makeCover) await db.collection('villas_thumb').doc(villaId).set({ thumb, fotoId: ref.id });
+        return ref.id;
+      },
+      setCover(villaId, fotoId, thumb) { return db.collection('villas_thumb').doc(villaId).set({ thumb, fotoId }); },
+      async deleteFoto(villaId, fotoId, next) {
+        await db.collection('villas_foto').doc(fotoId).delete();
+        const t = await db.collection('villas_thumb').doc(villaId).get();
+        if (t.exists && t.data().fotoId === fotoId) {
+          if (next) await db.collection('villas_thumb').doc(villaId).set({ thumb: next.thumb, fotoId: next.id });
+          else await db.collection('villas_thumb').doc(villaId).delete();
+        }
       }
     });
 
@@ -198,6 +225,7 @@
           snap.docs.forEach(d => {
             if (d.id === 'settings') state.settings = Object.assign(window.SDB.defaultSettings(), d.data());
             if (d.id === 'notes') state.notes = d.data().text || '';
+            if (d.id === 'preferiti') state.preferiti = (d.data() || {}).liste || [];
           });
           got.meta = true;
           if (started) emit(snap.metadata.hasPendingWrites ? 'local' : 'remote'); else maybeStart();

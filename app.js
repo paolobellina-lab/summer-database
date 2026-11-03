@@ -99,6 +99,52 @@ window.SDBStore.ready.then(function () {
   if (store.mode === 'online' && store.listenScontrini && window.SDBSpese) {
     store.listenScontrini(l => { spese.list = l; spese.ready = true; spese.error = null; speseChanged(); }, err => { spese.error = err; speseChanged(); });
   }
+  // copertine delle ville (villas_thumb): una sola lettura in tempo reale, solo online
+  const thumbs = { map: {}, ready: false, error: null };
+  let villasRedraw = null;
+  if (store.mode === 'online' && store.listenThumbs) {
+    store.listenThumbs(m => { thumbs.map = m; thumbs.ready = true; thumbs.error = null; if (villasRedraw) villasRedraw(); }, err => { thumbs.error = err; });
+  }
+  // elenchi dei preferiti (meta/preferiti, condivisi)
+  const favLists = () => (data().preferiti || []);
+  const isFav = id => favLists().some(l => (l.ville || []).includes(id));
+  const HEART = on => `<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-9.6-9.2C.9 7.9 3 4.5 6.6 4.5c2.1 0 3.7 1.2 4.4 2.6h2c.7-1.4 2.3-2.6 4.4-2.6 3.6 0 5.7 3.4 4.2 6.8-2.1 4.6-9.6 9.2-9.6 9.2z" fill="${on ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`;
+  function openFav(villaId, after) {
+    const dlg = $('#dlg'); const v = villaById(villaId);
+    const draw = () => {
+      const lists = favLists();
+      dlg.innerHTML = `<form class="dlg" id="fav-form" autocomplete="off">
+        <h3>Preferiti</h3><p class="note">Scegli in quali elenchi mettere <b>${esc(v ? v.name : '')}</b>. Gli elenchi sono condivisi con il tuo collega.</p>
+        <div class="fav-list">${lists.length ? lists.map(l => `<label class="flag"><input type="checkbox" data-l="${esc(l.id)}" ${(l.ville || []).includes(villaId) ? 'checked' : ''}><span><b>${esc(l.nome)}</b><small>${(l.ville || []).length} ville</small></span></label>`).join('') : '<p class="note">Non hai ancora elenchi: creane uno qui sotto.</p>'}</div>
+        <div class="fav-new"><input id="fav-name" placeholder="Nuovo elenco, es. Clienti agosto"><button type="submit" class="btn">Crea e aggiungi</button></div>
+        <div class="foot"><button type="button" class="btn primary" id="fav-ok">Fatto</button></div></form>`;
+      $$('#fav-form [data-l]').forEach(cb => cb.addEventListener('change', () => {
+        const ls = JSON.parse(JSON.stringify(favLists())); const l = ls.find(x => x.id === cb.dataset.l); if (!l) return;
+        l.ville = (l.ville || []).filter(x => x !== villaId); if (cb.checked) l.ville.push(villaId);
+        store.setPreferiti(ls); draw();
+      }));
+      $('#fav-form').addEventListener('submit', e => {
+        e.preventDefault(); const nome = $('#fav-name').value.trim(); if (!nome) { $('#fav-name').focus(); return; }
+        store.setPreferiti(favLists().concat([{ id: S.uid('l'), nome, ville: [villaId] }])); draw();
+      });
+      $('#fav-ok').onclick = () => dlg.close();
+    };
+    draw();
+    dlg.onclose = () => { dlg.onclose = null; if (after) after(); };
+    if (!dlg.open) { if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', ''); }
+  }
+  // compressione foto (stesso metodo dell'app Scontrini): JPEG ridimensionato sotto il limite di un documento
+  async function compressImage(file, lato, maxLen) {
+    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('immagine non leggibile')); i.src = URL.createObjectURL(file); });
+    let w = img.naturalWidth, h = img.naturalHeight; const k = Math.min(1, lato / Math.max(w, h));
+    const c = document.createElement('canvas'); c.width = Math.round(w * k); c.height = Math.round(h * k);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(img.src);
+    let q = 0.78, url = c.toDataURL('image/jpeg', q);
+    while (url.length > maxLen && q > 0.35) { q -= 0.08; url = c.toDataURL('image/jpeg', q); }
+    let cc = c;
+    while (url.length > maxLen && cc.width > 300) { const c2 = document.createElement('canvas'); c2.width = Math.round(cc.width * 0.75); c2.height = Math.round(cc.height * 0.75); c2.getContext('2d').drawImage(cc, 0, 0, c2.width, c2.height); cc = c2; url = cc.toDataURL('image/jpeg', 0.6); }
+    return url;
+  }
   const goSpese = (opts) => { Object.assign(ui, { spVilla: '', spPren: '', spQ: '' }, opts); saveUI(); location.hash = 'spese'; };
   // pulsante "Installa app" (Chrome/Edge su Android, Windows, Mac)
   let installEvt = window.__sdbInstall || null;
@@ -120,7 +166,7 @@ window.SDBStore.ready.then(function () {
   /* ---------- router ---------- */
   function route() {
     const h = (location.hash || '#disponibilita').slice(1);
-    spesePage = null; speseHooks.clear();
+    spesePage = null; speseHooks.clear(); villasRedraw = null;
     if (h.startsWith('villa-')) { refreshShell('villa'); return viewVilla(h.slice(6)); }
     refreshShell(h);
     if (h === 'ville') return viewVillas();
@@ -152,6 +198,7 @@ window.SDBStore.ready.then(function () {
     return sortedVillas().filter(v => {
       if (q && !(`${v.name} ${v.nomeReale} ${v.proprietario} ${v.location} ${v.indirizzo}`.toLowerCase().includes(q))) return false;
       if (ui.loc && String(v.location || '').trim().toUpperCase() !== ui.loc) return false;
+      if (ui.fav) { const fl = favLists().find(l => l.id === ui.fav); if (fl && !(fl.ville || []).includes(v.id)) return false; }
       if (g !== null) { const vg = num(v.guests) ?? num(v.pax); if (vg === null || vg < g) return false; }
       if (bd !== null) { const vb = num(v.totalBedrooms) ?? num(v.guestBedrooms); if (vb === null || vb < bd) return false; }
       if (hasRange) {
@@ -189,6 +236,7 @@ window.SDBStore.ready.then(function () {
           <label class="field f-num"><span>Prezzo a</span><input id="f-a" inputmode="numeric" placeholder="es. 75k" value="${esc(ui.a)}"></label>
           <label class="field f-date"><span>Libera dal</span><input type="date" id="f-dal" min="${st.seasonStart}" max="${st.seasonEnd}" value="${esc(ui.dal)}"></label>
           <label class="field f-date"><span>al</span><input type="date" id="f-al" min="${st.seasonStart}" max="${st.seasonEnd}" value="${esc(ui.al)}"></label>
+          <label class="field f-sel"><span>Preferiti</span><select id="f-fav"><option value="">Tutte le ville</option>${favLists().map(l => `<option value="${esc(l.id)}" ${ui.fav === l.id ? 'selected' : ''}>♥ ${esc(l.nome)} (${(l.ville || []).length})</option>`).join('')}</select></label>
           <label class="field f-sel"><span>Location</span><select id="f-loc"><option value="">Tutte</option>${locations().map(l => `<option ${ui.loc === l ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label>
           <label class="field f-num"><span>Ospiti min</span><input id="f-guests" inputmode="numeric" value="${esc(ui.guests)}"></label>
           <label class="field f-num"><span>Camere min</span><input id="f-beds" inputmode="numeric" value="${esc(ui.beds)}"></label>
@@ -206,7 +254,8 @@ window.SDBStore.ready.then(function () {
   function bindToolbar() {
     const tb = $('#tb');
     tb.addEventListener('submit', e => e.preventDefault());
-    const map = { 'f-q': 'q', 'f-da': 'da', 'f-a': 'a', 'f-dal': 'dal', 'f-al': 'al', 'f-loc': 'loc', 'f-guests': 'guests', 'f-beds': 'beds' };
+    if (ui.fav && !favLists().some(l => l.id === ui.fav)) { ui.fav = ''; saveUI(); }
+    const map = { 'f-fav': 'fav', 'f-q': 'q', 'f-da': 'da', 'f-a': 'a', 'f-dal': 'dal', 'f-al': 'al', 'f-loc': 'loc', 'f-guests': 'guests', 'f-beds': 'beds' };
     let t;
     Object.entries(map).forEach(([id, k]) => {
       const el = $('#' + id);
@@ -225,7 +274,7 @@ window.SDBStore.ready.then(function () {
     seg('f-tariff', 'tariff'); seg('f-mode', 'mode'); seg('f-zoom', 'zoom', Number);
     $('#f-more').addEventListener('click', () => { ui.open = !ui.open; saveUI(); tb.classList.toggle('open', ui.open); $('#f-more').setAttribute('aria-expanded', ui.open); });
     $('#f-reset').addEventListener('click', () => {
-      Object.assign(ui, { q: '', loc: '', da: '', a: '', guests: '', beds: '', dal: '', al: '' }); saveUI(); viewAvail();
+      Object.assign(ui, { fav: '', q: '', loc: '', da: '', a: '', guests: '', beds: '', dal: '', al: '' }); saveUI(); viewAvail();
     });
   }
 
@@ -529,10 +578,16 @@ window.SDBStore.ready.then(function () {
     });
     return { prices, free, nd, booked, bks, total: wk.length };
   }
+  const ICON = {
+    ospiti: '<svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><circle cx="12" cy="8" r="3.6" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M4.5 20c.8-4 3.7-6 7.5-6s6.7 2 7.5 6" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>',
+    camere: '<svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path d="M3 18V7m0 6h18v5M7 13V10h5v3" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>',
+    bagni: '<svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path d="M4 12h16v2a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5zM7 12V6a2 2 0 0 1 4 0" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>',
+    area: '<svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><rect x="4.5" y="4.5" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>'
+  };
   function viewVillas() {
     const locs = locations();
     const sortOpts = [['order', 'Ordine Excel'], ['name', 'Nome A–Z'], ['priceAsc', 'Prezzo più basso'], ['priceDesc', 'Prezzo più alto'], ['guests', 'Più ospiti'], ['free', 'Più settimane libere']];
-    ui.vsort = ui.vsort || 'order'; ui.vloc = ui.vloc || '';
+    ui.vsort = ui.vsort || 'order'; ui.vloc = ui.vloc || ''; ui.vlist = ui.vlist || '';
     main.innerHTML = `<div class="page"><div class="wrap">
       <div class="head"><div><h1>Ville</h1><div class="sub" id="vl-sub"></div></div>
         <div class="actions"><button class="btn primary" id="vl-add">+ Nuova villa</button></div></div>
@@ -540,17 +595,47 @@ window.SDBStore.ready.then(function () {
         <input type="search" id="vl-q" placeholder="Cerca per nome, proprietario, zona" value="${esc(ui.q)}">
         <label class="field vl-sort"><span>Ordina</span><select id="vl-sort">${sortOpts.map(([k, l]) => `<option value="${k}" ${ui.vsort === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
       </div>
+      <div class="fav-bar" id="vl-lists"></div>
       <div class="loc-chips" id="vl-locs">
-        <button type="button" data-l="" class="${!ui.vloc ? 'on' : ''}">Tutte <em>${data().villas.length}</em></button>
+        <button type="button" data-l="" class="${!ui.vloc ? 'on' : ''}">Tutte le zone</button>
         ${locs.map((l, i) => `<button type="button" data-l="${esc(l)}" class="${ui.vloc === l ? 'on' : ''}" style="--tone:var(${LOC_TONES[i % 6]})"><i></i>${esc(l)} <em>${data().villas.filter(v => String(v.location || '').trim().toUpperCase() === l).length}</em></button>`).join('')}
       </div>
       <div class="vcards" id="vl-body"></div>
     </div></div>`;
     const body = $('#vl-body');
     const st = settings(); const total = S.diffDays(st.seasonStart, st.seasonEnd) + 1;
+    const drawLists = () => {
+      const ls = favLists();
+      if (ui.vlist && !ls.some(l => l.id === ui.vlist)) ui.vlist = '';
+      const cur = ls.find(l => l.id === ui.vlist);
+      $('#vl-lists').innerHTML = `<span class="fav-lbl">Elenchi preferiti</span>
+        <button type="button" data-fl="" class="fav-chip ${!ui.vlist ? 'on' : ''}">Tutte le ville</button>
+        ${ls.map(l => `<button type="button" data-fl="${esc(l.id)}" class="fav-chip ${ui.vlist === l.id ? 'on' : ''}">${HEART(true)}${esc(l.nome)} <em>${(l.ville || []).length}</em></button>`).join('')}
+        <button type="button" class="fav-chip add" id="fl-new">+ Nuovo elenco</button>
+        ${cur ? `<span class="fav-tools"><button type="button" class="btn small" id="fl-ren">Rinomina</button><button type="button" class="btn small danger" id="fl-del">Elimina elenco</button></span>` : ''}
+        <div id="fl-edit" class="fav-edit" hidden></div>`;
+      const edit = $('#fl-edit');
+      const ask = (label, val, ok) => {
+        edit.hidden = false;
+        edit.innerHTML = `<input id="fl-in" value="${esc(val)}" placeholder="Nome dell'elenco"><button type="button" class="btn small primary" id="fl-ok">${label}</button><button type="button" class="btn small" id="fl-no">Annulla</button>`;
+        const inp = $('#fl-in'); inp.focus(); inp.select();
+        const go = () => { const n = inp.value.trim(); if (!n) { inp.focus(); return; } ok(n); };
+        $('#fl-ok').onclick = go; inp.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); go(); } };
+        $('#fl-no').onclick = () => { edit.hidden = true; };
+      };
+      $('#fl-new').onclick = () => ask('Crea', '', n => { const id = S.uid('l'); store.setPreferiti(favLists().concat([{ id, nome: n, ville: [] }])); ui.vlist = id; saveUI(); drawLists(); draw(); toast('Elenco creato: tocca il cuore sulle ville per aggiungerle'); });
+      const ren = $('#fl-ren'); if (ren) ren.onclick = () => ask('Salva', cur.nome, n => { store.setPreferiti(favLists().map(l => l.id === cur.id ? Object.assign({}, l, { nome: n }) : l)); drawLists(); });
+      const del = $('#fl-del'); if (del) del.onclick = () => {
+        edit.hidden = false;
+        edit.innerHTML = `<span>Eliminare l'elenco <b>${esc(cur.nome)}</b>? Le ville restano, si toglie solo l'elenco.</span><button type="button" class="btn small danger solid" id="fl-dok">Elimina</button><button type="button" class="btn small" id="fl-no">Annulla</button>`;
+        $('#fl-dok').onclick = () => { store.setPreferiti(favLists().filter(l => l.id !== cur.id)); ui.vlist = ''; saveUI(); drawLists(); draw(); };
+        $('#fl-no').onclick = () => { edit.hidden = true; };
+      };
+    };
     const draw = () => {
       const q = $('#vl-q').value.trim().toLowerCase();
-      let list = sortedVillas().filter(v => (!q || `${v.name} ${v.location} ${v.proprietario} ${v.nomeReale}`.toLowerCase().includes(q)) && (!ui.vloc || String(v.location || '').trim().toUpperCase() === ui.vloc))
+      const cur = favLists().find(l => l.id === ui.vlist);
+      let list = sortedVillas().filter(v => (!q || `${v.name} ${v.location} ${v.proprietario} ${v.nomeReale}`.toLowerCase().includes(q)) && (!ui.vloc || String(v.location || '').trim().toUpperCase() === ui.vloc) && (!cur || (cur.ville || []).includes(v.id)))
         .map(v => ({ v, s: villaStats(v) }));
       const minP = x => { const n = x.s.prices.map(p => p.pr).filter(p => typeof p === 'number'); return n.length ? Math.min(...n) : null; };
       const maxP = x => { const n = x.s.prices.map(p => p.pr).filter(p => typeof p === 'number'); return n.length ? Math.max(...n) : null; };
@@ -563,33 +648,30 @@ window.SDBStore.ready.then(function () {
         free: (a, b) => b.s.free - a.s.free
       }[ui.vsort];
       if (ui.vsort !== 'order') list.sort(cmp);
-      $('#vl-sub').textContent = `${list.length} ville${ui.vloc ? ' a ' + ui.vloc : ''} · prezzi di vendita settimanali`;
-      const globalMax = Math.max(1, ...list.map(maxP).filter(x => x !== null));
+      $('#vl-sub').textContent = `${list.length} ville${cur ? ' nell\'elenco ' + cur.nome : ''}${ui.vloc ? ' a ' + ui.vloc : ''} · prezzi di vendita settimanali`;
       body.innerHTML = list.length ? list.map(({ v, s }) => {
-        const li = locs.indexOf(String(v.location || '').trim().toUpperCase());
-        const tone = li >= 0 ? `var(${LOC_TONES[li % 6]})` : 'var(--surface-2)';
         const mn = minP({ s }), mx = maxP({ s });
-        const statList = [[v.guests || v.pax, 'ospiti'], [v.totalBedrooms || v.guestBedrooms, 'camere'], [v.bathrooms, 'bagni'], [v.indoorSqm, 'mq']].filter(([x]) => x !== '' && x != null);
-        const bars = s.prices.map(p => p.pr === 'ND' ? '<i class="nd"></i>' : typeof p.pr === 'number' ? `<i class="${p.busy ? 'busy' : ''}" style="height:${Math.max(8, p.pr / globalMax * 100)}%"></i>` : '<i class="none"></i>').join('');
+        const area = v.indoorSqm ? (/mq|m2|m²/i.test(String(v.indoorSqm)) ? v.indoorSqm : v.indoorSqm + ' mq') : '';
+        const statList = [[v.guests || v.pax, 'Ospiti', ICON.ospiti], [v.totalBedrooms || v.guestBedrooms, 'Camere da letto', ICON.camere], [v.bathrooms, 'Bagni', ICON.bagni], [area, 'Area', ICON.area]].filter(([x]) => x !== '' && x != null);
         const strip = ndSpans(v, 'settimanale').map(x => `<i class="ndseg" style="left:${S.diffDays(st.seasonStart, x.from) / total * 100}%;width:${S.diffDays(x.from, x.to) / total * 100}%"></i>`).join('')
           + s.bks.map(b => `<i style="background:${esc(bookingColor(b))};left:${(S.diffDays(st.seasonStart, b.from) + .5) / total * 100}%;width:${Math.max(S.diffDays(b.from, b.to), .5) / total * 100}%"></i>`).join('');
-        const tags = [['pool', 'Piscina'], ['spa', 'Spa'], ['gym', 'Palestra']].filter(([k]) => v[k] && String(v[k]).trim() && !/^no$/i.test(String(v[k]).trim())).map(([, l]) => `<span class="tag">${l}</span>`).join('');
-        const freePct = s.total ? Math.round(s.free / s.total * 100) : 0;
+        const desc = String(v.servizi || v.note || '').replace(/\s+/g, ' ').trim();
+        const th = thumbs.map[v.id];
+        const badge = [v.location, v.seafront].filter(Boolean).map(x => String(x).trim()).join(', ');
+        const fav = isFav(v.id);
         return `<article class="vcard" data-id="${esc(v.id)}" tabindex="0">
+          <div class="vc-media">
+            ${th && th.thumb ? `<img src="${esc(th.thumb)}" alt="${esc(v.name)}" loading="lazy">` : `<div class="vc-ph"><span>${esc(String(v.name || '?').trim().charAt(0))}</span><small>${store.mode === 'online' ? 'Aggiungi foto dalla scheda' : 'Nessuna foto'}</small></div>`}
+            <button type="button" class="vc-heart${fav ? ' on' : ''}" data-act="fav" aria-label="${fav ? 'Nei preferiti' : 'Aggiungi ai preferiti'}" title="Preferiti">${HEART(fav)}</button>
+            ${badge ? `<span class="vc-badge">${esc(badge)}</span>` : ''}
+          </div>
           <div class="vc-body">
-            <div class="vc-tags"><span class="vc-loc"><i style="background:${tone}"></i>${esc(v.location || 'Senza zona')}</span>${v.seafront ? `<span class="vc-loc">${esc(v.seafront)}</span>` : ''}</div>
-            <div class="vc-title"><h3>${esc(v.name)}</h3>${v.proprietario ? `<small>Proprietario: ${esc(v.proprietario)}</small>` : ''}</div>
-            ${statList.length ? `<div class="vc-stats">${statList.map(([x, l]) => `<div class="st"><span>${l}</span><b>${esc(x)}</b></div>`).join('')}</div>` : '<div class="vc-missing">Caratteristiche da completare</div>'}
+            <h3 class="vc-name">${esc(v.name)}</h3>
+            <p class="vc-desc">${desc ? esc(desc) : (v.proprietario ? 'Proprietario: ' + esc(v.proprietario) : 'Descrizione da completare')}</p>
+            ${statList.length ? `<div class="vc-stats2">${statList.map(([x, l, ic]) => `<div><span>${l}</span><b>${ic}${esc(x)}</b></div>`).join('')}</div>` : '<div class="vc-missing">Caratteristiche da completare</div>'}
             <hr>
-            <div class="vc-price">
-              <div><span class="lbl">Affitto settimanale</span><b${mn === null ? ' class="missing"' : ''}>${mn === null ? 'Prezzi da inserire' : mn === mx ? S.money(mn) : `€ ${S.short(mn)} – ${S.short(mx)}`}</b></div>
-              <div class="spark" aria-hidden="true">${bars}</div>
-            </div>
-            <div class="vc-avail">
-              <div class="strip">${strip}</div>
-              <div class="vc-free"><b>${s.free}</b> settimane libere su ${s.total}${s.nd ? ` · <span class="ndtxt">${s.nd} ND</span>` : ''}<span class="meter"><i style="width:${freePct}%"></i></span></div>
-            </div>
-            ${tags ? `<div class="tags">${tags}</div>` : ''}
+            <div class="vc-price2"><span>Affitto settimanale</span><b${mn === null ? ' class="missing"' : ''}>${mn === null ? 'Prezzi da inserire' : mn === mx ? S.money(mn) : `€ ${S.short(mn)} – ${S.short(mx)}`}</b></div>
+            <div class="vc-avail"><div class="strip">${strip}</div><div class="vc-free"><b>${s.free}</b> settimane libere su ${s.total}${s.nd ? ` · <span class="ndtxt">${s.nd} ND</span>` : ''}</div></div>
           </div>
           <footer class="vc-foot">
             <button type="button" class="btn dark" data-act="open">Scheda ↗</button>
@@ -597,21 +679,24 @@ window.SDBStore.ready.then(function () {
             <button type="button" class="btn" data-act="cal">Calendario</button>
           </footer>
         </article>`;
-      }).join('') : '<div class="empty">Nessuna villa trovata.</div>';
+      }).join('') : `<div class="empty">${cur ? 'Questo elenco è vuoto: tocca il cuore su una villa per aggiungerla.' : 'Nessuna villa trovata.'}</div>`;
     };
-    draw();
+    drawLists(); draw();
+    villasRedraw = () => { drawLists(); draw(); };
     let t; $('#vl-q').addEventListener('input', e => { ui.q = e.target.value; saveUI(); clearTimeout(t); t = setTimeout(draw, 100); });
     $('#vl-sort').addEventListener('change', e => { ui.vsort = e.target.value; saveUI(); draw(); });
     $('#vl-locs').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; ui.vloc = b.dataset.l; saveUI(); $$('#vl-locs button').forEach(x => x.classList.toggle('on', x === b)); draw(); });
+    $('#vl-lists').addEventListener('click', e => { const b = e.target.closest('[data-fl]'); if (!b) return; ui.vlist = b.dataset.fl; saveUI(); drawLists(); draw(); });
     const go = e => {
       const c = e.target.closest('.vcard'); if (!c) return;
       const act = e.target.closest('[data-act]'); const v = villaById(c.dataset.id);
+      if (act && act.dataset.act === 'fav') { e.stopPropagation(); openFav(v.id, () => { drawLists(); draw(); }); return; }
       if (act && act.dataset.act === 'book') { openBooking({ villaId: v.id, from: '2027-07-04', to: '2027-07-11' }); return; }
       if (act && act.dataset.act === 'cal') { ui.q = v.name; saveUI(); location.hash = 'disponibilita'; return; }
       location.hash = 'villa-' + c.dataset.id;
     };
     body.addEventListener('click', go);
-    body.addEventListener('keydown', e => { if (e.key === 'Enter') go(e); });
+    body.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.classList.contains('vcard')) go(e); });
     $('#vl-add').addEventListener('click', newVilla);
   }
 
@@ -655,6 +740,7 @@ window.SDBStore.ready.then(function () {
       <div class="head">
         <div><h1 id="v-title">${esc(v.name)}</h1><div class="sub">${esc([v.location, v.seafront, v.proprietario && 'Prop. ' + v.proprietario].filter(Boolean).join(' · '))}</div><div id="v-spese"></div></div>
         <div class="actions"><span class="saved" id="saved" aria-live="polite"></span>
+          <button class="btn vfav${isFav(v.id) ? ' on' : ''}" id="v-fav" title="Preferiti">${HEART(isFav(v.id))} Preferiti</button>
           <button class="btn" id="v-book">+ Periodo</button><button class="btn" id="v-dup">Duplica</button><button class="btn danger" id="v-del">Elimina villa</button></div>
       </div>
       <div id="v-confirm"></div>
@@ -665,6 +751,10 @@ window.SDBStore.ready.then(function () {
           <label class="field"><span>Note</span><textarea data-k="note" rows="4">${esc(v.note)}</textarea></label></section>
       </div>
       <section class="card"><h2>Caratteristiche</h2><div class="grid">${FIELDS.caratteristiche.map(([k, l]) => inp(k, l)).join('')}</div></section>
+      <section class="card" id="v-photos"><h2>Foto</h2>
+        <div class="ph-grid" id="ph-grid"></div>
+        <div class="ph-tools">${store.mode === 'online' ? `<label class="btn" for="ph-add">+ Aggiungi foto</label><input type="file" id="ph-add" accept="image/*" multiple hidden>` : ''}<span class="note" id="ph-msg"></span></div>
+      </section>
       <section class="card"><h2>Link e media</h2><div class="grid wide">${FIELDS.link.map(([k, l]) => linkInp(k, l)).join('')}</div></section>
       <section class="card" id="prices"></section>
       <section class="card"><h2>Disponibilità ${esc(st.seasonName)}</h2><div class="minitl" id="v-tl"></div><div class="blist" id="v-blist"></div></section>
@@ -744,6 +834,64 @@ window.SDBStore.ready.then(function () {
     $('#v-blist').addEventListener('click', e => { const it = e.target.closest('[data-b]'); if (it) openBooking({ id: it.dataset.b }); });
     $('#v-blist').addEventListener('keydown', e => { if (e.key === 'Enter') { const it = e.target.closest('[data-b]'); if (it) openBooking({ id: it.dataset.b }); } });
     $('#v-book').addEventListener('click', () => openBooking({ villaId: v.id, from: '2027-07-04', to: '2027-07-11' }));
+    $('#v-fav').addEventListener('click', () => openFav(v.id, () => { const f = isFav(v.id); const b = $('#v-fav'); if (b) { b.classList.toggle('on', f); b.innerHTML = HEART(f) + ' Preferiti'; } }));
+    // foto della villa
+    let foto = [];
+    const phMsg = t => { const m = $('#ph-msg'); if (m) m.textContent = t || ''; };
+    const rulesMsg = err => err && err.code === 'permission-denied' ? 'Per salvare le foto bisogna prima aggiornare le regole di Firestore (vedi istruzioni).' : 'Errore: ' + (err && err.message || err);
+    const drawFoto = () => {
+      const g = $('#ph-grid'); if (!g) return;
+      const coverId = (thumbs.map[v.id] || {}).fotoId;
+      g.innerHTML = foto.length ? foto.map(f => `<figure class="ph-item${f.id === coverId ? ' cover' : ''}" data-f="${esc(f.id)}">
+          <button type="button" class="ph-open" data-open-f="${esc(f.id)}"><img src="${esc(f.thumb || f.img)}" alt="Foto di ${esc(v.name)}" loading="lazy"></button>
+          <figcaption>${f.id === coverId ? '<span class="ph-badge">Copertina</span>' : `<button type="button" class="btn small" data-cover="${esc(f.id)}">Copertina</button>`}<button type="button" class="btn small danger" data-delf="${esc(f.id)}">Elimina</button></figcaption>
+        </figure>`).join('') : `<p class="note">${store.mode === 'online' ? 'Nessuna foto. Aggiungi la prima: diventa la copertina della scheda.' : 'Le foto si possono caricare solo con i dati online.'}</p>`;
+    };
+    const loadFoto = () => {
+      if (store.mode !== 'online' || !store.listFoto) { drawFoto(); return; }
+      $('#ph-grid').innerHTML = '<p class="note">Caricamento foto…</p>';
+      store.listFoto(v.id).then(l => { foto = l; drawFoto(); }, err => { $('#ph-grid').innerHTML = ''; phMsg(rulesMsg(err)); });
+    };
+    loadFoto();
+    const add = $('#ph-add');
+    if (add) add.addEventListener('change', async () => {
+      const files = Array.from(add.files || []); add.value = ''; if (!files.length) return;
+      for (let i = 0; i < files.length; i++) {
+        phMsg(`Caricamento ${i + 1} di ${files.length}…`);
+        try {
+          const img = await compressImage(files[i], 1600, 700000);
+          const th = await compressImage(files[i], 640, 70000);
+          await store.addFoto(v.id, img, th, Date.now() + i, !thumbs.map[v.id] && i === 0 && !foto.length);
+        } catch (err) { phMsg(rulesMsg(err)); return; }
+      }
+      phMsg(files.length === 1 ? 'Foto aggiunta' : files.length + ' foto aggiunte'); loadFoto();
+    });
+    $('#ph-grid').addEventListener('click', async e => {
+      const o = e.target.closest('[data-open-f]');
+      if (o) {
+        const f = foto.find(x => x.id === o.dataset.openF); if (!f) return;
+        const dlg = $('#dlg');
+        dlg.innerHTML = `<div class="dlg sp-photo"><h3>${esc(v.name)}</h3><div class="sp-photo-box"><img src="${esc(f.img)}" alt="Foto di ${esc(v.name)}"></div><div class="foot"><a class="btn" href="${esc(f.img)}" download="${esc(v.name)}-${esc(f.id.slice(0, 6))}.jpg">Scarica</a><button type="button" class="btn primary" id="ph-close">Chiudi</button></div></div>`;
+        $('#ph-close').onclick = () => dlg.close(); dlg.onclick = ev => { if (ev.target === dlg) dlg.close(); };
+        if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', '');
+        return;
+      }
+      const c = e.target.closest('[data-cover]');
+      if (c) { const f = foto.find(x => x.id === c.dataset.cover); try { await store.setCover(v.id, f.id, f.thumb); thumbs.map[v.id] = { thumb: f.thumb, fotoId: f.id }; drawFoto(); phMsg('Copertina aggiornata'); } catch (err) { phMsg(rulesMsg(err)); } return; }
+      const d = e.target.closest('[data-delf]');
+      if (d) {
+        const fig = d.closest('figure'); const id = d.dataset.delf;
+        fig.querySelector('figcaption').innerHTML = `<span class="ph-q">Eliminare?</span><button type="button" class="btn small danger solid" data-delok="${esc(id)}">Sì</button><button type="button" class="btn small" data-delno="1">No</button>`;
+        return;
+      }
+      if (e.target.closest('[data-delno]')) { drawFoto(); return; }
+      const ok = e.target.closest('[data-delok]');
+      if (ok) {
+        const id = ok.dataset.delok; const rest = foto.filter(x => x.id !== id);
+        try { await store.deleteFoto(v.id, id, rest[0] || null); foto = rest; if ((thumbs.map[v.id] || {}).fotoId === id) thumbs.map[v.id] = rest[0] ? { thumb: rest[0].thumb, fotoId: rest[0].id } : undefined; drawFoto(); phMsg('Foto eliminata'); }
+        catch (err) { phMsg(rulesMsg(err)); }
+      }
+    });
     $('#v-dup').addEventListener('click', () => {
       store.upsertVilla(JSON.parse(JSON.stringify(v)));
       const c = JSON.parse(JSON.stringify(v)); c.id = S.uid('v'); c.name = v.name + ' (copia)'; c.order = (v.order ?? 0) + 0.5;
