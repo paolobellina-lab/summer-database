@@ -89,8 +89,18 @@
       mode: 'online', user: '', online: navigator.onLine, canPersist: true,
       get: () => state,
       subscribe(fn) { subs.add(fn); return () => subs.delete(fn); },
-      signOut() { auth.signOut().then(() => location.reload()); }
+      // uscendo cancello anche la copia dei dati salvata sul dispositivo
+      signOut() { wipeAndSignOut().then(() => location.reload()); }
     };
+    const OKKEY = 'summer-db-autorizzato';
+    const markOk = email => { try { localStorage.setItem(OKKEY, String(email).toLowerCase()); } catch (_) {} };
+    const wasOk = email => { try { return localStorage.getItem(OKKEY) === String(email).toLowerCase(); } catch (_) { return false; } };
+    const forgetOk = () => { try { localStorage.removeItem(OKKEY); } catch (_) {} };
+    async function wipeAndSignOut() {
+      forgetOk();
+      try { await auth.signOut(); } catch (_) {}
+      try { await db.terminate(); await db.clearPersistence(); } catch (_) {}
+    }
     window.addEventListener('online', () => { api.online = true; });
     window.addEventListener('offline', () => { api.online = false; });
     const emit = origin => subs.forEach(fn => fn(state, origin));
@@ -205,35 +215,59 @@
           return;
         }
         api.user = user.email;
-        let got = { villas: false, bookings: false, meta: false }, started = false;
-        const maybeStart = () => { if (!started && got.villas && got.bookings && got.meta) { started = true; document.getElementById('app').innerHTML = ''; resolve(); } };
-        const denied = err => {
-          if (err && err.code === 'permission-denied') {
-            const el = loginScreen(`<p class="login-msg"><b>${user.email}</b> non è tra gli account autorizzati.</p>
-              <p class="login-note">Chiedi all'amministratore di aggiungerlo, oppure accedi con un altro account.</p>
-              <button class="btn" id="login-out">Cambia account</button>`);
-            el.querySelector('#login-out').addEventListener('click', () => auth.signOut());
-          } else fail(err);
-        };
-        const opts = { includeMetadataChanges: false };
-        db.collection('villas').onSnapshot(opts, snap => {
-          state.villas = snap.docs.map(d => d.data()); got.villas = true;
-          if (started) emit(snap.metadata.hasPendingWrites ? 'local' : 'remote'); else maybeStart();
-        }, denied);
-        db.collection('bookings').onSnapshot(opts, snap => {
-          state.bookings = snap.docs.map(d => d.data()); got.bookings = true;
-          if (started) emit(snap.metadata.hasPendingWrites ? 'local' : 'remote'); else maybeStart();
-        }, denied);
-        db.collection('meta').onSnapshot(opts, snap => {
-          snap.docs.forEach(d => {
-            if (d.id === 'settings') state.settings = Object.assign(window.SDB.defaultSettings(), d.data());
-            if (d.id === 'notes') state.notes = d.data().text || '';
-            if (d.id === 'preferiti') state.preferiti = (d.data() || {}).liste || [];
-            if (d.id === 'assegnazioni') state.assegnazioni = (d.data() || {}).account || [];
+        // 1) nessun dato e nessuna pagina finché il server non conferma che l'account è autorizzato
+        let blocked = false, started = false;
+        const block = () => {
+          if (blocked) return; blocked = true;
+          state = emptyState(); subs.clear();
+          const email = user.email;
+          document.getElementById('app').innerHTML = '';
+          wipeAndSignOut().then(() => {
+            const el = loginScreen(`<p class="login-msg"><b>${String(email).replace(/[<>&"]/g, '')}</b> non è autorizzato ad accedere.</p>
+              <p class="login-note">Accedi con un account autorizzato oppure chiedi all'amministratore.</p>
+              <button class="btn primary login-btn" id="login-other">Accedi con un altro account</button>`);
+            el.querySelector('#login-other').addEventListener('click', () => location.reload());
           });
-          got.meta = true;
-          if (started) emit(snap.metadata.hasPendingWrites ? 'local' : 'remote'); else maybeStart();
-        }, denied);
+        };
+        const verify = () => db.collection('meta').doc('settings').get({ source: 'server' }).then(() => true, err => {
+          if (err && err.code === 'permission-denied') return false;
+          // senza rete: entro solo se questo account era già stato verificato su questo dispositivo
+          return wasOk(user.email) ? true : null;
+        });
+        loginScreen('<p class="login-msg">Verifica dell\'account…</p>');
+        verify().then(ok => {
+          if (ok === false) { block(); return; }
+          if (ok === null) {
+            const el = loginScreen(`<p class="login-msg">Serve la connessione per verificare l'account la prima volta.</p><button class="btn" id="login-retry">Riprova</button>`);
+            el.querySelector('#login-retry').addEventListener('click', () => location.reload());
+            return;
+          }
+          markOk(user.email);
+          start();
+        });
+        function start() {
+          let got = { villas: false, bookings: false, meta: false };
+          const maybeStart = () => { if (!blocked && !started && got.villas && got.bookings && got.meta) { started = true; document.getElementById('app').innerHTML = ''; resolve(); } };
+          // 2) se in seguito l'accesso viene revocato, l'app si chiude e i dati sul dispositivo vengono cancellati
+          const denied = err => { if (err && err.code === 'permission-denied') block(); else fail(err); };
+          const opts = { includeMetadataChanges: false };
+          const on = (col, fn) => db.collection(col).onSnapshot(opts, snap => {
+            if (blocked) return;
+            fn(snap);
+            if (started) emit(snap.metadata.hasPendingWrites ? 'local' : 'remote'); else maybeStart();
+          }, denied);
+          on('villas', snap => { state.villas = snap.docs.map(d => d.data()); got.villas = true; });
+          on('bookings', snap => { state.bookings = snap.docs.map(d => d.data()); got.bookings = true; });
+          on('meta', snap => {
+            snap.docs.forEach(d => {
+              if (d.id === 'settings') state.settings = Object.assign(window.SDB.defaultSettings(), d.data());
+              if (d.id === 'notes') state.notes = d.data().text || '';
+              if (d.id === 'preferiti') state.preferiti = (d.data() || {}).liste || [];
+              if (d.id === 'assegnazioni') state.assegnazioni = (d.data() || {}).account || [];
+            });
+            got.meta = true;
+          });
+        }
       });
     });
     return api;
