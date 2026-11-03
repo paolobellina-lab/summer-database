@@ -51,6 +51,15 @@ window.SDBStore.ready.then(function () {
   let ui = { tariff: 'settimanale', mode: 'listino', q: '', loc: '', da: '', a: '', guests: '', beds: '', dal: '', al: '', zoom: isMobile() ? 16 : 22, open: false };
   try { Object.assign(ui, JSON.parse(localStorage.getItem(UIKEY) || '{}')); } catch (_) {}
   function saveUI() { try { localStorage.setItem(UIKEY, JSON.stringify(ui)); } catch (_) {} }
+  // tema: chiaro (panna) di base; "auto" segue il telefono/computer
+  if (!ui.theme) ui.theme = 'light';
+  const applyTheme = () => {
+    const r = document.documentElement;
+    if (ui.theme === 'auto') r.removeAttribute('data-theme'); else r.setAttribute('data-theme', ui.theme);
+    const dark = ui.theme === 'dark' || (ui.theme === 'auto' && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+    const m = document.querySelector('meta[name="theme-color"]'); if (m) m.setAttribute('content', dark ? '#07131c' : '#f5eee0');
+  };
+  applyTheme();
 
   const data = () => store.get();
   const settings = () => data().settings;
@@ -766,6 +775,9 @@ window.SDBStore.ready.then(function () {
     const st = JSON.parse(JSON.stringify(settings()));
     main.innerHTML = `<div class="page"><div class="wrap">
       <div class="head"><div><h1>Impostazioni</h1><div class="sub">Stagione, periodi tariffari, valori per le nuove ville, backup.</div></div><div class="actions"><span class="saved" id="saved"></span></div></div>
+      <section class="card"><h2>Aspetto</h2>
+        <div class="field"><span>Tema</span><div class="seg" id="s-theme">${[['light', 'Chiaro (panna)'], ['dark', 'Scuro'], ['auto', 'Come il dispositivo']].map(([k, l]) => `<button type="button" data-v="${k}" class="${ui.theme === k ? 'on' : ''}">${l}</button>`).join('')}</div></div>
+        <p class="note">La scelta vale solo per questo dispositivo.</p></section>
       <section class="card"><h2>Stagione</h2><div class="grid">
         <label class="field"><span>Nome</span><input id="s-name" value="${esc(st.seasonName)}"></label>
         <label class="field"><span>Inizio calendario</span><input type="date" id="s-start" value="${esc(st.seasonStart)}"></label>
@@ -790,6 +802,7 @@ window.SDBStore.ready.then(function () {
         <div id="s-msg"></div>
       </section>
     </div></div>`;
+    $('#s-theme').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; ui.theme = b.dataset.v; saveUI(); applyTheme(); $$('#s-theme button').forEach(x => x.classList.toggle('on', x === b)); });
     let t;
     const save = () => { $('#saved').textContent = 'Modifiche in corso…'; clearTimeout(t); t = setTimeout(() => { store.setSettings(JSON.parse(JSON.stringify(st))); refreshShell('impostazioni'); $('#saved').textContent = 'Salvato'; }, 400); };
     $('#s-name').addEventListener('input', e => { st.seasonName = e.target.value; save(); });
