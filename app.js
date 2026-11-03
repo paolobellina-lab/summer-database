@@ -1095,10 +1095,12 @@ window.SDBStore.ready.then(function () {
     };
     if ($('#acc-card')) {
       drawAcc();
-      $('#acc-list').addEventListener('change', e => { const cb = e.target.closest('[data-ui]'); if (!cb) return; const l = accUsers(); const u = l[Number(cb.dataset.ui)]; u.app = (u.app || []).filter(x => x !== cb.dataset.app); if (cb.checked) u.app.push(cb.dataset.app); accSave(l); });
+      $('#acc-list').addEventListener('change', e => { const cb = e.target.closest('[data-ui]'); if (!cb) return; const l = accUsers(); const u = l[Number(cb.dataset.ui)];
+        if (u.email === String(store.user || '').toLowerCase() && cb.dataset.app === 'summer' && !cb.checked) { cb.checked = true; toast('Non puoi togliere a te stesso l\'accesso a Summer Database'); return; } u.app = (u.app || []).filter(x => x !== cb.dataset.app); if (cb.checked) u.app.push(cb.dataset.app); accSave(l); });
       $('#acc-list').addEventListener('click', e => {
         const b = e.target.closest('[data-urm]'); if (!b) return;
         const l = accUsers(); const u = l[Number(b.dataset.urm)];
+        if (u.email === String(store.user || '').toLowerCase()) { toast('Non puoi togliere il tuo account mentre lo stai usando'); return; }
         b.outerHTML = `<span class="as-rmq">Togliere ${esc(u.email)}? Non potrà più entrare. <button type="button" class="btn small danger solid" data-urmok="${b.dataset.urm}">Togli</button></span>`;
       });
       $('#acc-list').addEventListener('click', e => { const b = e.target.closest('[data-urmok]'); if (!b) return; const l = accUsers(); l.splice(Number(b.dataset.urmok), 1); accSave(l); });
@@ -1106,7 +1108,7 @@ window.SDBStore.ready.then(function () {
         e.preventDefault(); const email = $('#acc-email').value.trim().toLowerCase();
         if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { toast('Email non valida'); $('#acc-email').focus(); return; }
         const l = accUsers(); if (l.some(u => u.email === email)) { toast('Account già presente'); return; }
-        l.push({ email, nome: $('#acc-nome').value.trim(), app: ['scontrini'] }); $('#acc-email').value = ''; $('#acc-nome').value = ''; accSave(l);
+        l.push({ email, nome: $('#acc-nome').value.trim(), app: email === String(store.user || '').toLowerCase() ? ['summer', 'scontrini'] : ['scontrini'] }); $('#acc-email').value = ''; $('#acc-nome').value = ''; accSave(l);
       });
     }
     const drawLocs = () => {

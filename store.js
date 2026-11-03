@@ -278,7 +278,14 @@
           // account presente nell'elenco ma abilitato solo all'app Scontrini: non entra in Summer Database
           db.collection('meta').doc('accessi').get().then(d => {
             const u = d.exists ? ((d.data() || {}).utenti || []).find(x => String(x.email).toLowerCase() === String(user.email).toLowerCase()) : null;
-            if (u && !(u.app || []).includes('summer')) { block(); return; }
+            if (u && !(u.app || []).includes('summer')) {
+              // un amministratore non deve mai restare chiuso fuori: se può scrivere meta/accessi (solo gli
+              // amministratori possono), riabilito da solo il suo accesso a Summer Database; altrimenti blocco.
+              const fixed = ((d.data() || {}).utenti || []).map(x => String(x.email).toLowerCase() === String(user.email).toLowerCase() ? Object.assign({}, x, { app: Array.from(new Set((x.app || []).concat(['summer']))) }) : x);
+              db.collection('meta').doc('accessi').update({ utenti: fixed, aggiornatoDa: user.email, aggiornatoIl: firebase.firestore.FieldValue.serverTimestamp() })
+                .then(() => { markOk(user.email); start(); }, () => block());
+              return;
+            }
             markOk(user.email); start();
           }, () => { markOk(user.email); start(); });
         });
