@@ -749,7 +749,10 @@ input[type="color"].dot::-moz-color-swatch { border: 0; border-radius: 50%; }
 }
 
 /* ---------- servizi nella prenotazione ---------- */
-.srv-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.srv-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; align-items: stretch; }
+/* servizi non spuntati: tutti della stessa misura, nome su una riga, casella centrata */
+.srv-item:not(.on) .flag { flex: 1; align-items: center; }
+.srv-item .flag b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .srv-item { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .srv-item .flag { align-items: center; }
 /* servizio spuntato: un unico riquadro con nome, incluso/a parte, prezzi e note */
@@ -758,4 +761,3 @@ input[type="color"].dot::-moz-color-swatch { border: 0; border-radius: 50%; }
 .srv-det { display: flex; flex-direction: column; gap: 8px; }
 .srv-det .seg { align-self: flex-start; }
 .seg.small button { font-size: 12.5px; padding: 5px 10px; }
-@media (max-width: 560px) { .srv-list { grid-template-columns: 1fr 1fr; } }
