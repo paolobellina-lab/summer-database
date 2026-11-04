@@ -60,6 +60,10 @@ window.SDBStore.ready.then(function () {
   const servizi = cfgIn => EXTRAS.map(([k, l]) => ({ key: k, label: l, base: true })).concat((Array.isArray(cfgIn) ? cfgIn : ((data().settings || {}).servizi || [])).filter(x => x && x.key).map(x => ({ key: x.key, label: x.label, base: false })));
   const hasSrv = (b, x) => x.base ? !!b[x.key] : (Array.isArray(b.servizi) && b.servizi.includes(x.key));
   const srvLabels = b => servizi().filter(x => hasSrv(b, x)).map(x => x.label);
+  /* Dettaglio dei servizi nella prenotazione: serviziDett[chiave] = { incluso, acquisto, vendita, note }.
+     "incluso" = compreso nel prezzo di vendita dell'affitto; altrimenti ha prezzi propri, sommati al totale. */
+  const srvDet = (b, k) => Object.assign({ incluso: true, acquisto: null, vendita: null, note: '' }, (b.serviziDett || {})[k] || {});
+  const srvTot = b => { let v = 0, a = 0; servizi().forEach(x => { if (!hasSrv(b, x)) return; const d = srvDet(b, x.key); if (d.incluso) return; if (typeof d.vendita === 'number') v += d.vendita; if (typeof d.acquisto === 'number') a += d.acquisto; }); return { vendita: v, acquisto: a }; };
   const isMobile = () => window.matchMedia('(max-width: 760px)').matches;
 
   /* ---------- preferenze di vista (solo su questo dispositivo) ---------- */
@@ -387,7 +391,7 @@ window.SDBStore.ready.then(function () {
         const txt = b.cliente || (b.status === 'owner' ? 'OWNER' : b.status === 'richiesta' ? 'SU RICHIESTA' : '');
         // prezzo complessivo: concordato, altrimenti stima da listino
         let tot = '';
-        if (ui.mode === 'netto' ? typeof b.prezzoAcquisto === 'number' : typeof b.prezzoVendita === 'number') tot = S.money(ui.mode === 'netto' ? b.prezzoAcquisto : b.prezzoVendita);
+        if (ui.mode === 'netto' ? typeof b.prezzoAcquisto === 'number' : typeof b.prezzoVendita === 'number') { const sv = srvTot(b); tot = S.money(ui.mode === 'netto' ? b.prezzoAcquisto + sv.acquisto : b.prezzoVendita + sv.vendita); }
         else if (b.status !== 'owner' && b.status !== 'richiesta') { const li = listinoApprox(v, b.from, b.to); const val = li && (li.approx ? li.sale : (ui.mode === 'netto' ? li.net : li.sale)); if (typeof val === 'number') tot = '≈ ' + S.money(val); }
         if (tot && w < 74) tot = tot.replace(' €', '').replace(/\.000$/, 'k');
         const extras = srvLabels(b);
@@ -526,9 +530,19 @@ window.SDBStore.ready.then(function () {
       ${canSee('spese') && (data().assegnazioni || []).length ? `<div class="field"><span>Assegnata a (app Scontrini)</span><div class="as-mini">${(data().assegnazioni || []).map(ac => `<label class="as-check"><input type="checkbox" data-bacc="${esc(ac.email)}" ${(ac.prenotazioni || []).includes(b.id) || (ac.ville || []).includes(b.villaId) ? 'checked' : ''} ${(ac.ville || []).includes(b.villaId) ? 'disabled title="Ha già tutta la villa"' : ''}> ${esc(ac.nome || ac.email)}</label>`).join('')}</div></div>` : ''}
       </section>
       <section class="dsec sec-srv"><h4>Servizi</h4>
-      <div class="flags three">
-        ${servizi().map(x => `<label class="flag"><input type="checkbox" ${x.base ? `id="b-${x.key}"` : `data-srv="${esc(x.key)}"`} ${hasSrv(b, x) ? 'checked' : ''}><span><b>${esc(x.label)}</b></span></label>`).join('')}
+      <div class="srv-list">
+        ${servizi().map(x => { const d = srvDet(b, x.key); const on = hasSrv(b, x); return `<div class="srv-item${on ? ' on' : ''}" data-sk="${esc(x.key)}">
+          <label class="flag"><input type="checkbox" class="srv-cb" ${x.base ? `id="b-${x.key}"` : `data-srv="${esc(x.key)}"`} ${on ? 'checked' : ''}><span><b>${esc(x.label)}</b></span></label>
+          <div class="srv-det"${on ? '' : ' hidden'}>
+            <div class="seg small srv-mode"><button type="button" data-inc="1" class="${d.incluso ? 'on' : ''}">Incluso nel prezzo</button><button type="button" data-inc="0" class="${d.incluso ? '' : 'on'}">A parte</button></div>
+            <div class="row srv-prices"${d.incluso ? ' hidden' : ''}>
+              <label class="field"><span>Acquisto €</span><input data-sa inputmode="numeric" value="${typeof d.acquisto === 'number' ? esc(fmtNum(d.acquisto)) : ''}"></label>
+              <label class="field"><span>Vendita €</span><input data-sv inputmode="numeric" value="${typeof d.vendita === 'number' ? esc(fmtNum(d.vendita)) : ''}"></label>
+            </div>
+            <label class="field"><span>Note</span><input data-sn value="${esc(d.note)}" placeholder="es. 3 cene, orari, fornitore"></label>
+          </div></div>`; }).join('')}
       </div>
+      <div class="pricehint" id="b-srv-hint"></div>
       </section>
       <section class="dsec sec-look"><h4>Stato e colore</h4>
       <div class="row">
@@ -558,8 +572,24 @@ window.SDBStore.ready.then(function () {
     $('#b-sw').addEventListener('click', e => { const s = e.target.closest('.sw[data-c]'); if (!s) return; color = s.dataset.c; colorTouched = true; paint(); });
     $('#b-color').addEventListener('input', e => { color = e.target.value; colorTouched = true; paint(); });
     $('#b-status').addEventListener('change', e => { if (!colorTouched) { color = statoColor(e.target.value); paint(); } });
-    const read = () => ({ villaId: $('#b-villa').value, status: $('#b-status').value, from: $('#b-from').value, to: $('#b-to').value, cliente: $('#b-cliente').value.trim(), note: $('#b-note').value.trim(), color: colorTouched ? color : null, earlyIn: $('#b-early').checked, lateOut: $('#b-late').checked, prezzoVendita: money('#b-sale'), prezzoAcquisto: money('#b-buy'), pulizia: $('#b-pulizia').checked, cuoco: $('#b-cuoco').checked, transfer: $('#b-transfer').checked, servizi: $$('#bform [data-srv]').filter(c => c.checked).map(c => c.dataset.srv).concat((b.servizi || []).filter(k => !servizi().some(x => x.key === k))) });
+    const read = () => ({ villaId: $('#b-villa').value, status: $('#b-status').value, from: $('#b-from').value, to: $('#b-to').value, cliente: $('#b-cliente').value.trim(), note: $('#b-note').value.trim(), color: colorTouched ? color : null, earlyIn: $('#b-early').checked, lateOut: $('#b-late').checked, prezzoVendita: money('#b-sale'), prezzoAcquisto: money('#b-buy'), pulizia: $('#b-pulizia').checked, cuoco: $('#b-cuoco').checked, transfer: $('#b-transfer').checked, serviziDett: readSrv(), servizi: $$('#bform [data-srv]').filter(c => c.checked).map(c => c.dataset.srv).concat((b.servizi || []).filter(k => !servizi().some(x => x.key === k))) });
     function money(sel) { const v = S.parseMoney($(sel).value); return typeof v === 'number' ? v : null; }
+    const num = el => { const v = S.parseMoney(el.value); return typeof v === 'number' ? v : null; };
+    // dettagli dei servizi: tengo anche quelli di servizi non spuntati o non più in elenco, così non si perdono
+    function readSrv() {
+      const out = JSON.parse(JSON.stringify(b.serviziDett || {}));
+      $$('#bform .srv-item').forEach(it => {
+        const k = it.dataset.sk; const cb = it.querySelector('.srv-cb');
+        const d = { incluso: it.querySelector('.srv-mode .on').dataset.inc === '1', acquisto: num(it.querySelector('[data-sa]')), vendita: num(it.querySelector('[data-sv]')), note: it.querySelector('[data-sn]').value.trim() };
+        if (!cb.checked && d.incluso && d.acquisto === null && d.vendita === null && !d.note) delete out[k]; else out[k] = d;
+      });
+      return out;
+    }
+    $$('#bform .srv-item').forEach(it => {
+      it.querySelector('.srv-cb').addEventListener('change', e => { it.classList.toggle('on', e.target.checked); it.querySelector('.srv-det').hidden = !e.target.checked; });
+      it.querySelector('.srv-mode').addEventListener('click', e => { const bt = e.target.closest('button'); if (!bt) return;
+        it.querySelectorAll('.srv-mode button').forEach(z => z.classList.toggle('on', z === bt)); it.querySelector('.srv-prices').hidden = bt.dataset.inc === '1'; check(); });
+    });
     // regola: check-out e check-in possono cadere nello stesso giorno (massimo 2 affitti in quel giorno);
     // se due affitti condividono anche una sola notte il salvataggio è bloccato.
     let blocked = false;
@@ -589,11 +619,15 @@ window.SDBStore.ready.then(function () {
       const li = n > 0 ? listinoFor(vv, x.from, x.to) : null;
       $('#b-sale').placeholder = li ? fmtNum(li.sale) : '';
       $('#b-buy').placeholder = li && li.net ? fmtNum(li.net) : '';
-      const mg = typeof x.prezzoVendita === 'number' && typeof x.prezzoAcquisto === 'number' ? x.prezzoVendita - x.prezzoAcquisto : null;
+      const sv = srvTot(x); const hasSv = sv.vendita || sv.acquisto;
+      const mg = typeof x.prezzoVendita === 'number' && typeof x.prezzoAcquisto === 'number' ? x.prezzoVendita + sv.vendita - x.prezzoAcquisto - sv.acquisto : null;
+      const totV = typeof x.prezzoVendita === 'number' ? x.prezzoVendita + sv.vendita : null;
       $('#b-hint').innerHTML = [
         li ? `Listino: <b>${S.money(li.sale)}</b>${li.net ? ` · netto ${S.money(li.net)}` : ''} <span class="muted">(${esc(li.label)})</span> <button type="button" class="btn small" id="b-uselist">Usa listino</button>` : '<span class="muted">Nessun prezzo di listino per queste date esatte.</span>',
-        mg !== null ? `Guadagno: <b>${S.money(mg)}</b>${x.prezzoVendita ? ` (${Math.round(mg / x.prezzoVendita * 1000) / 10}%)` : ''}` : ''
+        hasSv ? `Servizi a parte: vendita <b>${S.money(sv.vendita)}</b> · acquisto ${S.money(sv.acquisto)}${totV !== null ? ` · <b>Totale cliente ${S.money(totV)}</b>` : ''}` : '',
+        mg !== null ? `Guadagno${hasSv ? ' con i servizi' : ''}: <b>${S.money(mg)}</b>${totV ? ` (${Math.round(mg / totV * 1000) / 10}%)` : ''}` : ''
       ].filter(Boolean).join('<br>');
+      const sh = $('#b-srv-hint'); if (sh) sh.innerHTML = hasSv ? `Servizi a parte: vendita <b>${S.money(sv.vendita)}</b> · acquisto ${S.money(sv.acquisto)} · si sommano al prezzo dell'affitto.` : '';
       const ul = $('#b-uselist'); if (ul) ul.onclick = () => { $('#b-sale').value = fmtNum(li.sale); if (li.net) $('#b-buy').value = fmtNum(li.net); check(); };
       $('#b-save').disabled = !(n > 0) || blocked;
       paint();

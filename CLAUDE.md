@@ -25,6 +25,7 @@ Se una modifica richiesta va contro questi vincoli, avvisare prima di procedere.
 - `meta/settings.stati`: `[{ key, label, color, blocks }]`. I 5 stati di base (`occupato`, `confermato`, `opzione`, `richiesta`, `owner`) hanno chiavi fisse: si cambiano nome, colore e "blocca", non la chiave. Gli stati aggiunti hanno una chiave ricavata dal nome, che non cambia più (va in `bookings.status`, letto dalle altre app).
 - Colore della prenotazione: `bookings.color` è salvato solo se scelto a mano (altrimenti `null`). Se è nullo o uguale al colore originale del suo stato (`S.STATUS_COLOR`), la prenotazione segue il colore predefinito dello stato.
 - `meta/settings.servizi`: `[{ key, label }]` in aggiunta ai 3 di base (campi `pulizia`, `cuoco`, `transfer`). Nella prenotazione i servizi aggiunti stanno in `servizi: [key]`.
+- Dettaglio dei servizi nella prenotazione: `serviziDett: { [key]: { incluso, acquisto, vendita, note } }`. `incluso: true` = compreso nel prezzo di vendita dell'affitto; altrimenti acquisto e vendita del servizio si sommano al totale (barra del calendario, guadagno).
 
 ## Località
 Elenco condiviso in `meta/settings` → `localita` (maiuscolo). Nella scheda villa la località si sceglie da un menu (con "+ Nuova località"); in Impostazioni si aggiungono, rinominano e uniscono (aggiorna il campo `location` delle ville interessate, un documento per villa).
