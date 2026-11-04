@@ -4,9 +4,20 @@ window.SDBStore.ready.then(function () {
   const $ = (sel, root) => (root || document).querySelector(sel);
   const $$ = (sel, root) => Array.from((root || document).querySelectorAll(sel));
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const statoLabel = k => (S.STATI.find(s => s.key === k) || { label: k }).label;
-  const blocks = k => (S.STATI.find(s => s.key === k) || { blocks: true }).blocks;
-  const bookingColor = b => b.color || S.STATUS_COLOR[b.status] || S.STATUS_COLOR.occupato;
+  /* Stati delle prenotazioni: quelli di base (chiavi fisse, lette anche dalle altre app) più quelli
+     aggiunti in Impostazioni → Aspetto predefiniti. Nome, colore e "blocca il calendario" modificabili. */
+  function stati(cfgIn) {
+    const cfg = Array.isArray(cfgIn) ? cfgIn : (data().settings && Array.isArray(data().settings.stati)) ? data().settings.stati : [];
+    const base = S.STATI.map(s => Object.assign({ color: S.STATUS_COLOR[s.key] }, s, cfg.find(c => c.key === s.key) || {}, { base: true }));
+    return base.concat(cfg.filter(c => c && c.key && !S.STATI.some(s => s.key === c.key)).map(c => Object.assign({ blocks: true, color: '#6b7470' }, c, { base: false })));
+  }
+  const statoOf = k => stati().find(s => s.key === k);
+  const statoLabel = k => (statoOf(k) || { label: k }).label;
+  const blocks = k => (statoOf(k) || { blocks: true }).blocks;
+  const statoColor = k => (statoOf(k) || statoOf('occupato')).color;
+  // colore "di stato": nessun colore salvato, oppure ancora quello originale dello stato → segue il predefinito
+  const isDefaultColor = b => !b.color || String(b.color).toLowerCase() === String(S.STATUS_COLOR[b.status] || '').toLowerCase();
+  const bookingColor = b => isDefaultColor(b) ? statoColor(b.status) : b.color;
   // periodi ND del listino trasformati in "prenotazioni simulate" grigie (non salvate, calcolate dal listino)
   function ndSpans(v, tariff) {
     const per = S.periodsFor(settings(), v, tariff); const out = [];
@@ -44,6 +55,11 @@ window.SDBStore.ready.then(function () {
     return k ? { approx: true, sale, net: sale } : null;
   }
   const EXTRAS = [['pulizia', 'Pulizia finale'], ['cuoco', 'Cuoco'], ['transfer', 'Transfer']];
+  /* Servizi: i 3 di base (campi pulizia/cuoco/transfer della prenotazione) più quelli aggiunti in
+     Impostazioni → Aspetto predefiniti (settings.servizi), salvati nella prenotazione in "servizi: [chiave]". */
+  const servizi = cfgIn => EXTRAS.map(([k, l]) => ({ key: k, label: l, base: true })).concat((Array.isArray(cfgIn) ? cfgIn : ((data().settings || {}).servizi || [])).filter(x => x && x.key).map(x => ({ key: x.key, label: x.label, base: false })));
+  const hasSrv = (b, x) => x.base ? !!b[x.key] : (Array.isArray(b.servizi) && b.servizi.includes(x.key));
+  const srvLabels = b => servizi().filter(x => hasSrv(b, x)).map(x => x.label);
   const isMobile = () => window.matchMedia('(max-width: 760px)').matches;
 
   /* ---------- preferenze di vista (solo su questo dispositivo) ---------- */
@@ -292,7 +308,7 @@ window.SDBStore.ready.then(function () {
           <button type="button" class="btn ghost" id="f-reset">Azzera filtri</button>
         </div>
         <span class="count" id="count"></span>
-        <div class="legend" style="width:100%">${S.STATI.map(s => `<span><i style="background:${S.STATUS_COLOR[s.key]}"></i>${s.label}</span>`).join('')}<span>Colori predefiniti: ogni affitto può avere il suo. Tocca un prezzo per prenotare quel periodo; tocca un giorno senza prezzo per una settimana da quel giorno; col mouse puoi anche trascinare.</span></div>
+        <div class="legend" style="width:100%">${stati().map(s => `<span><i style="background:${esc(s.color)}"></i>${esc(s.label)}</span>`).join('')}<span>Colori predefiniti: ogni affitto può avere il suo. Tocca un prezzo per prenotare quel periodo; tocca un giorno senza prezzo per una settimana da quel giorno; col mouse puoi anche trascinare.</span></div>
       </form>
       <div class="cal" id="cal"></div>`;
     bindToolbar();
@@ -374,7 +390,7 @@ window.SDBStore.ready.then(function () {
         if (ui.mode === 'netto' ? typeof b.prezzoAcquisto === 'number' : typeof b.prezzoVendita === 'number') tot = S.money(ui.mode === 'netto' ? b.prezzoAcquisto : b.prezzoVendita);
         else if (b.status !== 'owner' && b.status !== 'richiesta') { const li = listinoApprox(v, b.from, b.to); const val = li && (li.approx ? li.sale : (ui.mode === 'netto' ? li.net : li.sale)); if (typeof val === 'number') tot = '≈ ' + S.money(val); }
         if (tot && w < 74) tot = tot.replace(' €', '').replace(/\.000$/, 'k');
-        const extras = EXTRAS.filter(([k]) => b[k]).map(([, l]) => l);
+        const extras = srvLabels(b);
         const tip = [statoLabel(b.status), S.dm(b.from) + ' → ' + S.dm(b.to), b.cliente, typeof b.prezzoVendita === 'number' ? 'Vendita ' + S.money(b.prezzoVendita) : '', typeof b.prezzoAcquisto === 'number' ? 'Acquisto ' + S.money(b.prezzoAcquisto) : '', b.earlyIn ? 'Early check-in' : '', b.lateOut ? 'Late check-out' : ''].concat(extras).filter(Boolean).join(' · ');
         return `<div class="bar" data-b="${esc(b.id)}" style="left:${l}px;width:${w}px;background:${esc(col)};color:${S.inkFor(col)}" title="${esc(tip)}"><span class="who">${esc(txt)}</span>${tot ? `<span class="tot">${esc(tot)}</span>` : ''}</div>`;
       }).join('');
@@ -483,7 +499,7 @@ window.SDBStore.ready.then(function () {
     const dlg = $('#dlg');
     const existing = init.id ? data().bookings.find(b => b.id === init.id) : null;
     const b = existing ? Object.assign({}, existing) : { id: S.uid('b'), villaId: init.villaId, status: 'occupato', from: init.from, to: init.to, cliente: '', note: '' };
-    let color = bookingColor(b); let colorTouched = !!b.color;
+    let color = bookingColor(b); let colorTouched = !isDefaultColor(b);
     const villas = sortedVillas();
     dlg.innerHTML = `<form class="dlg" method="dialog" id="bform">
       <h3>${existing ? 'Modifica periodo' : 'Nuovo periodo'}</h3>
@@ -511,12 +527,12 @@ window.SDBStore.ready.then(function () {
       </section>
       <section class="dsec sec-srv"><h4>Servizi</h4>
       <div class="flags three">
-        ${EXTRAS.map(([k, l]) => `<label class="flag"><input type="checkbox" id="b-${k}" ${b[k] ? 'checked' : ''}><span><b>${l}</b></span></label>`).join('')}
+        ${servizi().map(x => `<label class="flag"><input type="checkbox" ${x.base ? `id="b-${x.key}"` : `data-srv="${esc(x.key)}"`} ${hasSrv(b, x) ? 'checked' : ''}><span><b>${esc(x.label)}</b></span></label>`).join('')}
       </div>
       </section>
       <section class="dsec sec-look"><h4>Stato e colore</h4>
       <div class="row">
-        <label class="field"><span>Stato</span><select id="b-status">${S.STATI.map(s => `<option value="${s.key}" ${s.key === b.status ? 'selected' : ''}>${s.label}</option>`).join('')}</select></label>
+        <label class="field"><span>Stato</span><select id="b-status">${stati().map(s => `<option value="${esc(s.key)}" ${s.key === b.status ? 'selected' : ''}>${esc(s.label)}</option>`).join('')}</select></label>
         <div class="field"><span>Colore</span><div class="swatch-prev" id="b-prev"></div></div>
       </div>
       <div class="swatches" id="b-sw" role="radiogroup" aria-label="Colore dell'affitto">
@@ -541,8 +557,8 @@ window.SDBStore.ready.then(function () {
     };
     $('#b-sw').addEventListener('click', e => { const s = e.target.closest('.sw[data-c]'); if (!s) return; color = s.dataset.c; colorTouched = true; paint(); });
     $('#b-color').addEventListener('input', e => { color = e.target.value; colorTouched = true; paint(); });
-    $('#b-status').addEventListener('change', e => { if (!colorTouched) { color = S.STATUS_COLOR[e.target.value]; paint(); } });
-    const read = () => ({ villaId: $('#b-villa').value, status: $('#b-status').value, from: $('#b-from').value, to: $('#b-to').value, cliente: $('#b-cliente').value.trim(), note: $('#b-note').value.trim(), color, earlyIn: $('#b-early').checked, lateOut: $('#b-late').checked, prezzoVendita: money('#b-sale'), prezzoAcquisto: money('#b-buy'), pulizia: $('#b-pulizia').checked, cuoco: $('#b-cuoco').checked, transfer: $('#b-transfer').checked });
+    $('#b-status').addEventListener('change', e => { if (!colorTouched) { color = statoColor(e.target.value); paint(); } });
+    const read = () => ({ villaId: $('#b-villa').value, status: $('#b-status').value, from: $('#b-from').value, to: $('#b-to').value, cliente: $('#b-cliente').value.trim(), note: $('#b-note').value.trim(), color: colorTouched ? color : null, earlyIn: $('#b-early').checked, lateOut: $('#b-late').checked, prezzoVendita: money('#b-sale'), prezzoAcquisto: money('#b-buy'), pulizia: $('#b-pulizia').checked, cuoco: $('#b-cuoco').checked, transfer: $('#b-transfer').checked, servizi: $$('#bform [data-srv]').filter(c => c.checked).map(c => c.dataset.srv).concat((b.servizi || []).filter(k => !servizi().some(x => x.key === k))) });
     function money(sel) { const v = S.parseMoney($(sel).value); return typeof v === 'number' ? v : null; }
     // regola: check-out e check-in possono cadere nello stesso giorno (massimo 2 affitti in quel giorno);
     // se due affitti condividono anche una sola notte il salvataggio è bloccato.
@@ -917,7 +933,7 @@ window.SDBStore.ready.then(function () {
       const list = data().bookings.filter(b => b.villaId === v.id).sort((a, b) => a.from < b.from ? -1 : 1);
       const total = S.diffDays(st.seasonStart, st.seasonEnd) + 1;
       $('#v-tl').innerHTML = list.map(b => `<div class="bar" style="background:${esc(bookingColor(b))};left:${(S.diffDays(st.seasonStart, b.from) + .5) / total * 100}%;width:${Math.max(S.diffDays(b.from, b.to), .5) / total * 100}%" title="${esc(S.dm(b.from) + ' → ' + S.dm(b.to))}"></div>`).join('');
-      $('#v-blist').innerHTML = list.length ? list.map(b => `<div class="bitem" data-b="${esc(b.id)}" tabindex="0"><span class="chip" style="background:${esc(bookingColor(b))};color:${S.inkFor(bookingColor(b))}">${esc(statoLabel(b.status))}</span><span class="dates">${S.dm(b.from)} → ${S.dm(b.to)}</span><span class="nights">${S.diffDays(b.from, b.to)} notti${b.earlyIn ? ' · early check-in' : ''}${b.lateOut ? ' · late check-out' : ''}${EXTRAS.filter(([k]) => b[k]).map(([, l]) => ' · ' + l.toLowerCase()).join('')}</span>${typeof b.prezzoVendita === 'number' ? `<span class="dates">${S.money(b.prezzoVendita)}</span>` : ''}<span class="who">${esc([b.cliente, b.note].filter(Boolean).join(' · '))}</span></div>`).join('')
+      $('#v-blist').innerHTML = list.length ? list.map(b => `<div class="bitem" data-b="${esc(b.id)}" tabindex="0"><span class="chip" style="background:${esc(bookingColor(b))};color:${S.inkFor(bookingColor(b))}">${esc(statoLabel(b.status))}</span><span class="dates">${S.dm(b.from)} → ${S.dm(b.to)}</span><span class="nights">${S.diffDays(b.from, b.to)} notti${b.earlyIn ? ' · early check-in' : ''}${b.lateOut ? ' · late check-out' : ''}${srvLabels(b).map(l => ' · ' + esc(l.toLowerCase())).join('')}</span>${typeof b.prezzoVendita === 'number' ? `<span class="dates">${S.money(b.prezzoVendita)}</span>` : ''}<span class="who">${esc([b.cliente, b.note].filter(Boolean).join(' · '))}</span></div>`).join('')
         : '<div class="note">Nessun periodo inserito. Usa “+ Periodo” o clicca sul calendario.</div>';
     };
     drawBookings();
@@ -1026,7 +1042,7 @@ window.SDBStore.ready.then(function () {
     return [
       ['generale', 'Generale', 'Tema, nome e date della stagione'],
       ['listini', 'Listini e periodi', 'Giorno di cambio, periodi, valori per le nuove ville'],
-      ['localita', 'Località', nLoc + (nLoc === 1 ? ' località' : ' località') + ' nell\'elenco'],
+      ['aspetto', 'Aspetto predefiniti', 'Stati e colori, servizi, ' + nLoc + ' località'],
       store.mode === 'online' ? ['account', 'Account e accessi', nAcc ? nAcc + (nAcc === 1 ? ' account autorizzato' : ' account autorizzati') : 'Chi può entrare e in quali pagine'] : null,
       ['dati', 'Dati e backup', 'Backup e pulizia di fine stagione']
     ].filter(Boolean);
@@ -1043,7 +1059,7 @@ window.SDBStore.ready.then(function () {
       <div class="set-layout ${sub ? 'has-sub' : 'is-index'}">
       <nav class="set-nav" aria-label="Pagine delle impostazioni">${pages.map(([k, l, d]) => `<a href="#impostazioni-${k}" class="${k === cur ? 'on' : ''}"><span class="sn-t">${esc(l)}<small>${esc(d)}</small></span><span class="sn-chev" aria-hidden="true">›</span></a>`).join('')}</nav>
       <div class="set-body"><h2 class="set-title">${esc(curP[1])}</h2>
-      ${pg('generale', `      <section class="card"><h2>Aspetto</h2>
+      ${pg('generale', `      <section class="card"><h2>Tema</h2>
         <div class="field"><span>Tema</span><div class="seg" id="s-theme">${[['light', 'Chiaro (panna)'], ['dark', 'Scuro'], ['auto', 'Come il dispositivo']].map(([k, l]) => `<button type="button" data-v="${k}" class="${ui.theme === k ? 'on' : ''}">${l}</button>`).join('')}</div></div>
         <p class="note">La scelta vale solo per questo dispositivo.</p></section>
       <section class="card"><h2>Stagione</h2><div class="grid">
@@ -1059,7 +1075,17 @@ window.SDBStore.ready.then(function () {
       <section class="card"><h2>Questo dispositivo</h2>
         <p class="note">Accesso come <b>${esc(store.user || '')}</b>.</p>
         <div><button class="btn" id="s-logout">Esci da questo dispositivo</button></div></section>`) : ''}
-      ${pg('localita', `<section class="card"><h2>Località</h2>
+      ${pg('aspetto', `<section class="card"><h2>Stati delle prenotazioni</h2>
+        <p class="note">Sono gli stati che scegli nella finestra della prenotazione, con il loro colore predefinito. Nella prenotazione puoi sempre dare un colore diverso al singolo affitto. Le prenotazioni con un colore scelto a mano lo mantengono; le altre seguono il colore dello stato. "Blocca" indica se lo stato rende la villa non disponibile.</p>
+        <div id="st-list" class="st-admin"></div>
+        <form class="loc-new st-new" id="st-add" autocomplete="off"><input type="color" id="st-add-c" value="#2f6fd6" aria-label="Colore"><input id="st-add-n" placeholder="Nuovo stato (es. Manutenzione)"><label class="st-blk"><input type="checkbox" id="st-add-b" checked> Blocca</label><button class="btn small">Aggiungi stato</button></form>
+      </section>
+      <section class="card"><h2>Servizi</h2>
+        <p class="note">Sono le caselle della sezione Servizi nella finestra della prenotazione. Pulizia finale, cuoco e transfer sono di base; puoi aggiungerne altri, rinominarli e togliere quelli che nessuna prenotazione usa.</p>
+        <div id="srv-list" class="st-admin"></div>
+        <form class="loc-new" id="srv-add" autocomplete="off"><input id="srv-add-n" placeholder="Nuovo servizio (es. Baby sitter)"><button class="btn small">Aggiungi servizio</button></form>
+      </section>
+      <section class="card"><h2>Località</h2>
         <p class="note">È l'elenco da cui scegli la località nella scheda di ogni villa e che usi come filtro. Se due nomi indicano lo stesso posto (es. P.CERVO e PORTO CERVO), usa "Unisci in…": tutte le ville passano al nome scelto.</p>
         <div id="loc-list" class="loc-admin"></div>
         <div class="loc-new"><input id="loc-add-in" placeholder="Nuova località"><button type="button" class="btn small" id="loc-add">Aggiungi</button></div>
@@ -1165,6 +1191,65 @@ window.SDBStore.ready.then(function () {
         l.push({ email, nome: $('#acc-nome').value.trim(), app: email === String(store.user || '').toLowerCase() ? ['summer', 'scontrini'] : ['scontrini'] }); $('#acc-email').value = ''; $('#acc-nome').value = ''; accSave(l);
       });
     }
+    // ---- stati delle prenotazioni (settings.stati) ----
+    const stSave = list => { st.stati = list.map(x => ({ key: x.key, label: x.label, color: x.color, blocks: !!x.blocks })); save(); };
+    const stDraft = cfg => stati(cfg).map(x => ({ key: x.key, label: x.label, color: x.color, blocks: x.blocks, base: x.base }));
+    const drawStati = () => {
+      const cfgNow = st.stati; const list = stDraft(cfgNow);
+      const count = k => data().bookings.filter(b => b.status === k).length;
+      $('#st-list').innerHTML = list.map((x, i) => `<div class="st-row" data-si="${i}">
+        <input type="color" data-sc value="${esc(x.color)}" aria-label="Colore di ${esc(x.label)}">
+        <span class="chip" style="background:${esc(x.color)};color:${S.inkFor(x.color)}">${esc(x.label)}</span>
+        <input data-sl value="${esc(x.label)}" aria-label="Nome dello stato">
+        <label class="st-blk"><input type="checkbox" data-sb ${x.blocks ? 'checked' : ''}> Blocca</label>
+        <span class="note">${count(x.key)} ${count(x.key) === 1 ? 'prenotazione' : 'prenotazioni'}</span>
+        <span class="loc-act">${x.base && String(x.color).toLowerCase() !== S.STATUS_COLOR[x.key] ? `<button type="button" class="btn small" data-sr>Colore originale</button>` : ''}${!x.base && !count(x.key) ? '<button type="button" class="btn small danger" data-sd>Togli</button>' : ''}</span></div>`).join('');
+      return list;
+    };
+    let stList = drawStati();
+    const stUpd = (i, f, redraw) => { f(stList[i]); stSave(stList); if (redraw) stList = drawStati(); else { const r = $(`#st-list [data-si="${i}"] .chip`); r.style.background = stList[i].color; r.style.color = S.inkFor(stList[i].color); r.textContent = stList[i].label; } };
+    $('#st-list').addEventListener('input', e => { const row = e.target.closest('[data-si]'); if (!row) return; const i = Number(row.dataset.si);
+      if (e.target.matches('[data-sc]')) stUpd(i, x => { x.color = e.target.value; });
+      if (e.target.matches('[data-sl]')) { const v = e.target.value.trim(); if (v) stUpd(i, x => { x.label = v; }); } });
+    $('#st-list').addEventListener('change', e => { const row = e.target.closest('[data-si]'); if (!row) return; const i = Number(row.dataset.si);
+      if (e.target.matches('[data-sb]')) stUpd(i, x => { x.blocks = e.target.checked; }, true);
+      if (e.target.matches('[data-sc]')) stList = drawStati();
+      if (e.target.matches('[data-sl]') && !e.target.value.trim()) e.target.value = stList[i].label; });
+    $('#st-list').addEventListener('click', e => { const row = e.target.closest('[data-si]'); if (!row) return; const i = Number(row.dataset.si);
+      if (e.target.closest('[data-sr]')) stUpd(i, x => { x.color = S.STATUS_COLOR[x.key]; }, true);
+      if (e.target.closest('[data-sd]')) { stList.splice(i, 1); stSave(stList); stList = drawStati(); toast('Stato tolto'); } });
+    $('#st-add').addEventListener('submit', e => {
+      e.preventDefault(); const label = $('#st-add-n').value.trim(); if (!label) { $('#st-add-n').focus(); return; }
+      if (stList.some(x => x.label.toLowerCase() === label.toLowerCase())) { toast('Esiste già uno stato con questo nome'); return; }
+      const slug = label.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24) || 'stato';
+      let key = slug; let n = 2; while (stList.some(x => x.key === key)) key = slug + '-' + n++;
+      stList.push({ key, label, color: $('#st-add-c').value, blocks: $('#st-add-b').checked }); stSave(stList); stList = drawStati();
+      $('#st-add-n').value = ''; toast(`Aggiunto lo stato ${label}`);
+    });
+    // ---- servizi (settings.servizi) ----
+    const srvUsed = k => data().bookings.filter(b => Array.isArray(b.servizi) && b.servizi.includes(k)).length;
+    const srvBaseUsed = k => data().bookings.filter(b => b[k]).length;
+    const drawSrv = () => {
+      const list = servizi(st.servizi);
+      $('#srv-list').innerHTML = list.map(x => { const n = x.base ? srvBaseUsed(x.key) : srvUsed(x.key); return `<div class="st-row" data-sk="${esc(x.key)}">
+        ${x.base ? `<b class="srv-n">${esc(x.label)}</b><span class="note">di base</span>` : `<input data-sl value="${esc(x.label)}" aria-label="Nome del servizio">`}
+        <span class="note">${n} ${n === 1 ? 'prenotazione' : 'prenotazioni'}</span>
+        <span class="loc-act">${!x.base && !n ? '<button type="button" class="btn small danger" data-sd>Togli</button>' : ''}</span></div>`; }).join('');
+    };
+    const srvCustom = () => JSON.parse(JSON.stringify(st.servizi || (settings().servizi || [])));
+    drawSrv();
+    $('#srv-list').addEventListener('input', e => { const row = e.target.closest('[data-sk]'); if (!row || !e.target.matches('[data-sl]')) return; const v = e.target.value.trim(); if (!v) return;
+      const l = srvCustom(); const x = l.find(y => y.key === row.dataset.sk); if (x) { x.label = v; st.servizi = l; save(); } });
+    $('#srv-list').addEventListener('change', e => { const row = e.target.closest('[data-sk]'); if (row && e.target.matches('[data-sl]') && !e.target.value.trim()) drawSrv(); });
+    $('#srv-list').addEventListener('click', e => { const row = e.target.closest('[data-sk]'); if (!row || !e.target.closest('[data-sd]')) return;
+      st.servizi = srvCustom().filter(y => y.key !== row.dataset.sk); save(); drawSrv(); toast('Servizio tolto'); });
+    $('#srv-add').addEventListener('submit', e => {
+      e.preventDefault(); const label = $('#srv-add-n').value.trim(); if (!label) { $('#srv-add-n').focus(); return; }
+      if (servizi(st.servizi).some(x => x.label.toLowerCase() === label.toLowerCase())) { toast('Esiste già questo servizio'); return; }
+      const slug = label.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24) || 'servizio';
+      const l = srvCustom(); let key = slug; let n = 2; while (l.some(x => x.key === key) || EXTRAS.some(([k]) => k === key)) key = slug + '-' + n++;
+      l.push({ key, label }); st.servizi = l; save(); drawSrv(); $('#srv-add-n').value = ''; toast(`Aggiunto il servizio ${label}`);
+    });
     const drawLocs = () => {
       const list = locList(); const count = l => data().villas.filter(v => normLoc(v.location) === l).length;
       $('#loc-list').innerHTML = list.length ? list.map(l => `<div class="loc-row" data-l="${esc(l)}"><b>${esc(l)}</b><span class="note">${count(l)} ville</span>
