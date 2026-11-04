@@ -85,6 +85,10 @@
   function FirebaseStore(cfg) {
     firebase.initializeApp(cfg);
     const auth = firebase.auth(), db = firebase.firestore();
+    // "Resta collegato": accesso salvato sul dispositivo (si riapre l'app già collegati) oppure solo per questa sessione
+    const KEEPKEY = 'summer-db-resta-collegato';
+    const keepOn = () => { try { return localStorage.getItem(KEEPKEY) !== 'no'; } catch (_) { return true; } };
+    try { auth.setPersistence(keepOn() ? firebase.auth.Auth.Persistence.LOCAL : firebase.auth.Auth.Persistence.SESSION).catch(() => {}); } catch (_) {}
     try { db.enablePersistence({ synchronizeTabs: true }).catch(() => {}); } catch (_) {}
     let state = emptyState();
     const subs = new Set();
@@ -236,9 +240,13 @@
       auth.onAuthStateChanged(user => {
         if (!user) {
           const el = loginScreen(`<p class="login-msg">Accedi con il tuo account Google autorizzato.</p>
+            <label class="login-keep"><input type="checkbox" id="login-keep" ${keepOn() ? 'checked' : ''}> <span><b>Resta collegato</b><small>Su questo dispositivo non dovrai accedere ogni volta. Toglilo su computer condivisi.</small></span></label>
             <button class="btn primary login-btn" id="login-google">Accedi con Google</button>
             <p class="login-note" id="login-err"></p>`);
-          el.querySelector('#login-google').addEventListener('click', () => {
+          el.querySelector('#login-google').addEventListener('click', async () => {
+            const keep = el.querySelector('#login-keep').checked;
+            try { localStorage.setItem(KEEPKEY, keep ? 'si' : 'no'); } catch (_) {}
+            try { await auth.setPersistence(keep ? firebase.auth.Auth.Persistence.LOCAL : firebase.auth.Auth.Persistence.SESSION); } catch (_) {}
             const p = new firebase.auth.GoogleAuthProvider(); p.setCustomParameters({ prompt: 'select_account' });
             auth.signInWithPopup(p).catch(err => {
               if (err.code === 'auth/popup-blocked' || err.code === 'auth/operation-not-supported-in-this-environment') return auth.signInWithRedirect(p);
