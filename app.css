@@ -752,9 +752,10 @@ input[type="color"].dot::-moz-color-swatch { border: 0; border-radius: 50%; }
 .srv-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .srv-item { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .srv-item .flag { align-items: center; }
-.srv-item.on { grid-column: 1 / -1; padding: 0 0 10px; border-bottom: 1px dashed color-mix(in srgb, var(--sec-srv-ink) 30%, var(--line)); }
-.srv-item.on .flag { align-self: flex-start; min-width: 180px; }
-.srv-det { display: flex; flex-direction: column; gap: 8px; padding-left: 4px; }
+/* servizio spuntato: un unico riquadro con nome, incluso/a parte, prezzi e note */
+.srv-item.on { grid-column: 1 / -1; gap: 10px; padding: 0 12px 12px; border: 1px solid var(--accent); border-radius: 8px; background: var(--accent-soft); box-shadow: 0 1px 2px rgba(10,30,28,.06); }
+.dsec .srv-item.on .flag { border: 0; background: none; box-shadow: none; padding: 10px 0 2px; margin: 0; }
+.srv-det { display: flex; flex-direction: column; gap: 8px; }
 .srv-det .seg { align-self: flex-start; }
 .seg.small button { font-size: 12.5px; padding: 5px 10px; }
 @media (max-width: 560px) { .srv-list { grid-template-columns: 1fr 1fr; } }
