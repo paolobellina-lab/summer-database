@@ -78,6 +78,7 @@ window.SDBStore.ready.then(function () {
     if (ui.theme === 'auto') r.removeAttribute('data-theme'); else r.setAttribute('data-theme', ui.theme);
     const dark = ui.theme === 'dark' || (ui.theme === 'auto' && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
     const m = document.querySelector('meta[name="theme-color"]'); if (m) m.setAttribute('content', dark ? '#07131c' : '#f5eee0');
+    const cs = document.querySelector('meta[name="color-scheme"]'); if (cs) cs.setAttribute('content', ui.theme === 'dark' ? 'only dark' : ui.theme === 'auto' ? 'light dark' : 'only light');
   };
   applyTheme();
 

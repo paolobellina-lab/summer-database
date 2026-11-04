@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Summer Database 2027</title>
 <meta name="theme-color" content="#f5eee0">
+<!-- "only light": impedisce ai browser Android (Samsung Internet, Chrome con tema scuro forzato) di scurire da soli il tema chiaro -->
+<meta name="color-scheme" content="only light">
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob: https://*.googleusercontent.com; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com wss://*.firebaseio.com; frame-src https://*.firebaseapp.com https://accounts.google.com https://apis.google.com; object-src 'none'; base-uri 'self'">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -20,7 +22,7 @@
 </head>
 <body>
 <div id="app"></div>
-<script>try { var t = (JSON.parse(localStorage.getItem('summer-db-2027-ui') || '{}').theme) || 'light'; if (t !== 'auto') document.documentElement.setAttribute('data-theme', t); } catch (e) { document.documentElement.setAttribute('data-theme', 'light'); }</script>
+<script>try { var t = (JSON.parse(localStorage.getItem('summer-db-2027-ui') || '{}').theme) || 'light'; if (t !== 'auto') document.documentElement.setAttribute('data-theme', t); var cs = document.querySelector('meta[name="color-scheme"]'); if (cs) cs.setAttribute('content', t === 'dark' ? 'only dark' : t === 'auto' ? 'light dark' : 'only light'); } catch (e) { document.documentElement.setAttribute('data-theme', 'light'); }</script>
 <script>window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); window.__sdbInstall = e; });</script>
 <script src="core.js"></script>
 <script src="firebase-config.js"></script>
