@@ -730,19 +730,20 @@ dialog:has(.assign) { width: min(640px, calc(100vw - 32px)); }
 }
 
 /* ---------- Aspetto predefiniti: stati e servizi ---------- */
-.st-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 8px 0; border-bottom: 1px solid var(--line-soft); }
-.st-row input[type="color"], .st-new input[type="color"] { width: 38px; height: 32px; padding: 2px; flex: 0 0 auto; border: 1px solid var(--line); background: var(--field); cursor: pointer; }
-.st-row .chip { min-width: 96px; text-align: center; }
-.st-row input[data-sl] { flex: 1 1 160px; max-width: 260px; }
+.st-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 8px 0; border-bottom: 1px solid var(--line-soft); }
+input[type="color"].dot { -webkit-appearance: none; appearance: none; width: 30px; height: 30px; padding: 0; flex: 0 0 auto; border: 2px solid var(--surface); border-radius: 50%; box-shadow: 0 0 0 1px var(--line); background: none; cursor: pointer; overflow: hidden; }
+input[type="color"].dot::-webkit-color-swatch-wrapper { padding: 0; }
+input[type="color"].dot::-webkit-color-swatch { border: 0; border-radius: 50%; }
+input[type="color"].dot::-moz-color-swatch { border: 0; border-radius: 50%; }
+.st-row input[data-sl] { flex: 0 1 240px; min-width: 0; }
+.st-row .chip { margin-left: auto; min-width: 110px; text-align: center; order: 6; }
+.st-row .loc-act { margin-left: 0; order: 5; }
 .st-row .srv-n { min-width: 140px; font-weight: 500; }
+.st-row .srv-n ~ .loc-act, .st-row input[data-sl]:not(:has(~ .chip)) ~ .loc-act { margin-left: auto; }
 .st-blk { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; color: var(--muted); white-space: nowrap; }
-.st-new input[type="color"] { max-width: none; }
-.st-new .st-blk { align-self: center; }
+.st-new input#st-add-n { flex: 0 1 240px; }
 @media (max-width: 760px) {
-  .st-row .chip { display: none; }
-  .st-row input[data-sl] { flex: 1 1 150px; min-width: 0; max-width: none; }
-  .st-row > .note { order: 4; padding-left: 50px; }
-  .st-row .loc-act { order: 5; }
+  .st-row input[data-sl] { flex: 1 1 150px; }
   .st-row .srv-n { min-width: 0; flex: 1 1 150px; }
   .st-new input#st-add-n { flex: 1 1 150px; }
 }

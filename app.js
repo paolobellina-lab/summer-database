@@ -1078,7 +1078,7 @@ window.SDBStore.ready.then(function () {
       ${pg('aspetto', `<section class="card"><h2>Stati delle prenotazioni</h2>
         <p class="note">Sono gli stati che scegli nella finestra della prenotazione, con il loro colore predefinito. Nella prenotazione puoi sempre dare un colore diverso al singolo affitto. Le prenotazioni con un colore scelto a mano lo mantengono; le altre seguono il colore dello stato. "Blocca" indica se lo stato rende la villa non disponibile.</p>
         <div id="st-list" class="st-admin"></div>
-        <form class="loc-new st-new" id="st-add" autocomplete="off"><input type="color" id="st-add-c" value="#2f6fd6" aria-label="Colore"><input id="st-add-n" placeholder="Nuovo stato (es. Manutenzione)"><label class="st-blk"><input type="checkbox" id="st-add-b" checked> Blocca</label><button class="btn small">Aggiungi stato</button></form>
+        <form class="loc-new st-new" id="st-add" autocomplete="off"><input id="st-add-n" placeholder="Nuovo stato (es. Manutenzione)"><input type="color" class="dot" id="st-add-c" value="#2f6fd6" aria-label="Colore"><label class="st-blk"><input type="checkbox" id="st-add-b" checked> Blocca</label><button class="btn small">Aggiungi stato</button></form>
       </section>
       <section class="card"><h2>Servizi</h2>
         <p class="note">Sono le caselle della sezione Servizi nella finestra della prenotazione. Pulizia finale, cuoco e transfer sono di base; puoi aggiungerne altri, rinominarli e togliere quelli che nessuna prenotazione usa.</p>
@@ -1198,11 +1198,11 @@ window.SDBStore.ready.then(function () {
       const cfgNow = st.stati; const list = stDraft(cfgNow);
       const count = k => data().bookings.filter(b => b.status === k).length;
       $('#st-list').innerHTML = list.map((x, i) => `<div class="st-row" data-si="${i}">
-        <input type="color" data-sc value="${esc(x.color)}" aria-label="Colore di ${esc(x.label)}">
-        <span class="chip" style="background:${esc(x.color)};color:${S.inkFor(x.color)}">${esc(x.label)}</span>
         <input data-sl value="${esc(x.label)}" aria-label="Nome dello stato">
+        <input type="color" class="dot" data-sc value="${esc(x.color)}" aria-label="Colore di ${esc(x.label)}">
         <label class="st-blk"><input type="checkbox" data-sb ${x.blocks ? 'checked' : ''}> Blocca</label>
         <span class="note">${count(x.key)} ${count(x.key) === 1 ? 'prenotazione' : 'prenotazioni'}</span>
+        <span class="chip" style="background:${esc(x.color)};color:${S.inkFor(x.color)}">${esc(x.label)}</span>
         <span class="loc-act">${x.base && String(x.color).toLowerCase() !== S.STATUS_COLOR[x.key] ? `<button type="button" class="btn small" data-sr>Colore originale</button>` : ''}${!x.base && !count(x.key) ? '<button type="button" class="btn small danger" data-sd>Togli</button>' : ''}</span></div>`).join('');
       return list;
     };
