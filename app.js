@@ -179,7 +179,7 @@ window.SDBStore.ready.then(function () {
     spesePage = null; speseHooks.clear(); villasRedraw = null;
     if (canSee('spese')) startSpese(); else stopSpese();
     // pagina non permessa a questo account: vado alla prima consentita
-    const pageOf = h.startsWith('villa-') ? (canSee('ville') ? 'ville' : 'disponibilita') : (PAGES.some(p => p[0] === h) ? h : 'disponibilita');
+    const pageOf = h.startsWith('villa-') ? (canSee('ville') ? 'ville' : 'disponibilita') : h.startsWith('impostazioni-') ? 'impostazioni' : (PAGES.some(p => p[0] === h) ? h : 'disponibilita');
     if (!canSee(pageOf)) {
       const first = allowedPages()[0];
       if (!first) { refreshShell(''); main.innerHTML = '<div class="page"><div class="wrap"><div class="card"><p class="note">Al tuo account non è stata assegnata nessuna pagina. Chiedi all\'amministratore.</p></div></div></div>'; return; }
@@ -187,6 +187,7 @@ window.SDBStore.ready.then(function () {
       h = first;
     }
     if (h.startsWith('villa-')) { refreshShell('villa'); return viewVilla(h.slice(6)); }
+    if (h.startsWith('impostazioni-')) { refreshShell('impostazioni'); return viewSettings(h.slice(13)); }
     refreshShell(h);
     if (h === 'ville') return viewVillas();
     if (h === 'spese' && window.SDBSpese) { spesePage = window.SDBSpese.mount(main, { ui, saveUI, esc, data, spese, store, $, $$, toast }); return; }
@@ -1018,29 +1019,52 @@ window.SDBStore.ready.then(function () {
      IMPOSTAZIONI
      ===================================================================== */
   let perTab = 'bisettimanale';
-  function viewSettings() {
+  /* Impostazioni divise in pagine: al computer menu a sinistra, sul cellulare un indice a voci
+     (#impostazioni) che apre ogni pagina (#impostazioni-<pagina>) con "‹ Impostazioni" per tornare. */
+  function setPages() {
+    const nAcc = ((data().accessi && data().accessi.utenti) || []).length; const nLoc = locList().length;
+    return [
+      ['generale', 'Generale', 'Tema, nome e date della stagione'],
+      ['listini', 'Listini e periodi', 'Giorno di cambio, periodi, valori per le nuove ville'],
+      ['localita', 'Località', nLoc + (nLoc === 1 ? ' località' : ' località') + ' nell\'elenco'],
+      store.mode === 'online' ? ['account', 'Account e accessi', nAcc ? nAcc + (nAcc === 1 ? ' account autorizzato' : ' account autorizzati') : 'Chi può entrare e in quali pagine'] : null,
+      ['dati', 'Dati e backup', 'Backup e pulizia di fine stagione']
+    ].filter(Boolean);
+  }
+  function viewSettings(sub) {
     const st = JSON.parse(JSON.stringify(settings()));
+    const pages = setPages();
+    if (sub && !pages.some(p => p[0] === sub)) { location.hash = 'impostazioni'; return; }
+    const cur = sub || 'generale'; const curP = pages.find(p => p[0] === cur);
+    const pg = (k, html) => `<div class="set-page" data-sp="${k}"${k === cur ? '' : ' hidden'}>${html}</div>`;
+    window.scrollTo(0, 0);
     main.innerHTML = `<div class="page"><div class="wrap">
-      <div class="head"><div><h1>Impostazioni</h1><div class="sub">Aspetto, stagione, giorno di cambio, valori per le nuove ville, backup.</div></div><div class="actions"><span class="saved" id="saved"></span></div></div>
-      <section class="card"><h2>Aspetto</h2>
+      <div class="head set-head ${sub ? 'has-sub' : 'is-index'}"><div><a class="set-back" href="#impostazioni">‹ Impostazioni</a><h1><span class="t-main">Impostazioni</span><span class="t-sub">${esc(curP[1])}</span></h1></div><div class="actions"><span class="saved" id="saved"></span></div></div>
+      <div class="set-layout ${sub ? 'has-sub' : 'is-index'}">
+      <nav class="set-nav" aria-label="Pagine delle impostazioni">${pages.map(([k, l, d]) => `<a href="#impostazioni-${k}" class="${k === cur ? 'on' : ''}"><span class="sn-t">${esc(l)}<small>${esc(d)}</small></span><span class="sn-chev" aria-hidden="true">›</span></a>`).join('')}</nav>
+      <div class="set-body"><h2 class="set-title">${esc(curP[1])}</h2>
+      ${pg('generale', `      <section class="card"><h2>Aspetto</h2>
         <div class="field"><span>Tema</span><div class="seg" id="s-theme">${[['light', 'Chiaro (panna)'], ['dark', 'Scuro'], ['auto', 'Come il dispositivo']].map(([k, l]) => `<button type="button" data-v="${k}" class="${ui.theme === k ? 'on' : ''}">${l}</button>`).join('')}</div></div>
         <p class="note">La scelta vale solo per questo dispositivo.</p></section>
       <section class="card"><h2>Stagione</h2><div class="grid">
         <label class="field"><span>Nome</span><input id="s-name" value="${esc(st.seasonName)}"></label>
         <label class="field"><span>Inizio calendario</span><input type="date" id="s-start" value="${esc(st.seasonStart)}"></label>
-        <label class="field"><span>Fine calendario</span><input type="date" id="s-end" value="${esc(st.seasonEnd)}"></label></div></section>
-      ${store.mode === 'online' ? `<section class="card" id="acc-card"><h2>Account autorizzati</h2>
+        <label class="field"><span>Fine calendario</span><input type="date" id="s-end" value="${esc(st.seasonEnd)}"></label></div></section>`)}
+      ${store.mode === 'online' ? pg('account', `<section class="card" id="acc-card"><h2>Account autorizzati</h2>
         <p class="note">Chi è in questo elenco può accedere con il proprio account Google. Scegli per ognuno a quale app può entrare. Solo gli amministratori possono modificare l'elenco.</p>
         <div id="acc-list"></div>
         <form class="loc-new" id="acc-add" autocomplete="off"><input id="acc-email" type="email" placeholder="email Google"><input id="acc-nome" placeholder="Nome (facoltativo)"><button class="btn small">Aggiungi account</button></form>
         <div id="acc-msg"></div>
-      </section>` : ''}
-      <section class="card"><h2>Località</h2>
+      </section>
+      <section class="card"><h2>Questo dispositivo</h2>
+        <p class="note">Accesso come <b>${esc(store.user || '')}</b>.</p>
+        <div><button class="btn" id="s-logout">Esci da questo dispositivo</button></div></section>`) : ''}
+      ${pg('localita', `<section class="card"><h2>Località</h2>
         <p class="note">È l'elenco da cui scegli la località nella scheda di ogni villa e che usi come filtro. Se due nomi indicano lo stesso posto (es. P.CERVO e PORTO CERVO), usa "Unisci in…": tutte le ville passano al nome scelto.</p>
         <div id="loc-list" class="loc-admin"></div>
         <div class="loc-new"><input id="loc-add-in" placeholder="Nuova località"><button type="button" class="btn small" id="loc-add">Aggiungi</button></div>
-      </section>
-      <section class="card"><h2>Giorno di cambio</h2>
+      </section>`)}
+      ${pg('listini', `<section class="card"><h2>Giorno di cambio</h2>
         <div class="field"><span>Le settimane predefinite vanno</span><div class="seg" id="s-cambio">${[['sabato', 'Da sabato a sabato'], ['domenica', 'Da domenica a domenica']].map(([k, l]) => `<button type="button" data-c="${k}" class="${(st.cambio || 'domenica') === k ? 'on' : ''}">${l}</button>`).join('')}</div></div>
         <p class="note">Vale per tutte le ville. Nella scheda di ogni villa, sopra il listino prezzi, puoi scegliere un giorno diverso solo per quella villa. Anche le tariffe bisettimanali, mensili e bimensili seguono lo stesso giorno. I prezzi già inseriti restano collegati alla stessa settimana.</p>
         <p class="note" id="s-cambio-n"></p></section>
@@ -1051,15 +1075,14 @@ window.SDBStore.ready.then(function () {
         <p class="note">Sono le date predefinite per tutte le ville. Nella scheda di una villa puoi sostituirle solo per quella villa. Il numero dei periodi resta fisso, così ogni prezzo resta collegato al suo periodo.</p></section>
       <section class="card"><h2>Valori iniziali per una nuova villa</h2><div class="tbl-wrap"><table class="prices ptable"><thead><tr><th>Tariffa</th><th>Spese servizi €</th><th>Arrotonda a €</th><th>Margine %</th></tr></thead><tbody>
         ${S.TARIFFE.map(x => `<tr><td class="per">${x.label}</td><td><input data-d="${x.key}" data-k="spese" value="${esc(st.defaults[x.key].spese)}"></td><td><input data-d="${x.key}" data-k="arrotonda" value="${esc(st.defaults[x.key].arrotonda)}"></td><td><input data-d="${x.key}" data-k="margine" value="${esc(Math.round(st.defaults[x.key].margine * 1000) / 10)}"></td></tr>`).join('')}
-      </tbody></table></div></section>
-      <section class="card"><h2>Backup e dati</h2>
+      </tbody></table></div></section>`)}
+      ${pg('dati', `<section class="card"><h2>Backup e dati</h2>
         <p class="note">${store.mode === 'online' ? `Dati online, condivisi tra gli account autorizzati. Accesso come <b>${esc(store.user || '')}</b>. Esporta comunque un backup ogni tanto.` : 'I dati sono salvati solo in questo browser. Esporta un backup ogni tanto.'}</p>
         <div style="display:flex;flex-wrap:wrap;gap:8px">
           <button class="btn" id="s-export">Esporta backup (.json)</button>
           <label class="btn" for="s-import" title="Aggiunge e aggiorna ville e periodi. Non cancella nulla.">Importa backup</label><input type="file" id="s-import" accept=".json,.txt,application/json,text/plain,*/*" hidden>
           <button class="btn" id="s-copy">Copia backup negli appunti</button>
           ${window.SDB_SEED && store.mode === 'local' ? `<button class="btn danger" id="s-reset">Ripristina dati dall'Excel</button>` : ''}
-          ${store.mode === 'online' ? `<button class="btn" id="s-logout">Esci da questo dispositivo</button>` : ''}
         </div>
         <p class="note">L'importazione aggiunge e aggiorna ville e periodi presenti nel file. Non cancella nulla e non tocca gli scontrini.</p>
         <div id="s-msg"></div>
@@ -1072,8 +1095,8 @@ window.SDBStore.ready.then(function () {
           ${store.mode === 'online' ? `<button class="btn danger" id="w-sc">Cancella tutte le note spese${spese.ready ? ' (' + spese.list.length + ')' : ''}</button>` : ''}
         </div>
         <div id="wipe-box"></div>
-      </section>
-    </div></div>`;
+      </section>`)}
+    </div></div></div></div>`;
     $('#s-theme').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; ui.theme = b.dataset.v; saveUI(); applyTheme(); $$('#s-theme button').forEach(x => x.classList.toggle('on', x === b)); });
     let t;
     const save = () => { $('#saved').textContent = 'Modifiche in corso…'; clearTimeout(t); t = setTimeout(() => { store.setSettings(JSON.parse(JSON.stringify(st))); refreshShell('impostazioni'); $('#saved').textContent = 'Salvato'; }, 400); };
@@ -1261,14 +1284,14 @@ window.SDBStore.ready.then(function () {
         let d; try { d = JSON.parse(r.result); if (!Array.isArray(d.villas)) throw new Error('formato'); }
         catch (err) { msg('<p class="note">Questo file non è un backup valido di Summer Database.</p>'); return; }
         msg('<p class="note">Importazione in corso…</p>');
-        Promise.resolve(store.mergeAll(d)).then(r => { toast(`Backup importato: ${r.villas} ville e ${r.bookings} periodi aggiunti o aggiornati`); viewSettings(); }, err => msg(`<p class="note">Importazione non riuscita: ${esc(err.message || err)}</p>`));
+        Promise.resolve(store.mergeAll(d)).then(r => { toast(`Backup importato: ${r.villas} ville e ${r.bookings} periodi aggiunti o aggiornati`); route(); }, err => msg(`<p class="note">Importazione non riuscita: ${esc(err.message || err)}</p>`));
       };
       r.readAsText(f);
     });
     const lo = $('#s-logout'); if (lo) lo.addEventListener('click', () => store.signOut());
     if ($('#s-reset')) $('#s-reset').addEventListener('click', () => {
       msg(`<div class="confirm-bar">Sostituire tutti i dati con quelli importati dall'Excel? Le modifiche fatte nell'app andranno perse. <button class="btn small danger solid" id="s-reset-ok">Ripristina</button><button class="btn small" id="s-reset-no">Annulla</button></div>`);
-      $('#s-reset-ok').addEventListener('click', () => { store.resetToSeed(); toast('Dati ripristinati'); viewSettings(); });
+      $('#s-reset-ok').addEventListener('click', () => { store.resetToSeed(); toast('Dati ripristinati'); route(); });
       $('#s-reset-no').addEventListener('click', () => msg(''));
     });
   }

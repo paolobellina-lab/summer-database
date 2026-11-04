@@ -699,3 +699,32 @@ dialog:has(.assign) { width: min(640px, calc(100vw - 32px)); }
 .login-keep input { width: 18px; height: 18px; margin-top: 2px; accent-color: var(--accent); flex: none; }
 .login-keep b { display: block; font-size: 14px; }
 .login-keep small { display: block; font-size: 12px; color: var(--muted); line-height: 1.35; }
+
+/* ---------- Impostazioni divise in pagine ---------- */
+.set-head .set-back, .set-head .t-sub { display: none; }
+.set-layout { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 22px; align-items: start; }
+.set-nav { position: sticky; top: calc(var(--top-h) + 14px); display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.set-nav a { display: flex; align-items: center; gap: 8px; padding: 12px 14px; color: var(--fg); text-decoration: none; border-left: 3px solid transparent; font-size: 14px; letter-spacing: .02em; }
+.set-nav a + a { border-top: 1px solid var(--line-soft); }
+.set-nav a:hover { background: var(--accent-soft); }
+.set-nav a.on { border-left-color: var(--accent); background: var(--accent-soft); font-weight: 500; }
+.set-nav .sn-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.set-nav small { display: none; color: var(--muted); font-size: 12px; font-weight: 400; letter-spacing: 0; }
+.set-nav .sn-chev { display: none; color: var(--muted); font-size: 22px; line-height: 1; }
+.set-body { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.set-page { display: flex; flex-direction: column; gap: 18px; }
+.set-title { font: 500 26px/1.1 var(--font-display); margin: 0; }
+@media (max-width: 760px) {
+  .set-layout { grid-template-columns: 1fr; }
+  .set-nav { position: static; }
+  .set-nav a { padding: 14px 14px; border-left: 0; min-height: 56px; }
+  .set-nav a.on { background: none; font-weight: 400; }
+  .set-nav small, .set-nav .sn-chev { display: block; }
+  .set-nav .sn-t { font-size: 16px; }
+  .set-layout.is-index .set-body { display: none; }
+  .set-layout.has-sub .set-nav { display: none; }
+  .set-title { display: none; }
+  .set-head.has-sub .set-back { display: inline-block; color: var(--accent); text-decoration: none; font-size: 14px; padding: 4px 0 6px; letter-spacing: .03em; }
+  .set-head.has-sub .t-main { display: none; }
+  .set-head.has-sub .t-sub { display: inline; }
+}
