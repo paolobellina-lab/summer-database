@@ -147,6 +147,28 @@ window.SDBStore.ready.then(function () {
   const favLists = () => (data().preferiti || []);
   const isFav = id => favLists().some(l => (l.ville || []).includes(id));
   const HEART = on => `<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-9.6-9.2C.9 7.9 3 4.5 6.6 4.5c2.1 0 3.7 1.2 4.4 2.6h2c.7-1.4 2.3-2.6 4.4-2.6 3.6 0 5.7 3.4 4.2 6.8-2.1 4.6-9.6 9.2-9.6 9.2z" fill="${on ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`;
+  /* condivisione di una villa con i profili utente (solo amministratori): meta/profili.profili[id].ville */
+  function openShare(villaId, after) {
+    const dlg = $('#dlg'); const v = villaById(villaId);
+    const draw = () => {
+      const pm = data().profili || {};
+      const ids = Object.keys(pm).filter(k => !pm[k].completo).sort((a, b) => String(pm[a].nome).localeCompare(String(pm[b].nome), 'it'));
+      const full = Object.keys(pm).filter(k => pm[k].completo);
+      dlg.innerHTML = `<form class="dlg" id="share-form" autocomplete="off">
+        <h3>Condivisa con</h3><p class="note">Scegli quali profili utente vedono <b>${esc(v ? v.name : '')}</b>. Gli amministratori${full.length ? ' e i profili con accesso completo (' + full.map(k => esc(pm[k].nome)).join(', ') + ')' : ''} la vedono sempre.</p>
+        <div class="fav-list">${ids.length ? ids.map(k => `<label class="flag"><input type="checkbox" data-share="${esc(k)}" ${(pm[k].ville || []).includes(villaId) ? 'checked' : ''}><span><b>${esc(pm[k].nome || 'Profilo')}</b><small>${(pm[k].ville || []).filter(x => villaById(x)).length} ville condivise</small></span></label>`).join('') : '<p class="note">Nessun profilo limitato: creali in Impostazioni → Account e accessi.</p>'}</div>
+        <div class="foot"><button type="button" class="btn primary" id="share-ok">Fatto</button></div></form>`;
+      $$('#share-form [data-share]').forEach(cb => cb.addEventListener('change', () => {
+        const pm2 = JSON.parse(JSON.stringify(data().profili || {})); const pr = pm2[cb.dataset.share]; if (!pr) return;
+        pr.ville = (pr.ville || []).filter(x => x !== villaId); if (cb.checked) pr.ville.push(villaId);
+        Promise.resolve(store.setProfili(pm2)).then(() => draw(), err => { cb.checked = !cb.checked; toast(err && err.code === 'permission-denied' ? 'Solo un amministratore può cambiare la condivisione' : 'Salvataggio non riuscito'); });
+      }));
+      $('#share-ok').onclick = () => dlg.close();
+    };
+    draw();
+    dlg.onclose = () => { dlg.onclose = null; if (after) after(); };
+    if (!dlg.open) { if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', ''); }
+  }
   function openFav(villaId, after) {
     const dlg = $('#dlg'); const v = villaById(villaId);
     const draw = () => {
@@ -852,6 +874,7 @@ window.SDBStore.ready.then(function () {
     const st = settings();
     // profilo limitato: scheda in sola lettura; senza prezzi di acquisto c'è solo il listino di vendita
     const ro = !isFull();
+    if (!ro && !v.pricing) v.pricing = S.emptyPricing(st);
     if (v.pricing) S.TARIFFE.forEach(t => {
       const n = st.periods[t.key].length;
       if (!v.pricing[t.key]) v.pricing[t.key] = S.emptyPricing(st)[t.key];
@@ -869,6 +892,7 @@ window.SDBStore.ready.then(function () {
       <div class="head">
         <div><h1 id="v-title">${esc(v.name)}</h1><div class="sub">${esc([v.location, v.seafront, v.proprietario && 'Prop. ' + v.proprietario].filter(Boolean).join(' · '))}</div><div id="v-spese"></div></div>
         <div class="actions"><span class="saved" id="saved" aria-live="polite"></span>
+          ${isAdmin() && store.mode === 'online' ? '<button class="btn" id="v-share" title="Profili che vedono questa villa"></button>' : ''}
           <button class="btn vfav${isFav(v.id) ? ' on' : ''}" id="v-fav" title="Preferiti">${HEART(isFav(v.id))} Preferiti</button>
           ${canEdit() ? '<button class="btn" id="v-book">+ Periodo</button>' : ''}${ro ? '' : '<button class="btn" id="v-dup">Duplica</button><button class="btn danger" id="v-del">Elimina villa</button>'}</div>
       </div>
@@ -885,28 +909,20 @@ window.SDBStore.ready.then(function () {
         <div class="ph-tools">${store.mode === 'online' && !ro ? `<label class="btn" for="ph-add">+ Aggiungi foto</label><input type="file" id="ph-add" accept="image/*" multiple hidden>` : ''}<span class="note" id="ph-msg"></span></div>
       </section>
       <section class="card"><h2>Link e media</h2><div class="grid wide">${FIELDS.link.map(([k, l]) => linkInp(k, l)).join('')}</div></section>
-      ${isAdmin() && store.mode === 'online' ? '<section class="card" id="v-share"></section>' : ''}
       <section class="card" id="prices"></section>
       <section class="card"><h2>Disponibilità ${esc(st.seasonName)}</h2><div class="minitl" id="v-tl"></div><div class="blist" id="v-blist"></div></section>
     </div></div>`;
 
     if (ro) $$('[data-k], #v-loc', main).forEach(el => { el.disabled = true; });
-    // condivisione con i profili (solo amministratori): meta/profili.profili[id].ville
-    const drawShare = () => {
-      const box = $('#v-share'); if (!box) return;
-      const pm = data().profili || {}; const ids = Object.keys(pm).filter(k => !pm[k].completo).sort((a, b) => String(pm[a].nome).localeCompare(String(pm[b].nome), 'it'));
-      const full = Object.keys(pm).filter(k => pm[k].completo);
-      box.innerHTML = `<h2>Condivisa con</h2>
-        <p class="note">Scegli quali profili utente vedono questa villa. Gli amministratori${full.length ? ' e i profili con accesso completo (' + full.map(k => esc(pm[k].nome)).join(', ') + ')' : ''} la vedono sempre.</p>
-        ${ids.length ? `<div class="pg-chips share-chips">${ids.map(k => `<label class="pg-chip"><input type="checkbox" data-share="${esc(k)}" ${(pm[k].ville || []).includes(v.id) ? 'checked' : ''}><span>${esc(pm[k].nome || 'Profilo')}</span></label>`).join('')}</div>` : '<p class="note">Nessun profilo limitato: creali in Impostazioni → Account e accessi.</p>'}`;
+    // condivisione con i profili (solo amministratori): pulsante accanto a Preferiti
+    const drawShareBtn = () => {
+      const b = $('#v-share'); if (!b) return;
+      const pm = data().profili || {}; const n = Object.keys(pm).filter(k => !pm[k].completo && (pm[k].ville || []).includes(v.id)).length;
+      b.classList.toggle('on', n > 0);
+      b.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.6-3 2.8-4.8 5.5-4.8s4.9 1.8 5.5 4.8"/><circle cx="17" cy="9" r="2.6"/><path d="M15.5 14.4c2.4.1 4.3 1.7 4.9 4.6"/></svg> Condivisa con${n ? ' · ' + n : ''}`;
     };
-    drawShare();
-    if ($('#v-share')) $('#v-share').addEventListener('change', e => {
-      const cb = e.target.closest('[data-share]'); if (!cb) return;
-      const pm = JSON.parse(JSON.stringify(data().profili || {})); const pr = pm[cb.dataset.share]; if (!pr) return;
-      pr.ville = (pr.ville || []).filter(x => x !== v.id); if (cb.checked) pr.ville.push(v.id);
-      Promise.resolve(store.setProfili(pm)).then(() => toast(cb.checked ? `Condivisa con ${pr.nome}` : `Non più condivisa con ${pr.nome}`), err => { cb.checked = !cb.checked; toast(err && err.code === 'permission-denied' ? 'Solo un amministratore può cambiare la condivisione' : 'Salvataggio non riuscito'); });
-    });
+    drawShareBtn();
+    if ($('#v-share')) $('#v-share').addEventListener('click', () => openShare(v.id, drawShareBtn));
     // salvataggio automatico
     let saveT;
     const save = () => {

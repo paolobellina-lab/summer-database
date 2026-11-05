@@ -793,3 +793,5 @@ input[type="color"].dot::-moz-color-swatch { border: 0; border-radius: 50%; }
   .acc-tbl td:first-child { flex-basis: auto; flex: 1 1 auto; order: 1; }
   .acc-tbl td.acc-app { order: 3; }
 }
+#v-share { display: inline-flex; align-items: center; gap: 6px; }
+#v-share.on { color: var(--navy); border-color: var(--navy); }
