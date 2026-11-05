@@ -803,3 +803,6 @@ input[type="color"].dot::-moz-color-swatch { border: 0; border-radius: 50%; }
 #v-share { display: inline-flex; align-items: center; gap: 6px; }
 #v-share.on { color: var(--navy); border-color: var(--navy); }
 .prof-opt .lbl { align-self: start; padding-top: 8px; }
+/* assegnazioni: freccia accanto al numero di prenotazioni, gira quando la villa è aperta */
+.as-villa.can-open > summary > span::after { content: ''; display: inline-block; width: 7px; height: 7px; margin-left: 9px; border-right: 1.6px solid currentColor; border-bottom: 1.6px solid currentColor; transform: translateY(-3px) rotate(45deg); transition: transform .15s; }
+.as-villa.can-open[open] > summary > span::after { transform: translateY(1px) rotate(-135deg); }

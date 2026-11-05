@@ -349,7 +349,7 @@
           <div class="as-list">${vl.map(v => {
             const bs = bookings.filter(b => b.villaId === v.id && b.status !== 'richiesta').sort((x, y) => String(y.from).localeCompare(String(x.from)));
             const all = vSet.has(v.id); const nb = bs.filter(b => bSet.has(b.id)).length;
-            return `<details class="as-villa${all || nb ? ' has' : ''}" ${q || nb ? 'open' : ''}><summary><label class="as-check" onclick="event.stopPropagation()"><input type="checkbox" data-av="${esc(v.id)}" ${all ? 'checked' : ''}> <b>${esc(v.name)}</b></label><span>${all ? 'tutta la villa' : nb ? nb + ' prenotazioni' : bs.length ? bs.length + ' prenotazioni' : 'nessuna prenotazione'}</span></summary>
+            return `<details class="as-villa${all || nb ? ' has' : ''}${bs.length ? ' can-open' : ''}" ${q || nb ? 'open' : ''}><summary><label class="as-check" onclick="event.stopPropagation()"><input type="checkbox" data-av="${esc(v.id)}" ${all ? 'checked' : ''}> <b>${esc(v.name)}</b></label><span>${all ? 'tutta la villa' : nb ? nb + (nb === 1 ? ' prenotazione' : ' prenotazioni') + ' su ' + bs.length : bs.length ? bs.length + (bs.length === 1 ? ' prenotazione' : ' prenotazioni') : 'nessuna prenotazione'}</span></summary>
               ${bs.length ? `<div class="as-bks">${bs.map(b => `<label class="as-check"><input type="checkbox" data-ab="${esc(b.id)}" ${all || bSet.has(b.id) ? 'checked' : ''} ${all ? 'disabled' : ''}> ${esc((b.cliente || '').trim() || 'Senza nome')} · ${dataBreve(b.from)} → ${dataBreve(b.to)}</label>`).join('')}</div>` : ''}
             </details>`;
           }).join('')}</div>` : '<p class="note">Aggiungi il primo account per scegliere cosa può vedere.</p>'}
