@@ -816,3 +816,7 @@ details.prof-item { padding: 0; gap: 0; }
 details.prof-item[open] > .prof-sum { border-bottom: 1px solid var(--line-soft); }
 details.prof-item[open] > .prof-sum .chev { transform: translateY(1px) rotate(-135deg); }
 .prof-body { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; }
+/* Impostazioni: il titolo resta fermo in alto mentre la pagina scorre (il menu a sinistra si ferma sotto) */
+.set-head { position: sticky; top: -20px; z-index: 6; background: var(--bg); margin-top: -20px; padding: 20px 0 12px; }
+.set-nav { top: 76px; }
+@media (max-width: 760px) { .set-head { padding-bottom: 8px; } }
