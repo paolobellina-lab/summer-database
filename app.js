@@ -263,6 +263,8 @@ window.SDBStore.ready.then(function () {
        mostro quelli (si sommano le settimane); se non ha né l'una né l'altra, non compare. */
   const hasNumPrice = (v, t) => S.periodsFor(settings(), v, t).some((p, i) => typeof S.priceAt(v, t, i, 'netto') === 'number' || typeof S.priceAt(v, t, i, 'listino') === 'number');
   function tariffFor(v, t) {
+    // profilo che non vede il listino: la villa compare comunque, con le sole disponibilità
+    if (hiddenField('listino')) return t;
     if (hasNumPrice(v, t)) return t;
     if (t !== 'settimanale' && hasNumPrice(v, 'settimanale')) return 'settimanale';
     return null;
@@ -818,7 +820,7 @@ window.SDBStore.ready.then(function () {
             <p class="vc-desc">${desc ? esc(desc) : (v.proprietario && !hiddenField('proprietario') ? 'Proprietario: ' + esc(v.proprietario) : isFull() ? 'Descrizione da completare' : '')}</p>
             ${statList.length ? `<div class="vc-stats2">${statList.map(([x, l, ic]) => `<div><span>${l}</span><b>${ic}${esc(x)}</b></div>`).join('')}</div>` : '<div class="vc-missing">Caratteristiche da completare</div>'}
             <hr>
-            <div class="vc-price2"><span>Affitto settimanale</span><b${mn === null ? ' class="missing"' : ''}>${mn === null ? 'Prezzi da inserire' : mn === mx ? S.money(mn) : `€ ${S.short(mn)} – ${S.short(mx)}`}</b></div>
+            ${hiddenField('listino') ? '' : `<div class="vc-price2"><span>Affitto settimanale</span><b${mn === null ? ' class="missing"' : ''}>${mn === null ? 'Prezzi da inserire' : mn === mx ? S.money(mn) : `€ ${S.short(mn)} – ${S.short(mx)}`}</b></div>`}
             <div class="vc-avail"><div class="strip">${strip}</div><div class="vc-free"><b>${s.free}</b> settimane libere su ${s.total}${s.nd ? ` · <span class="ndtxt">${s.nd} ND</span>` : ''}</div></div>
           </div>
           <footer class="vc-foot">
@@ -911,7 +913,7 @@ window.SDBStore.ready.then(function () {
         <div class="ph-tools">${store.mode === 'online' && !ro ? `<label class="btn" for="ph-add">+ Aggiungi foto</label><input type="file" id="ph-add" accept="image/*" multiple hidden>` : ''}<span class="note" id="ph-msg"></span></div>
       </section>
       <section class="card"><h2>Link e media</h2><div class="grid wide">${FIELDS.link.filter(([k]) => !hiddenField(k)).map(([k, l]) => linkInp(k, l)).join('')}</div></section>
-      <section class="card" id="prices"></section>
+      ${hiddenField('listino') ? '' : '<section class="card" id="prices"></section>'}
       <section class="card"><h2>Disponibilità ${esc(st.seasonName)}</h2><div class="minitl" id="v-tl"></div><div class="blist" id="v-blist"></div></section>
     </div></div>`;
 
@@ -957,7 +959,7 @@ window.SDBStore.ready.then(function () {
       $('#v-loc-x').onclick = () => { showNew(false); locSel.value = normLoc(v.location) || ''; };
     }
 
-    drawPrices();
+    if ($('#prices')) drawPrices();
     function drawPrices() {
       if (ro) return drawPricesRO();
       const box = $('#prices'); const t = villaTab; const p = v.pricing[t]; const per = S.periodsFor(st, v, t);
@@ -1313,9 +1315,9 @@ window.SDBStore.ready.then(function () {
             <span class="note">${nAcc} ${nAcc === 1 ? 'account' : 'account'} · ${p.completo ? 'tutte le ville' : nV + (nV === 1 ? ' villa condivisa' : ' ville condivise')}</span>
             ${adm && !nAcc ? '<button type="button" class="btn small danger" data-pdel>Elimina</button>' : ''}</div>
           <div class="prof-opt"><span class="lbl">Accesso</span><div class="seg small" data-pk="completo">${[[false, 'Limitato'], [true, 'Completo: vede e modifica tutto']].map(([v, l]) => `<button type="button" data-v="${v}" class="${!!p.completo === v ? 'on' : ''}" ${adm ? '' : 'disabled'}>${l}</button>`).join('')}</div></div>
-          ${p.completo ? '' : PROF_OPTS.map(([pk, lbl, opts]) => { const off = pk === 'modifica' && !p.dettaglio; return `<div class="prof-opt"><span class="lbl">${lbl}</span><div class="seg small" data-pk="${pk}">${opts.map(([v, l]) => `<button type="button" data-v="${v}" class="${(off ? false : !!p[pk]) === v ? 'on' : ''}" ${adm && !off ? '' : 'disabled'}>${l}</button>`).join('')}</div>${off ? '<span class="note">Con "Solo ND" le prenotazioni si possono solo vedere.</span>' : ''}</div>`; }).join('')}
-          ${p.completo ? '' : `<div class="prof-opt"><span class="lbl">Campi della scheda villa nascosti</span><div class="pg-chips ris-chips">${RIS_FIELDS.map(([fk, l]) => `<label class="pg-chip"><input type="checkbox" data-pris="${fk}" ${S.nascostiDi(p).includes(fk) ? 'checked' : ''} ${adm ? '' : 'disabled'}><span>${l}</span></label>`).join('')}</div></div>`}
           ${p.completo ? '' : `<div class="prof-opt"><span class="lbl">Pagine</span><div class="pg-chips">${PAGES.map(([pk, l]) => `<label class="pg-chip"><input type="checkbox" data-ppg="${pk}" ${(p.pagine || []).includes(pk) ? 'checked' : ''} ${adm ? '' : 'disabled'}><span>${l}</span></label>`).join('')}</div></div>`}
+          ${p.completo ? '' : PROF_OPTS.filter(([pk]) => pk === 'acquisto' ? (p.pagine || []).includes('disponibilita') || (p.pagine || []).includes('ville') : (p.pagine || []).includes('disponibilita')).map(([pk, lbl, opts]) => { const off = pk === 'modifica' && !p.dettaglio; return `<div class="prof-opt"><span class="lbl">${lbl}</span><div class="seg small" data-pk="${pk}">${opts.map(([v, l]) => `<button type="button" data-v="${v}" class="${(off ? false : !!p[pk]) === v ? 'on' : ''}" ${adm && !off ? '' : 'disabled'}>${l}</button>`).join('')}</div>${off ? '<span class="note">Con "Solo ND" le prenotazioni si possono solo vedere.</span>' : ''}</div>`; }).join('')}
+          ${p.completo || !(p.pagine || []).includes('ville') ? '' : `<div class="prof-opt"><span class="lbl">Dati della scheda villa nascosti</span><div class="pg-chips ris-chips">${RIS_FIELDS.map(([fk, l]) => `<label class="pg-chip"><input type="checkbox" data-pris="${fk}" ${S.nascostiDi(p).includes(fk) ? 'checked' : ''} ${adm ? '' : 'disabled'}><span>${l}</span></label>`).join('')}</div></div>`}
         </div>`; }).join('') : '<p class="note">Nessun profilo. Creane uno, poi assegnalo agli account qui sotto.</p>';
     };
     if ($('#prof-card')) {

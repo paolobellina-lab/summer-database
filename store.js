@@ -155,7 +155,9 @@
       });
       return out;
     }
-    const villaPub = v => { const x = clone(v); delete x.pricing; riservati().forEach(k => { delete x[k]; }); x.listino = listinoOf(v); return x; };
+    const villaPub = v => { const x = clone(v); delete x.pricing; x.listino = listinoOf(v); riservati().forEach(k => { delete x[k]; }); return x; };
+    // valore di un campo separato: il listino si ricalcola sempre dai prezzi di acquisto
+    const valOf = (v, k) => k === 'listino' ? (v.pricing ? listinoOf(v) : (v.listino || {})) : (v[k] === undefined || v[k] === null ? '' : v[k]);
     const villaRis = v => { const x = { villaId: v.id }; riservati().forEach(k => { if (v[k] !== undefined) x[k] = v[k]; }); return x; };
     const villaPriv = v => ({ villaId: v.id, pricing: clone(v.pricing || {}) });
     const bookingPub = b => { const x = clone(b); delete x.prezzoAcquisto; delete x._nd; if (x.serviziDett) Object.keys(x.serviziDett).forEach(k => { if (x.serviziDett[k]) delete x.serviziDett[k].acquisto; }); return x; };
@@ -170,6 +172,7 @@
         if (r) Object.keys(r).forEach(k => { if (k !== 'villaId') x[k] = r[k]; });
         if (c) Object.keys(c).forEach(k => { x[k] = c[k]; });
         nascosti().forEach(k => { delete x[k]; });
+        if (nascosti().includes('listino')) { delete x.pricing; delete x.listino; return x; }
         if (a && a.pricing) x.pricing = a.pricing;
         if (x.pricing && (!x.listino || !Object.keys(x.listino).length)) x.listino = listinoOf(x);
         if (!canAcq()) delete x.pricing;
@@ -207,7 +210,7 @@
           const b = db.batch(); b.set(col('villas_acquisto').doc(v.id), strip(villaPriv(v)));
           if (separati()) {
             const cur = raw.villasCampi[v.id] = raw.villasCampi[v.id] || {};
-            CAMPI.forEach(k => { const val = v[k] === undefined || v[k] === null ? '' : v[k]; if (cur[k] !== val) { cur[k] = val; b.set(col(campoPath(v.id)).doc(k), { villaId: v.id, valore: val }); } });
+            CAMPI.forEach(k => { const val = valOf(v, k); if (JSON.stringify(cur[k]) !== JSON.stringify(val)) { cur[k] = val; b.set(col(campoPath(v.id)).doc(k), strip({ villaId: v.id, valore: val })); } });
           } else if (riservati().length) { raw.villasRis[v.id] = villaRis(v); b.set(col('villas_riservati').doc(v.id), strip(villaRis(v))); }
           b.set(col('villas').doc(v.id), strip(villaPub(v))); b.commit().catch(fail);
         } else { const x = Object.assign(clone(v), { listino: listinoOf(v) }); raw.villas[v.id] = x; col('villas').doc(v.id).set(strip(x)).catch(fail); }
@@ -256,7 +259,7 @@
       async mergeAll(data) {
         const d = clone(data);
         const ops = [];
-        (d.villas || []).forEach(v => { if (!v || !v.id) return; if (protetto()) { ops.push(['villas_acquisto', v.id, villaPriv(v)]); if (separati()) CAMPI.forEach(k => ops.push([campoPath(v.id), k, { villaId: v.id, valore: v[k] === undefined || v[k] === null ? '' : v[k] }])); else if (riservati().length) ops.push(['villas_riservati', v.id, villaRis(v)]); ops.push(['villas', v.id, villaPub(v)]); } else ops.push(['villas', v.id, Object.assign(clone(v), { listino: listinoOf(v) })]); });
+        (d.villas || []).forEach(v => { if (!v || !v.id) return; if (protetto()) { ops.push(['villas_acquisto', v.id, villaPriv(v)]); if (separati()) CAMPI.forEach(k => ops.push([campoPath(v.id), k, { villaId: v.id, valore: valOf(v, k) }])); else if (riservati().length) ops.push(['villas_riservati', v.id, villaRis(v)]); ops.push(['villas', v.id, villaPub(v)]); } else ops.push(['villas', v.id, Object.assign(clone(v), { listino: listinoOf(v) })]); });
         (d.bookings || []).forEach(b => { if (!b || !b.id) return; if (protetto()) { ops.push(['bookings_acquisto', b.id, bookingPriv(b)]); ops.push(['bookings', b.id, bookingPub(b)]); } else ops.push(['bookings', b.id, b]); });
         if (d.settings) ops.push(['meta', 'settings', d.settings]);
         if (typeof d.notes === 'string') ops.push(['meta', 'notes', { text: d.notes }]);
@@ -302,7 +305,7 @@
         const run = async ops => { for (let i = 0; i < ops.length; i += 400) { const b = db.batch(); ops.slice(i, i + 400).forEach(([c, id, val]) => val === null ? b.delete(col(c).doc(id)) : b.set(col(c).doc(id), strip(val))); await b.commit(); } };
         const full = Object.values(raw.villas).map(v => { const x = clone(v); const r = raw.villasRis[v.id]; if (r) Object.keys(r).forEach(k => { if (k !== 'villaId') x[k] = r[k]; }); const a = raw.villasAcq[v.id]; if (a && a.pricing) x.pricing = a.pricing; return x; });
         step('Copia dei campi della scheda…');
-        await run([].concat(...full.map(v => CAMPI.map(k => [campoPath(v.id), k, { villaId: v.id, valore: v[k] === undefined || v[k] === null ? '' : v[k] }]))));
+        await run([].concat(...full.map(v => CAMPI.map(k => [campoPath(v.id), k, { villaId: v.id, valore: valOf(v, k) }]))));
         const prev = state.campiSeparati; state.campiSeparati = true;
         try {
           step('Aggiornamento delle schede…');
@@ -313,7 +316,7 @@
           await col('meta').doc('profili').update({ profili: strip(pm) });
           state.profili = pm;
         } catch (e) { state.campiSeparati = prev; throw e; }
-        full.forEach(v => { raw.villas[v.id] = villaPub(v); const m = {}; CAMPI.forEach(k => { m[k] = v[k] === undefined || v[k] === null ? '' : v[k]; }); raw.villasCampi[v.id] = m; });
+        full.forEach(v => { raw.villas[v.id] = villaPub(v); const m = {}; CAMPI.forEach(k => { m[k] = valOf(v, k); }); raw.villasCampi[v.id] = m; });
         raw.villasRis = {};
         rebuild(); emit('local');
         return full.length;
@@ -509,7 +512,16 @@
         }
         function start() {
           const need = new Set(); const ready = k => { need.delete(k); maybeStart(); };
-          const maybeStart = () => { if (!blocked && !started && !need.size) { started = true; rebuild(); document.getElementById('app').innerHTML = ''; resolve(); } };
+          const maybeStart = () => { if (!blocked && !started && !need.size) { started = true; rebuild(); document.getElementById('app').innerHTML = ''; resolve(); if (prof.full && state.campiSeparati) setTimeout(spostaListino, 1500); } };
+          // ville già separate prima che "Listino prezzi" diventasse un campo: lo sposto in villas_campi (prima la copia, poi la pulizia)
+          async function spostaListino() {
+            const todo = Object.values(raw.villas).filter(v => v.listino !== undefined);
+            if (!todo.length) return;
+            try {
+              const b1 = db.batch(); todo.forEach(v => { const a = raw.villasAcq[v.id]; const full = Object.assign(clone(v), a && a.pricing ? { pricing: a.pricing } : {}); b1.set(col(campoPath(v.id)).doc('listino'), strip({ villaId: v.id, valore: valOf(full, 'listino') })); }); await b1.commit();
+              const b2 = db.batch(); todo.forEach(v => { const x = clone(v); delete x.listino; b2.set(col('villas').doc(v.id), strip(x)); }); await b2.commit();
+            } catch (_) {}
+          }
           // 2) se in seguito l'accesso viene revocato, l'app si chiude e i dati sul dispositivo vengono cancellati
           const denied = err => { if (err && err.code === 'permission-denied') block(); else fail(err); };
           const opts = { includeMetadataChanges: false };

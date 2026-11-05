@@ -173,7 +173,7 @@
   function uid(p) { return (p || 'id') + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 
   // campi della scheda villa che un profilo può non vedere (salvati a parte: villas_campi/{villaId}/campi/{campo})
-  const CAMPI_SCHEDA = [['nomeReale', 'Nome reale'], ['proprietario', 'Proprietario'], ['realEstate', 'Real estate'], ['indirizzo', 'Indirizzo'], ['seafront', 'Seafront – Seaview'], ['servizi', 'Servizi inclusi'], ['note', 'Note'], ['linkSito', 'Link sito'], ['mediaProprietario', 'Media proprietario'], ['googleMaps', 'Google Maps'], ['youtube', 'Video YouTube'], ['vimeo', 'Video Vimeo'], ['psw', 'Password']];
+  const CAMPI_SCHEDA = [['listino', 'Listino prezzi'], ['nomeReale', 'Nome reale'], ['proprietario', 'Proprietario'], ['realEstate', 'Real estate'], ['indirizzo', 'Indirizzo'], ['seafront', 'Seafront – Seaview'], ['servizi', 'Servizi inclusi'], ['note', 'Note'], ['linkSito', 'Link sito'], ['mediaProprietario', 'Media proprietario'], ['googleMaps', 'Google Maps'], ['youtube', 'Video YouTube'], ['vimeo', 'Video Vimeo'], ['psw', 'Password']];
   const CAMPI_NASCOSTI_DEFAULT = ['nomeReale', 'proprietario', 'realEstate', 'indirizzo', 'note', 'mediaProprietario', 'googleMaps', 'psw'];
   // campi nascosti a un profilo: elenco del profilo; per i profili creati prima, dalla vecchia scelta "scheda"
   const nascostiDi = pr => Array.isArray(pr && pr.nascosti) ? pr.nascosti : (pr && pr.scheda ? [] : CAMPI_NASCOSTI_DEFAULT.slice());
