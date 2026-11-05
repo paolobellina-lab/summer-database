@@ -5,6 +5,7 @@ rules_version = '2';
 //
 // Profili utente (meta/profili.profili[id]) assegnati agli account con meta/accessi.profiloDi[email]:
 //   completo  = vede e modifica tutto
+//   scheda    = vede i campi riservati delle schede villa (villas_riservati)
 //   ville     = ville condivise con il profilo
 //   acquisto  = vede i prezzi di acquisto (villas_acquisto, bookings_acquisto)
 //   dettaglio = vede le prenotazioni (altrimenti solo occupazione/{villaId}, cioè periodi ND)
@@ -43,6 +44,11 @@ service cloud.firestore {
     // ville: dati e listino di vendita
     match /villas/{id} {
       allow read: if villaVisibile(id) || appScontrini();
+      allow write: if completo();
+    }
+    // campi riservati delle schede villa (meta/profili.campiRiservati): solo con "Dati schede villa: Completa"
+    match /villas_riservati/{id} {
+      allow read: if completo() || (puo('scheda') && villaVisibile(id));
       allow write: if completo();
     }
     // prezzi di acquisto delle ville

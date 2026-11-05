@@ -803,7 +803,7 @@ window.SDBStore.ready.then(function () {
         const statList = [[v.guests || v.pax, 'Ospiti', ICON.ospiti], [v.totalBedrooms || v.guestBedrooms, 'Camere da letto', ICON.camere], [v.bathrooms, 'Bagni', ICON.bagni], [area, 'Area', ICON.area]].filter(([x]) => x !== '' && x != null);
         const strip = ndSpans(v, 'settimanale').map(x => `<i class="ndseg" style="left:${S.diffDays(st.seasonStart, x.from) / total * 100}%;width:${S.diffDays(x.from, x.to) / total * 100}%"></i>`).join('')
           + s.bks.map(b => `<i style="background:${esc(bookingColor(b))};left:${(S.diffDays(st.seasonStart, b.from) + .5) / total * 100}%;width:${Math.max(S.diffDays(b.from, b.to), .5) / total * 100}%"></i>`).join('');
-        const desc = String(v.servizi || v.note || '').replace(/\s+/g, ' ').trim();
+        const desc = String((!hiddenField('servizi') && v.servizi) || (!hiddenField('note') && v.note) || '').replace(/\s+/g, ' ').trim();
         const th = thumbs.map[v.id];
         const badge = [v.location, v.seafront].filter(Boolean).map(x => String(x).trim()).join(', ');
         const fav = isFav(v.id);
@@ -815,7 +815,7 @@ window.SDBStore.ready.then(function () {
           </div>
           <div class="vc-body">
             <h3 class="vc-name">${esc(v.name)}</h3>
-            <p class="vc-desc">${desc ? esc(desc) : (v.proprietario ? 'Proprietario: ' + esc(v.proprietario) : 'Descrizione da completare')}</p>
+            <p class="vc-desc">${desc ? esc(desc) : (v.proprietario && !hiddenField('proprietario') ? 'Proprietario: ' + esc(v.proprietario) : isFull() ? 'Descrizione da completare' : '')}</p>
             ${statList.length ? `<div class="vc-stats2">${statList.map(([x, l, ic]) => `<div><span>${l}</span><b>${ic}${esc(x)}</b></div>`).join('')}</div>` : '<div class="vc-missing">Caratteristiche da completare</div>'}
             <hr>
             <div class="vc-price2"><span>Affitto settimanale</span><b${mn === null ? ' class="missing"' : ''}>${mn === null ? 'Prezzi da inserire' : mn === mx ? S.money(mn) : `€ ${S.short(mn)} – ${S.short(mx)}`}</b></div>
@@ -866,6 +866,10 @@ window.SDBStore.ready.then(function () {
     link: [['linkSito', 'Link sito'], ['mediaProprietario', 'Media proprietario'], ['googleMaps', 'Google Maps'], ['youtube', 'Video YouTube'], ['vimeo', 'Video Vimeo'], ['psw', 'Password']]
   };
   let villaTab = 'settimanale';
+  // campi della scheda che si possono riservare ai profili con "Dati schede villa: Completa"
+  const RIS_FIELDS = [['nomeReale', 'Nome reale'], ['proprietario', 'Proprietario'], ['realEstate', 'Real estate'], ['indirizzo', 'Indirizzo'], ['seafront', 'Seafront – Seaview'], ['servizi', 'Servizi inclusi'], ['note', 'Note'], ['linkSito', 'Link sito'], ['mediaProprietario', 'Media proprietario'], ['googleMaps', 'Google Maps'], ['youtube', 'Video YouTube'], ['vimeo', 'Video Vimeo'], ['psw', 'Password']];
+  const RIS_DEFAULT = ['nomeReale', 'proprietario', 'realEstate', 'indirizzo', 'note', 'mediaProprietario', 'googleMaps', 'psw'];
+  const hiddenField = k => !isFull() && !ME().scheda && (data().campiRiservati || RIS_DEFAULT).includes(k);
 
   function viewVilla(id) {
     const v0 = villaById(id);
@@ -890,7 +894,7 @@ window.SDBStore.ready.then(function () {
     main.innerHTML = `<div class="page"><div class="wrap">
       <a class="crumb" href="#disponibilita">← Disponibilità</a>
       <div class="head">
-        <div><h1 id="v-title">${esc(v.name)}</h1><div class="sub">${esc([v.location, v.seafront, v.proprietario && 'Prop. ' + v.proprietario].filter(Boolean).join(' · '))}</div><div id="v-spese"></div></div>
+        <div><h1 id="v-title">${esc(v.name)}</h1><div class="sub">${esc([v.location, !hiddenField('seafront') && v.seafront, !hiddenField('proprietario') && v.proprietario && 'Prop. ' + v.proprietario].filter(Boolean).join(' · '))}</div><div id="v-spese"></div></div>
         <div class="actions"><span class="saved" id="saved" aria-live="polite"></span>
           ${isAdmin() && store.mode === 'online' ? '<button class="btn" id="v-share" title="Profili che vedono questa villa"></button>' : ''}
           <button class="btn vfav${isFav(v.id) ? ' on' : ''}" id="v-fav" title="Preferiti">${HEART(isFav(v.id))} Preferiti</button>
@@ -898,17 +902,17 @@ window.SDBStore.ready.then(function () {
       </div>
       <div id="v-confirm"></div>
       <div class="cols2">
-        <section class="card"><h2>Anagrafica</h2><div class="grid wide">${FIELDS.anagrafica.map(([k, l]) => k === 'location' ? locSelect() : inp(k, l)).join('')}</div></section>
+        <section class="card"><h2>Anagrafica</h2><div class="grid wide">${FIELDS.anagrafica.filter(([k]) => !hiddenField(k)).map(([k, l]) => k === 'location' ? locSelect() : inp(k, l)).join('')}</div></section>
         <section class="card"><h2>Servizi e note</h2>
-          <label class="field"><span>Servizi inclusi</span><textarea data-k="servizi" rows="4">${esc(v.servizi)}</textarea></label>
-          <label class="field"><span>Note</span><textarea data-k="note" rows="4">${esc(v.note)}</textarea></label></section>
+          ${hiddenField('servizi') ? '' : `<label class="field"><span>Servizi inclusi</span><textarea data-k="servizi" rows="4">${esc(v.servizi)}</textarea></label>`}
+          ${hiddenField('note') ? '' : `<label class="field"><span>Note</span><textarea data-k="note" rows="4">${esc(v.note)}</textarea></label>`}${hiddenField('servizi') && hiddenField('note') ? '<p class="note">Riservati.</p>' : ''}</section>
       </div>
       <section class="card"><h2>Caratteristiche</h2><div class="grid">${FIELDS.caratteristiche.map(([k, l]) => inp(k, l)).join('')}</div></section>
       <section class="card" id="v-photos"><h2>Foto</h2>
         <div class="ph-grid" id="ph-grid"></div>
         <div class="ph-tools">${store.mode === 'online' && !ro ? `<label class="btn" for="ph-add">+ Aggiungi foto</label><input type="file" id="ph-add" accept="image/*" multiple hidden>` : ''}<span class="note" id="ph-msg"></span></div>
       </section>
-      <section class="card"><h2>Link e media</h2><div class="grid wide">${FIELDS.link.map(([k, l]) => linkInp(k, l)).join('')}</div></section>
+      <section class="card"><h2>Link e media</h2><div class="grid wide">${FIELDS.link.filter(([k]) => !hiddenField(k)).map(([k, l]) => linkInp(k, l)).join('')}</div></section>
       <section class="card" id="prices"></section>
       <section class="card"><h2>Disponibilità ${esc(st.seasonName)}</h2><div class="minitl" id="v-tl"></div><div class="blist" id="v-blist"></div></section>
     </div></div>`;
@@ -1170,6 +1174,7 @@ window.SDBStore.ready.then(function () {
         ${isAdmin() ? '<form class="loc-new" id="prof-add" autocomplete="off"><input id="prof-name" placeholder="Nome del profilo (es. Agenti esterni)"><button class="btn small">Aggiungi profilo</button></form>' : ''}
         <div id="prof-msg"></div>
       </section>
+      ${isAdmin() ? '<section class="card" id="ris-card"></section>' : ''}
       <section class="card" id="acc-card"><h2>Account autorizzati</h2>
         <p class="note">Chi è in questo elenco può accedere con il proprio account Google. Scegli a quale app può entrare e, per Summer Database, il suo profilo. Senza profilo l'account non vede nessuna villa. Solo gli amministratori possono modificare l'elenco.</p>
         <div id="acc-list"></div>
@@ -1297,6 +1302,7 @@ window.SDBStore.ready.then(function () {
     }
     // ---- profili utente (meta/profili) ----
     const PROF_OPTS = [
+      ['scheda', 'Dati schede villa', [[false, 'Limitata'], [true, 'Completa']]],
       ['acquisto', 'Prezzi', [[false, 'Solo listino di vendita'], [true, 'Anche prezzi di acquisto']]],
       ['dettaglio', 'Prenotazioni nel calendario', [[true, 'Con tutti i dettagli'], [false, 'Solo ND, senza dettagli']]],
       ['modifica', 'Prenotazioni', [[false, 'Solo visualizzare'], [true, 'Aggiungere e modificare']]]
@@ -1335,6 +1341,24 @@ window.SDBStore.ready.then(function () {
         $('#prof-name').value = ''; profSave(pm); toast(`Profilo ${nome} creato: ora condividi le ville dalla loro scheda`);
       });
     }
+    // ---- campi riservati delle schede villa (meta/profili.campiRiservati) ----
+    let risDraft = null;
+    const drawRis = () => {
+      const box = $('#ris-card'); if (!box) return;
+      const applied = data().campiRiservati; const sel = risDraft || applied || RIS_DEFAULT.slice();
+      const changed = !applied || JSON.stringify(sel.slice().sort()) !== JSON.stringify(applied.slice().sort());
+      box.innerHTML = `<h2>Campi riservati delle schede villa</h2>
+        <p class="note">I profili con "Dati schede villa: Limitata" non ricevono questi campi: nella scheda non compaiono. Con "Completa" li vedono tutti.</p>
+        <div class="pg-chips">${RIS_FIELDS.map(([k, l]) => `<label class="pg-chip"><input type="checkbox" data-ris="${k}" ${sel.includes(k) ? 'checked' : ''}><span>${l}</span></label>`).join('')}</div>
+        <div class="ris-foot">${applied && !changed ? '<span class="note">Applicati.</span>' : `<span class="note">${applied ? 'Modifiche da applicare.' : 'Non ancora applicati: per ora i profili limitati li ricevono ancora.'}</span><button type="button" class="btn small primary" id="ris-go"${data().protezione ? '' : ' disabled title="Attiva prima la protezione dei dati"'}>Applica</button>`}</div><div id="ris-msg"></div>`;
+      const go = $('#ris-go'); if (go) go.onclick = async () => {
+        go.disabled = true; $('#ris-msg').innerHTML = '<p class="note">Aggiornamento delle schede…</p>';
+        try { const n = await store.setCampiRiservati(sel); risDraft = null; toast(`Campi riservati applicati a ${n} ville`); drawRis(); }
+        catch (x) { go.disabled = false; $('#ris-msg').innerHTML = `<div class="warn err">${x && x.code === 'permission-denied' ? 'Le regole di Firestore aggiornate non sono ancora pubblicate: pubblicale e riprova. Non è stato modificato nulla.' : 'Operazione non riuscita: ' + esc(x.message || x)}</div>`; }
+      };
+    };
+    drawRis();
+    if ($('#ris-card')) $('#ris-card').addEventListener('change', e => { const cb = e.target.closest('[data-ris]'); if (!cb) return; const cur = new Set(risDraft || data().campiRiservati || RIS_DEFAULT); if (cb.checked) cur.add(cb.dataset.ris); else cur.delete(cb.dataset.ris); risDraft = RIS_FIELDS.map(f => f[0]).filter(k => cur.has(k)); drawRis(); });
     // ---- protezione dei dati nel database (una volta sola) ----
     const drawProt = () => {
       const box = $('#prot-card'); if (!box) return;
