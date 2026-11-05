@@ -12,12 +12,13 @@ window.SDBStore.ready.then(function () {
     return base.concat(cfg.filter(c => c && c.key && !S.STATI.some(s => s.key === c.key)).map(c => Object.assign({ blocks: true, color: '#6b7470' }, c, { base: false })));
   }
   const statoOf = k => stati().find(s => s.key === k);
-  const statoLabel = k => (statoOf(k) || { label: k }).label;
+  const statoLabel = k => k === '_nd' ? 'Non disponibile' : (statoOf(k) || { label: k }).label;
   const blocks = k => (statoOf(k) || { blocks: true }).blocks;
   const statoColor = k => (statoOf(k) || statoOf('occupato')).color;
   // colore "di stato": nessun colore salvato, oppure ancora quello originale dello stato → segue il predefinito
   const isDefaultColor = b => !b.color || String(b.color).toLowerCase() === String(S.STATUS_COLOR[b.status] || '').toLowerCase();
-  const bookingColor = b => isDefaultColor(b) ? statoColor(b.status) : b.color;
+  const ND_COLOR = '#8a8f94';
+  const bookingColor = b => b._nd ? ND_COLOR : isDefaultColor(b) ? statoColor(b.status) : b.color;
   // periodi ND del listino trasformati in "prenotazioni simulate" grigie (non salvate, calcolate dal listino)
   function ndSpans(v, tariff) {
     const per = S.periodsFor(settings(), v, tariff); const out = [];
@@ -114,10 +115,17 @@ window.SDBStore.ready.then(function () {
     <dialog id="dlg"></dialog>`;
   const main = $('#main');
   // scontrini dell'app Scontrini: sola lettura, un unico ascolto in tempo reale
-  // pagine visibili per l'account collegato: meta/accessi → utenti[].pagine (se manca, vede tutto)
+  /* Profilo dell'account collegato (store.profile, deciso all'accesso):
+     full = vede e modifica tutto; altrimenti acquisto (prezzi di acquisto), modifica (prenotazioni),
+     dettaglio (false = prenotazioni solo come ND), pagine visibili, ville condivise. */
   const PAGES = [['disponibilita', 'Disponibilità'], ['ville', 'Ville'], ['spese', 'Spese'], ['appunti', 'Appunti'], ['impostazioni', 'Impostazioni']];
-  const myEntry = () => { const me = String(store.user || '').toLowerCase(); return (((data().accessi || {}).utenti) || []).find(u => String(u.email).toLowerCase() === me) || null; };
-  const allowedPages = () => { const u = myEntry(); return u && Array.isArray(u.pagine) ? u.pagine : PAGES.map(p => p[0]); };
+  const ME = () => store.profile || { full: true, acquisto: true, modifica: true, dettaglio: true, pagine: null, ville: [] };
+  const isFull = () => !!ME().full;
+  const canAcq = () => isFull() || !!ME().acquisto;
+  const canEdit = () => isFull() || (!!ME().modifica && !!ME().dettaglio);
+  const canDetail = () => isFull() || !!ME().dettaglio;
+  const isAdmin = () => store.mode !== 'online' || !!ME().admin;
+  const allowedPages = () => isFull() ? PAGES.map(p => p[0]) : PAGES.map(p => p[0]).filter(k => (ME().pagine || []).includes(k));
   const canSee = p => store.mode !== 'online' || allowedPages().includes(p);
   const spese = { list: [], ready: false, error: null };
   let spesePage = null; const speseHooks = new Set();
@@ -125,7 +133,7 @@ window.SDBStore.ready.then(function () {
   let speseUnsub = null;
   const startSpese = () => {
     if (speseUnsub || !(store.mode === 'online' && store.listenScontrini && window.SDBSpese) || !canSee('spese')) return;
-    speseUnsub = store.listenScontrini(l => { spese.list = l; spese.ready = true; spese.error = null; speseChanged(); }, err => { spese.error = err; speseChanged(); });
+    speseUnsub = store.listenScontrini(l => { spese.list = isFull() ? l : l.filter(x => data().villas.some(v => v.id === x.villaId)); spese.ready = true; spese.error = null; speseChanged(); }, err => { spese.error = err; speseChanged(); });
   };
   const stopSpese = () => { if (speseUnsub) { try { speseUnsub(); } catch (_) {} speseUnsub = null; spese.list = []; spese.ready = false; } };
   startSpese();
@@ -203,7 +211,7 @@ window.SDBStore.ready.then(function () {
     const pageOf = h.startsWith('villa-') ? (canSee('ville') ? 'ville' : 'disponibilita') : h.startsWith('impostazioni-') ? 'impostazioni' : (PAGES.some(p => p[0] === h) ? h : 'disponibilita');
     if (!canSee(pageOf)) {
       const first = allowedPages()[0];
-      if (!first) { refreshShell(''); main.innerHTML = '<div class="page"><div class="wrap"><div class="card"><p class="note">Al tuo account non è stata assegnata nessuna pagina. Chiedi all\'amministratore.</p></div></div></div>'; return; }
+      if (!first) { refreshShell(''); main.innerHTML = `<div class="page"><div class="wrap"><div class="card"><p class="note">${ME().none ? 'Al tuo account non è ancora stato assegnato un profilo. Chiedi all\'amministratore.' : 'Al tuo profilo non è stata assegnata nessuna pagina. Chiedi all\'amministratore.'}</p></div></div></div>`; return; }
       if (location.hash !== '#' + first) { location.hash = first; return; }
       h = first;
     }
@@ -294,12 +302,13 @@ window.SDBStore.ready.then(function () {
 
   function viewAvail() {
     const st = settings();
+    if (!canAcq() && ui.mode !== 'listino') { ui.mode = 'listino'; saveUI(); }
     main.innerHTML = `
       <form class="toolbar${ui.open ? ' open' : ''}" id="tb" autocomplete="off">
         <label class="field f-search"><span>Cerca villa</span><input type="search" id="f-q" placeholder="Nome, proprietario, zona" value="${esc(ui.q)}"></label>
         <button type="button" class="btn filters-toggle" id="f-more" aria-expanded="${ui.open}">Filtri</button>
         <div class="field"><span>Tariffa</span><div class="seg" id="f-tariff">${S.TARIFFE.map(t => `<button type="button" data-v="${t.key}" class="${ui.tariff === t.key ? 'on' : ''}">${t.label}</button>`).join('')}</div></div>
-        <div class="field"><span>Prezzi</span><div class="seg" id="f-mode"><button type="button" data-v="listino" class="${ui.mode === 'listino' ? 'on' : ''}">Listino</button><button type="button" data-v="netto" class="${ui.mode === 'netto' ? 'on' : ''}">Netto</button></div></div>
+        <div class="field"${canAcq() ? '' : ' hidden'}><span>Prezzi</span><div class="seg" id="f-mode"><button type="button" data-v="listino" class="${ui.mode === 'listino' ? 'on' : ''}">Listino</button><button type="button" data-v="netto" class="${ui.mode === 'netto' ? 'on' : ''}">Netto</button></div></div>
         <div class="more">
           <label class="field f-num"><span>Prezzo da</span><input id="f-da" inputmode="numeric" placeholder="es. 25k" value="${esc(ui.da)}"></label>
           <label class="field f-num"><span>Prezzo a</span><input id="f-a" inputmode="numeric" placeholder="es. 75k" value="${esc(ui.a)}"></label>
@@ -313,7 +322,7 @@ window.SDBStore.ready.then(function () {
           <button type="button" class="btn ghost" id="f-reset">Azzera filtri</button>
         </div>
         <span class="count" id="count"></span>
-        <div class="legend" style="width:100%">${stati().map(s => `<span><i style="background:${esc(s.color)}"></i>${esc(s.label)}</span>`).join('')}<span>Colori predefiniti: ogni affitto può avere il suo. Tocca un prezzo per prenotare quel periodo; tocca un giorno senza prezzo per una settimana da quel giorno; col mouse puoi anche trascinare.</span></div>
+        <div class="legend" style="width:100%">${stati().map(s => `<span><i style="background:${esc(s.color)}"></i>${esc(s.label)}</span>`).join('')}<span>${canEdit() ? 'Colori predefiniti: ogni affitto può avere il suo. Tocca un prezzo per prenotare quel periodo; tocca un giorno senza prezzo per una settimana da quel giorno; col mouse puoi anche trascinare.' : canDetail() ? 'Tocca una prenotazione per vederne il dettaglio.' : 'ND = periodo non disponibile.'}</span></div>
       </form>
       <div class="cal" id="cal"></div>`;
     bindToolbar();
@@ -389,10 +398,11 @@ window.SDBStore.ready.then(function () {
         l = Math.max(l, 0); r = Math.min(r, width); const w = Math.max(r - l, W / 2);
         const col = bookingColor(b);
         spans.push({ l, r: l + w, ink: S.inkFor(col) });
-        const txt = b.cliente || (b.status === 'owner' ? 'OWNER' : b.status === 'richiesta' ? 'SU RICHIESTA' : '');
+        const txt = b._nd ? 'ND' : b.cliente || (b.status === 'owner' ? 'OWNER' : b.status === 'richiesta' ? 'SU RICHIESTA' : '');
         // prezzo complessivo: concordato, altrimenti stima da listino
         let tot = '';
-        if (ui.mode === 'netto' ? typeof b.prezzoAcquisto === 'number' : typeof b.prezzoVendita === 'number') { const sv = srvTot(b); tot = S.money(ui.mode === 'netto' ? b.prezzoAcquisto + sv.acquisto : b.prezzoVendita + sv.vendita); }
+        if (b._nd) tot = '';
+        else if (ui.mode === 'netto' ? typeof b.prezzoAcquisto === 'number' : typeof b.prezzoVendita === 'number') { const sv = srvTot(b); tot = S.money(ui.mode === 'netto' ? b.prezzoAcquisto + sv.acquisto : b.prezzoVendita + sv.vendita); }
         else if (b.status !== 'owner' && b.status !== 'richiesta') { const li = listinoApprox(v, b.from, b.to); const val = li && (li.approx ? li.sale : (ui.mode === 'netto' ? li.net : li.sale)); if (typeof val === 'number') tot = '≈ ' + S.money(val); }
         if (tot && w < 74) tot = tot.replace(' €', '').replace(/\.000$/, 'k');
         const extras = srvLabels(b);
@@ -503,11 +513,15 @@ window.SDBStore.ready.then(function () {
   function openBooking(init) {
     const dlg = $('#dlg');
     const existing = init.id ? data().bookings.find(b => b.id === init.id) : null;
+    // profilo "solo ND": nessun dettaglio da mostrare; profilo in sola lettura: niente nuove prenotazioni
+    if (existing && existing._nd) { toast('Periodo non disponibile'); return; }
+    if (!existing && !canEdit()) { toast('Il tuo profilo può solo visualizzare le prenotazioni'); return; }
+    const ro = !canEdit();
     const b = existing ? Object.assign({}, existing) : { id: S.uid('b'), villaId: init.villaId, status: 'occupato', from: init.from, to: init.to, cliente: '', note: '' };
     let color = bookingColor(b); let colorTouched = !isDefaultColor(b);
     const villas = sortedVillas();
     dlg.innerHTML = `<form class="dlg" method="dialog" id="bform">
-      <h3>${existing ? 'Modifica periodo' : 'Nuovo periodo'}</h3>
+      <h3>${ro ? 'Prenotazione' : existing ? 'Modifica periodo' : 'Nuovo periodo'}</h3>
       <section class="dsec sec-date"><h4>Villa e date</h4>
       <label class="field"><span>Villa</span><select id="b-villa">${villas.map(v => `<option value="${esc(v.id)}" ${v.id === b.villaId ? 'selected' : ''}>${esc(v.name)}</option>`).join('')}</select></label>
       <div class="row">
@@ -524,7 +538,7 @@ window.SDBStore.ready.then(function () {
       <label class="field"><span>Cliente</span><input id="b-cliente" value="${esc(b.cliente)}" placeholder="Cognome cliente"></label>
       <div class="row">
         <label class="field"><span>Vendita concordata €</span><input id="b-sale" inputmode="numeric" value="${typeof b.prezzoVendita === 'number' ? esc(fmtNum(b.prezzoVendita)) : ''}"></label>
-        <label class="field"><span>Acquisto concordato €</span><input id="b-buy" inputmode="numeric" value="${typeof b.prezzoAcquisto === 'number' ? esc(fmtNum(b.prezzoAcquisto)) : ''}"></label>
+        <label class="field"${canAcq() ? '' : ' hidden'}><span>Acquisto concordato €</span><input id="b-buy" inputmode="numeric" value="${typeof b.prezzoAcquisto === 'number' ? esc(fmtNum(b.prezzoAcquisto)) : ''}"></label>
       </div>
       <div class="pricehint" id="b-hint"></div>
       <div id="b-spese"></div>
@@ -537,7 +551,7 @@ window.SDBStore.ready.then(function () {
           <div class="srv-det"${on ? '' : ' hidden'}>
             <div class="seg small srv-mode"><button type="button" data-inc="1" class="${d.incluso ? 'on' : ''}">Incluso nel prezzo</button><button type="button" data-inc="0" class="${d.incluso ? '' : 'on'}">A parte</button></div>
             <div class="row srv-prices"${d.incluso ? ' hidden' : ''}>
-              <label class="field"><span>Acquisto €</span><input data-sa inputmode="numeric" value="${typeof d.acquisto === 'number' ? esc(fmtNum(d.acquisto)) : ''}"></label>
+              <label class="field"${canAcq() ? '' : ' hidden'}><span>Acquisto €</span><input data-sa inputmode="numeric" value="${typeof d.acquisto === 'number' ? esc(fmtNum(d.acquisto)) : ''}"></label>
               <label class="field"><span>Vendita €</span><input data-sv inputmode="numeric" value="${typeof d.vendita === 'number' ? esc(fmtNum(d.vendita)) : ''}"></label>
             </div>
             <label class="field"><span>Note</span><input data-sn value="${esc(d.note)}" placeholder="es. 3 cene, orari, fornitore"></label>
@@ -559,12 +573,13 @@ window.SDBStore.ready.then(function () {
       <div id="b-warn"></div>
       <div id="b-confirm"></div>
       <div class="foot">
-        ${existing ? '<button type="button" class="btn danger left" id="b-del">Elimina</button>' : ''}
-        <button type="button" class="btn" id="b-cancel">Annulla</button>
-        <button type="submit" class="btn primary" id="b-save">Salva</button>
+        ${existing && !ro ? '<button type="button" class="btn danger left" id="b-del">Elimina</button>' : ''}
+        <button type="button" class="btn" id="b-cancel">${ro ? 'Chiudi' : 'Annulla'}</button>
+        ${ro ? '' : '<button type="submit" class="btn primary" id="b-save">Salva</button>'}
       </div>
     </form>`;
     const f = $('#bform', dlg);
+    if (ro) { f.classList.add('readonly'); $$('input,select,textarea,button.sw,.srv-mode button,#b-uselist', f).forEach(el => { el.disabled = true; }); }
     const paint = () => {
       const p = $('#b-prev'); p.style.background = color; p.style.color = S.inkFor(color); p.textContent = $('#b-cliente').value.trim() || 'Anteprima';
       $$('#b-sw .sw[data-c]').forEach(s => { const on = s.dataset.c.toLowerCase() === color.toLowerCase(); s.classList.toggle('on', on); s.setAttribute('aria-checked', on); });
@@ -624,13 +639,13 @@ window.SDBStore.ready.then(function () {
       const mg = typeof x.prezzoVendita === 'number' && typeof x.prezzoAcquisto === 'number' ? x.prezzoVendita + sv.vendita - x.prezzoAcquisto - sv.acquisto : null;
       const totV = typeof x.prezzoVendita === 'number' ? x.prezzoVendita + sv.vendita : null;
       $('#b-hint').innerHTML = [
-        li ? `Listino: <b>${S.money(li.sale)}</b>${li.net ? ` · netto ${S.money(li.net)}` : ''} <span class="muted">(${esc(li.label)})</span> <button type="button" class="btn small" id="b-uselist">Usa listino</button>` : '<span class="muted">Nessun prezzo di listino per queste date esatte.</span>',
-        hasSv ? `Servizi a parte: vendita <b>${S.money(sv.vendita)}</b> · acquisto ${S.money(sv.acquisto)}${totV !== null ? ` · <b>Totale cliente ${S.money(totV)}</b>` : ''}` : '',
-        mg !== null ? `Guadagno${hasSv ? ' con i servizi' : ''}: <b>${S.money(mg)}</b>${totV ? ` (${Math.round(mg / totV * 1000) / 10}%)` : ''}` : ''
+        li ? `Listino: <b>${S.money(li.sale)}</b>${li.net ? ` · netto ${S.money(li.net)}` : ''} <span class="muted">(${esc(li.label)})</span>${ro ? '' : ' <button type="button" class="btn small" id="b-uselist">Usa listino</button>'}` : '<span class="muted">Nessun prezzo di listino per queste date esatte.</span>',
+        hasSv ? `Servizi a parte: vendita <b>${S.money(sv.vendita)}</b>${canAcq() ? ` · acquisto ${S.money(sv.acquisto)}` : ''}${totV !== null ? ` · <b>Totale cliente ${S.money(totV)}</b>` : ''}` : '',
+        mg !== null && canAcq() ? `Guadagno${hasSv ? ' con i servizi' : ''}: <b>${S.money(mg)}</b>${totV ? ` (${Math.round(mg / totV * 1000) / 10}%)` : ''}` : ''
       ].filter(Boolean).join('<br>');
-      const sh = $('#b-srv-hint'); if (sh) sh.innerHTML = hasSv ? `Servizi a parte: vendita <b>${S.money(sv.vendita)}</b> · acquisto ${S.money(sv.acquisto)} · si sommano al prezzo dell'affitto.` : '';
+      const sh = $('#b-srv-hint'); if (sh) sh.innerHTML = hasSv ? `Servizi a parte: vendita <b>${S.money(sv.vendita)}</b>${canAcq() ? ` · acquisto ${S.money(sv.acquisto)}` : ''} · si sommano al prezzo dell'affitto.` : '';
       const ul = $('#b-uselist'); if (ul) ul.onclick = () => { $('#b-sale').value = fmtNum(li.sale); if (li.net) $('#b-buy').value = fmtNum(li.net); check(); };
-      $('#b-save').disabled = !(n > 0) || blocked;
+      const sb = $('#b-save'); if (sb) sb.disabled = !(n > 0) || blocked;
       paint();
     };
     f.addEventListener('input', check); f.addEventListener('change', check); check();
@@ -646,7 +661,7 @@ window.SDBStore.ready.then(function () {
     }
     $('#b-cancel').addEventListener('click', () => dlg.close());
     f.addEventListener('submit', e => {
-      e.preventDefault(); check(); const x = read(); if (!(S.diffDays(x.from, x.to) > 0) || blocked) return;
+      e.preventDefault(); if (ro) return; check(); const x = read(); if (!(S.diffDays(x.from, x.to) > 0) || blocked) return;
       store.upsertBooking(Object.assign(b, x));
       const accBoxes = $$('[data-bacc]', dlg);
       if (accBoxes.length) {
@@ -701,7 +716,7 @@ window.SDBStore.ready.then(function () {
     ui.vsort = ui.vsort || 'order'; ui.vloc = ui.vloc || ''; ui.vlist = ui.vlist || '';
     main.innerHTML = `<div class="page"><div class="wrap">
       <div class="head"><div><h1>Ville</h1><div class="sub" id="vl-sub"></div></div>
-        <div class="actions"><button class="btn primary" id="vl-add">+ Nuova villa</button></div></div>
+        <div class="actions">${isFull() ? '<button class="btn primary" id="vl-add">+ Nuova villa</button>' : ''}</div></div>
       <div class="vl-tools">
         <input type="search" id="vl-q" placeholder="Cerca per nome, proprietario, zona" value="${esc(ui.q)}">
         <label class="field vl-sort"><span>Ordina</span><select id="vl-sort">${sortOpts.map(([k, l]) => `<option value="${k}" ${ui.vsort === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
@@ -786,7 +801,7 @@ window.SDBStore.ready.then(function () {
           </div>
           <footer class="vc-foot">
             <button type="button" class="btn dark" data-act="open">Scheda ↗</button>
-            <button type="button" class="btn" data-act="book">Prenota</button>
+            ${canEdit() ? '<button type="button" class="btn" data-act="book">Prenota</button>' : ''}
             <button type="button" class="btn" data-act="cal">Calendario</button>
           </footer>
         </article>`;
@@ -808,7 +823,7 @@ window.SDBStore.ready.then(function () {
     };
     body.addEventListener('click', go);
     body.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.classList.contains('vcard')) go(e); });
-    $('#vl-add').addEventListener('click', newVilla);
+    if ($('#vl-add')) $('#vl-add').addEventListener('click', newVilla);
   }
 
   function newVilla() {
@@ -835,7 +850,9 @@ window.SDBStore.ready.then(function () {
     if (!v0) { main.innerHTML = `<div class="page"><div class="wrap"><a class="crumb" href="#ville">← Ville</a><p>Questa villa non esiste più.</p></div></div>`; return; }
     let v = JSON.parse(JSON.stringify(v0));
     const st = settings();
-    S.TARIFFE.forEach(t => {
+    // profilo limitato: scheda in sola lettura; senza prezzi di acquisto c'è solo il listino di vendita
+    const ro = !isFull();
+    if (v.pricing) S.TARIFFE.forEach(t => {
       const n = st.periods[t.key].length;
       if (!v.pricing[t.key]) v.pricing[t.key] = S.emptyPricing(st)[t.key];
       const p = v.pricing[t.key];
@@ -853,7 +870,7 @@ window.SDBStore.ready.then(function () {
         <div><h1 id="v-title">${esc(v.name)}</h1><div class="sub">${esc([v.location, v.seafront, v.proprietario && 'Prop. ' + v.proprietario].filter(Boolean).join(' · '))}</div><div id="v-spese"></div></div>
         <div class="actions"><span class="saved" id="saved" aria-live="polite"></span>
           <button class="btn vfav${isFav(v.id) ? ' on' : ''}" id="v-fav" title="Preferiti">${HEART(isFav(v.id))} Preferiti</button>
-          <button class="btn" id="v-book">+ Periodo</button><button class="btn" id="v-dup">Duplica</button><button class="btn danger" id="v-del">Elimina villa</button></div>
+          ${canEdit() ? '<button class="btn" id="v-book">+ Periodo</button>' : ''}${ro ? '' : '<button class="btn" id="v-dup">Duplica</button><button class="btn danger" id="v-del">Elimina villa</button>'}</div>
       </div>
       <div id="v-confirm"></div>
       <div class="cols2">
@@ -865,13 +882,31 @@ window.SDBStore.ready.then(function () {
       <section class="card"><h2>Caratteristiche</h2><div class="grid">${FIELDS.caratteristiche.map(([k, l]) => inp(k, l)).join('')}</div></section>
       <section class="card" id="v-photos"><h2>Foto</h2>
         <div class="ph-grid" id="ph-grid"></div>
-        <div class="ph-tools">${store.mode === 'online' ? `<label class="btn" for="ph-add">+ Aggiungi foto</label><input type="file" id="ph-add" accept="image/*" multiple hidden>` : ''}<span class="note" id="ph-msg"></span></div>
+        <div class="ph-tools">${store.mode === 'online' && !ro ? `<label class="btn" for="ph-add">+ Aggiungi foto</label><input type="file" id="ph-add" accept="image/*" multiple hidden>` : ''}<span class="note" id="ph-msg"></span></div>
       </section>
       <section class="card"><h2>Link e media</h2><div class="grid wide">${FIELDS.link.map(([k, l]) => linkInp(k, l)).join('')}</div></section>
+      ${isAdmin() && store.mode === 'online' ? '<section class="card" id="v-share"></section>' : ''}
       <section class="card" id="prices"></section>
       <section class="card"><h2>Disponibilità ${esc(st.seasonName)}</h2><div class="minitl" id="v-tl"></div><div class="blist" id="v-blist"></div></section>
     </div></div>`;
 
+    if (ro) $$('[data-k], #v-loc', main).forEach(el => { el.disabled = true; });
+    // condivisione con i profili (solo amministratori): meta/profili.profili[id].ville
+    const drawShare = () => {
+      const box = $('#v-share'); if (!box) return;
+      const pm = data().profili || {}; const ids = Object.keys(pm).filter(k => !pm[k].completo).sort((a, b) => String(pm[a].nome).localeCompare(String(pm[b].nome), 'it'));
+      const full = Object.keys(pm).filter(k => pm[k].completo);
+      box.innerHTML = `<h2>Condivisa con</h2>
+        <p class="note">Scegli quali profili utente vedono questa villa. Gli amministratori${full.length ? ' e i profili con accesso completo (' + full.map(k => esc(pm[k].nome)).join(', ') + ')' : ''} la vedono sempre.</p>
+        ${ids.length ? `<div class="pg-chips share-chips">${ids.map(k => `<label class="pg-chip"><input type="checkbox" data-share="${esc(k)}" ${(pm[k].ville || []).includes(v.id) ? 'checked' : ''}><span>${esc(pm[k].nome || 'Profilo')}</span></label>`).join('')}</div>` : '<p class="note">Nessun profilo limitato: creali in Impostazioni → Account e accessi.</p>'}`;
+    };
+    drawShare();
+    if ($('#v-share')) $('#v-share').addEventListener('change', e => {
+      const cb = e.target.closest('[data-share]'); if (!cb) return;
+      const pm = JSON.parse(JSON.stringify(data().profili || {})); const pr = pm[cb.dataset.share]; if (!pr) return;
+      pr.ville = (pr.ville || []).filter(x => x !== v.id); if (cb.checked) pr.ville.push(v.id);
+      Promise.resolve(store.setProfili(pm)).then(() => toast(cb.checked ? `Condivisa con ${pr.nome}` : `Non più condivisa con ${pr.nome}`), err => { cb.checked = !cb.checked; toast(err && err.code === 'permission-denied' ? 'Solo un amministratore può cambiare la condivisione' : 'Salvataggio non riuscito'); });
+    });
     // salvataggio automatico
     let saveT;
     const save = () => {
@@ -906,6 +941,7 @@ window.SDBStore.ready.then(function () {
 
     drawPrices();
     function drawPrices() {
+      if (ro) return drawPricesRO();
       const box = $('#prices'); const t = villaTab; const p = v.pricing[t]; const per = S.periodsFor(st, v, t);
       const defC = st.cambio || 'domenica';
       box.innerHTML = `<h2>Listino prezzi</h2>
@@ -961,6 +997,16 @@ window.SDBStore.ready.then(function () {
         $(`[data-mg="${i}"]`, box).textContent = typeof sale === 'number' && typeof acq === 'number' ? S.money(sale - acq) : '';
       }
     }
+    function drawPricesRO() {
+      const box = $('#prices'); const t = villaTab; const per = S.periodsFor(st, v, t);
+      box.innerHTML = `<h2>Listino prezzi</h2>
+        <div class="tabs" id="p-tabs">${S.TARIFFE.map(x => `<button type="button" data-t="${x.key}" class="${x.key === t ? 'on' : ''}">${x.label}</button>`).join('')}</div>
+        <div class="tbl-wrap"><table class="prices"><thead><tr><th>Periodo</th>${canAcq() ? '<th style="text-align:right">Acquisto (netto)</th>' : ''}<th style="text-align:right">Vendita (listino)</th></tr></thead><tbody>
+          ${per.map((pp, i) => { const sale = S.priceAt(v, t, i, 'listino'); const net = canAcq() ? S.priceAt(v, t, i, 'netto') : null;
+            return `<tr><td class="per">${esc(pp.label)}${pp.label.includes(S.dm(pp.from)) ? '' : `<small>${S.dm(pp.from)} → ${S.dm(pp.to)}</small>`}</td>${canAcq() ? `<td class="sale">${net === null ? '—' : S.money(net)}</td>` : ''}<td class="sale${sale === 'ND' || sale === null ? ' nd' : ''}">${sale === null ? '—' : S.money(sale)}</td></tr>`; }).join('')}
+        </tbody></table></div>`;
+      $('#p-tabs', box).addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; villaTab = b.dataset.t; drawPrices(); });
+    }
     function fmtIn(x) { if (x === null || x === undefined || x === '') return ''; if (x === 'ND') return 'ND'; return new Intl.NumberFormat('it-IT').format(x); }
 
     // periodi della villa
@@ -984,7 +1030,7 @@ window.SDBStore.ready.then(function () {
     }
     $('#v-blist').addEventListener('click', e => { const it = e.target.closest('[data-b]'); if (it) openBooking({ id: it.dataset.b }); });
     $('#v-blist').addEventListener('keydown', e => { if (e.key === 'Enter') { const it = e.target.closest('[data-b]'); if (it) openBooking({ id: it.dataset.b }); } });
-    $('#v-book').addEventListener('click', () => openBooking(Object.assign({ villaId: v.id }, julyWeek(v))));
+    if ($('#v-book')) $('#v-book').addEventListener('click', () => openBooking(Object.assign({ villaId: v.id }, julyWeek(v))));
     $('#v-fav').addEventListener('click', () => openFav(v.id, () => { const f = isFav(v.id); const b = $('#v-fav'); if (b) { b.classList.toggle('on', f); b.innerHTML = HEART(f) + ' Preferiti'; } }));
     // foto della villa
     let foto = [];
@@ -995,8 +1041,8 @@ window.SDBStore.ready.then(function () {
       const coverId = (thumbs.map[v.id] || {}).fotoId;
       g.innerHTML = foto.length ? foto.map(f => `<figure class="ph-item${f.id === coverId ? ' cover' : ''}" data-f="${esc(f.id)}">
           <button type="button" class="ph-open" data-open-f="${esc(f.id)}"><img src="${esc(f.thumb || f.img)}" alt="Foto di ${esc(v.name)}" loading="lazy"></button>
-          <figcaption>${f.id === coverId ? '<span class="ph-badge">Copertina</span>' : `<button type="button" class="btn small" data-cover="${esc(f.id)}">Copertina</button>`}<button type="button" class="btn small danger" data-delf="${esc(f.id)}">Elimina</button></figcaption>
-        </figure>`).join('') : `<p class="note">${store.mode === 'online' ? 'Nessuna foto. Aggiungi la prima: diventa la copertina della scheda.' : 'Le foto si possono caricare solo con i dati online.'}</p>`;
+          <figcaption>${ro ? '' : f.id === coverId ? '<span class="ph-badge">Copertina</span>' : `<button type="button" class="btn small" data-cover="${esc(f.id)}">Copertina</button>`}<button type="button" class="btn small danger" data-delf="${esc(f.id)}">Elimina</button></figcaption>
+        </figure>`).join('') : `<p class="note">${ro ? 'Nessuna foto.' : store.mode === 'online' ? 'Nessuna foto. Aggiungi la prima: diventa la copertina della scheda.' : 'Le foto si possono caricare solo con i dati online.'}</p>`;
     };
     const loadFoto = () => {
       if (store.mode !== 'online' || !store.listFoto) { drawFoto(); return; }
@@ -1043,12 +1089,12 @@ window.SDBStore.ready.then(function () {
         catch (err) { phMsg(rulesMsg(err)); }
       }
     });
-    $('#v-dup').addEventListener('click', () => {
+    if (!ro) $('#v-dup').addEventListener('click', () => {
       store.upsertVilla(JSON.parse(JSON.stringify(v)));
       const c = JSON.parse(JSON.stringify(v)); c.id = S.uid('v'); c.name = v.name + ' (copia)'; c.order = (v.order ?? 0) + 0.5;
       store.upsertVilla(c); toast('Villa duplicata'); location.hash = 'villa-' + c.id;
     });
-    $('#v-del').addEventListener('click', () => {
+    if (!ro) $('#v-del').addEventListener('click', () => {
       const n = data().bookings.filter(b => b.villaId === v.id).length;
       $('#v-confirm').innerHTML = `<div class="confirm-bar"><div><b>Eliminare ${esc(v.name)}?</b> ${n ? `Verranno eliminati anche i suoi <b>${n} periodi</b> dal calendario. ` : ''}Gli scontrini collegati restano nell'app Scontrini, ma non saranno più agganciati ${n ? 'a queste prenotazioni' : 'a questa villa'}. L'operazione non si può annullare.</div><button class="btn small danger solid" id="vd-ok">Elimina</button><button class="btn small" id="vd-no">Annulla</button></div>`;
       $('#vd-ok').addEventListener('click', () => { clearTimeout(saveT); store.removeVilla(v.id); toast('Villa eliminata'); location.hash = 'ville'; });
@@ -1078,9 +1124,9 @@ window.SDBStore.ready.then(function () {
       ['generale', 'Generale', 'Tema, nome e date della stagione'],
       ['listini', 'Listini e periodi', 'Giorno di cambio, periodi, valori per le nuove ville'],
       ['aspetto', 'Aspetto predefiniti', 'Stati e colori, servizi, ' + nLoc + ' località'],
-      store.mode === 'online' ? ['account', 'Account e accessi', nAcc ? nAcc + (nAcc === 1 ? ' account autorizzato' : ' account autorizzati') : 'Chi può entrare e in quali pagine'] : null,
+      store.mode === 'online' && isFull() ? ['account', 'Account e accessi', nAcc ? nAcc + (nAcc === 1 ? ' account autorizzato' : ' account autorizzati') : 'Chi può entrare e in quali pagine'] : null,
       ['dati', 'Dati e backup', 'Backup e pulizia di fine stagione']
-    ].filter(Boolean);
+    ].filter(Boolean).filter(p => isFull() || p[0] === 'generale');
   }
   function viewSettings(sub) {
     const st = JSON.parse(JSON.stringify(settings()));
@@ -1101,8 +1147,15 @@ window.SDBStore.ready.then(function () {
         <label class="field"><span>Nome</span><input id="s-name" value="${esc(st.seasonName)}"></label>
         <label class="field"><span>Inizio calendario</span><input type="date" id="s-start" value="${esc(st.seasonStart)}"></label>
         <label class="field"><span>Fine calendario</span><input type="date" id="s-end" value="${esc(st.seasonEnd)}"></label></div></section>`)}
-      ${store.mode === 'online' ? pg('account', `<section class="card" id="acc-card"><h2>Account autorizzati</h2>
-        <p class="note">Chi è in questo elenco può accedere con il proprio account Google. Scegli per ognuno a quale app può entrare. Solo gli amministratori possono modificare l'elenco.</p>
+      ${store.mode === 'online' && isFull() ? pg('account', `${isAdmin() ? `<section class="card${data().protezione ? '' : ' danger-card'}" id="prot-card"></section>` : ''}
+      <section class="card" id="prof-card"><h2>Profili utente</h2>
+        <p class="note">Ogni account usa un profilo, che decide cosa vede e cosa può fare. Le ville si condividono dalla scheda di ogni villa, nella sezione "Condivisa con": un profilo nuovo e una villa nuova non sono condivisi con nessuno. Gli amministratori vedono sempre tutto.</p>
+        <div id="prof-list"></div>
+        ${isAdmin() ? '<form class="loc-new" id="prof-add" autocomplete="off"><input id="prof-name" placeholder="Nome del profilo (es. Agenti esterni)"><button class="btn small">Aggiungi profilo</button></form>' : ''}
+        <div id="prof-msg"></div>
+      </section>
+      <section class="card" id="acc-card"><h2>Account autorizzati</h2>
+        <p class="note">Chi è in questo elenco può accedere con il proprio account Google. Scegli a quale app può entrare e, per Summer Database, il suo profilo. Senza profilo l'account non vede nessuna villa. Solo gli amministratori possono modificare l'elenco.</p>
         <div id="acc-list"></div>
         <form class="loc-new" id="acc-add" autocomplete="off"><input id="acc-email" type="email" placeholder="email Google"><input id="acc-nome" placeholder="Nome (facoltativo)"><button class="btn small">Aggiungi account</button></form>
         <div id="acc-msg"></div>
@@ -1161,6 +1214,7 @@ window.SDBStore.ready.then(function () {
     $('#s-theme').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; ui.theme = b.dataset.v; saveUI(); applyTheme(); $$('#s-theme button').forEach(x => x.classList.toggle('on', x === b)); });
     let t;
     const save = () => { $('#saved').textContent = 'Modifiche in corso…'; clearTimeout(t); t = setTimeout(() => { store.setSettings(JSON.parse(JSON.stringify(st))); refreshShell('impostazioni'); $('#saved').textContent = 'Salvato'; }, 400); };
+    if (!isFull()) ['#s-name', '#s-start', '#s-end'].forEach(q => { const el = $(q); if (el) el.disabled = true; });
     $('#s-name').addEventListener('input', e => { st.seasonName = e.target.value; save(); });
     $('#s-start').addEventListener('change', e => { if (e.target.value) { st.seasonStart = e.target.value; save(); } });
     $('#s-end').addEventListener('change', e => { if (e.target.value) { st.seasonEnd = e.target.value; save(); } });
@@ -1189,25 +1243,24 @@ window.SDBStore.ready.then(function () {
     const accSave = list => Promise.resolve(store.setAccessi(list)).then(() => { $('#acc-msg').innerHTML = ''; drawAcc(); toast('Account aggiornati'); }, err => {
       $('#acc-msg').innerHTML = `<div class="warn err">${err && err.code === 'permission-denied' ? 'Non puoi modificare l\'elenco: serve un account amministratore, e le regole di Firestore devono essere aggiornate (vedi istruzioni).' : 'Salvataggio non riuscito: ' + esc(err.message || err)}</div>`;
     });
+    const profMap = () => data().profili || {};
+    const profIds = () => Object.keys(profMap()).sort((a, b) => String(profMap()[a].nome || '').localeCompare(String(profMap()[b].nome || ''), 'it'));
     const drawAcc = () => {
       const box = $('#acc-list'); if (!box) return;
-      const list = accUsers();
-      box.innerHTML = list.length ? `<div class="tbl-wrap"><table class="prices acc-tbl"><thead><tr><th>Account</th>${APPS.map(([, l]) => `<th>${l}</th>`).join('')}<th>Pagine di Summer Database</th><th></th></tr></thead><tbody>
-        ${list.map((u, i) => `<tr><td><b>${esc(u.nome || u.email)}</b>${u.nome ? `<small class="note">${esc(u.email)}</small>` : ''}</td>${APPS.map(([k]) => `<td><input type="checkbox" data-ui="${i}" data-app="${k}" ${(u.app || []).includes(k) ? 'checked' : ''}></td>`).join('')}
-          <td>${(u.app || []).includes('summer') ? `<div class="pg-chips">${PAGES.map(([k, l]) => `<label class="pg-chip"><input type="checkbox" data-pg="${i}" data-page="${k}" ${!Array.isArray(u.pagine) || u.pagine.includes(k) ? 'checked' : ''}><span>${l}</span></label>`).join('')}</div>` : '<span class="note">—</span>'}</td>
+      const list = accUsers(); const pm = profMap();
+      box.innerHTML = list.length ? `<div class="tbl-wrap"><table class="prices acc-tbl"><thead><tr><th>Account</th>${APPS.map(([, l]) => `<th>${l}</th>`).join('')}<th>Profilo in Summer Database</th><th></th></tr></thead><tbody>
+        ${list.map((u, i) => `<tr><td><b>${esc(u.nome || u.email)}</b>${u.nome ? `<small class="note">${esc(u.email)}</small>` : ''}</td>${APPS.map(([k, l]) => `<td class="acc-app" data-l="${l}"><input type="checkbox" data-ui="${i}" data-app="${k}" ${(u.app || []).includes(k) ? 'checked' : ''} aria-label="${l}"></td>`).join('')}
+          <td class="acc-prof">${(u.app || []).includes('summer') ? `<select data-up="${i}" aria-label="Profilo"><option value="">— nessun profilo (non vede niente) —</option>${profIds().map(k => `<option value="${esc(k)}" ${u.profilo === k ? 'selected' : ''}>${esc(pm[k].nome || 'Profilo')}${pm[k].completo ? ' · completo' : ''}</option>`).join('')}</select>` : '<span class="note">—</span>'}</td>
           <td><button type="button" class="btn small danger" data-urm="${i}">Togli</button></td></tr>`).join('')}
         </tbody></table></div>` : '<p class="note">Nessun account nell\'elenco: per ora entrano solo gli amministratori scritti nelle regole di Firestore.</p>';
     };
     if ($('#acc-card')) {
       drawAcc();
       $('#acc-list').addEventListener('change', e => {
-        const pg = e.target.closest('[data-pg]'); if (!pg) return;
-        const l = accUsers(); const u = l[Number(pg.dataset.pg)];
-        let pages = Array.isArray(u.pagine) ? u.pagine.slice() : PAGES.map(p => p[0]);
-        pages = pages.filter(x => x !== pg.dataset.page); if (pg.checked) pages.push(pg.dataset.page);
-        if (u.email === String(store.user || '').toLowerCase() && pg.dataset.page === 'impostazioni' && !pg.checked) { pg.checked = true; toast('Non puoi togliere a te stesso la pagina Impostazioni'); return; }
-        if (!pages.length) { pg.checked = true; toast('Lascia almeno una pagina'); return; }
-        u.pagine = PAGES.map(p => p[0]).filter(k => pages.includes(k)); if (u.pagine.length === PAGES.length) delete u.pagine;
+        const sel = e.target.closest('[data-up]'); if (!sel) return;
+        const l = accUsers(); const u = l[Number(sel.dataset.up)]; const pr = profMap()[sel.value];
+        if (u.email === String(store.user || '').toLowerCase() && !(pr && pr.completo)) { sel.value = u.profilo || ''; toast('Al tuo account puoi dare solo un profilo con accesso completo'); return; }
+        if (sel.value) u.profilo = sel.value; else delete u.profilo;
         accSave(l);
       });
       $('#acc-list').addEventListener('change', e => { const cb = e.target.closest('[data-ui]'); if (!cb) return; const l = accUsers(); const u = l[Number(cb.dataset.ui)];
@@ -1226,6 +1279,69 @@ window.SDBStore.ready.then(function () {
         l.push({ email, nome: $('#acc-nome').value.trim(), app: email === String(store.user || '').toLowerCase() ? ['summer', 'scontrini'] : ['scontrini'] }); $('#acc-email').value = ''; $('#acc-nome').value = ''; accSave(l);
       });
     }
+    // ---- profili utente (meta/profili) ----
+    const PROF_OPTS = [
+      ['acquisto', 'Prezzi', [[false, 'Solo listino di vendita'], [true, 'Anche prezzi di acquisto']]],
+      ['dettaglio', 'Prenotazioni nel calendario', [[true, 'Con tutti i dettagli'], [false, 'Solo ND, senza dettagli']]],
+      ['modifica', 'Prenotazioni', [[false, 'Solo visualizzare'], [true, 'Aggiungere e modificare']]]
+    ];
+    const profMsg = h => { const m = $('#prof-msg'); if (m) m.innerHTML = h || ''; };
+    const profSave = map => Promise.resolve(store.setProfili(map)).then(() => { profMsg(''); drawProf(); drawAcc(); }, err => profMsg(`<div class="warn err">${err && err.code === 'permission-denied' ? 'Solo un amministratore può modificare i profili.' : 'Salvataggio non riuscito: ' + esc(err.message || err)}</div>`));
+    const drawProf = () => {
+      const box = $('#prof-list'); if (!box) return; const pm = profMap(); const users = accUsers(); const adm = isAdmin();
+      box.innerHTML = profIds().length ? profIds().map(k => { const p = pm[k]; const nAcc = users.filter(u => u.profilo === k).length; const nV = (p.ville || []).filter(id => villaById(id)).length;
+        return `<div class="prof-item" data-pid="${esc(k)}">
+          <div class="prof-top"><input data-pn value="${esc(p.nome || '')}" aria-label="Nome del profilo" ${adm ? '' : 'disabled'}>
+            <span class="note">${nAcc} ${nAcc === 1 ? 'account' : 'account'} · ${p.completo ? 'tutte le ville' : nV + (nV === 1 ? ' villa condivisa' : ' ville condivise')}</span>
+            ${adm && !nAcc ? '<button type="button" class="btn small danger" data-pdel>Elimina</button>' : ''}</div>
+          <div class="prof-opt"><span class="lbl">Accesso</span><div class="seg small" data-pk="completo">${[[false, 'Limitato'], [true, 'Completo: vede e modifica tutto']].map(([v, l]) => `<button type="button" data-v="${v}" class="${!!p.completo === v ? 'on' : ''}" ${adm ? '' : 'disabled'}>${l}</button>`).join('')}</div></div>
+          ${p.completo ? '' : PROF_OPTS.map(([pk, lbl, opts]) => { const off = pk === 'modifica' && !p.dettaglio; return `<div class="prof-opt"><span class="lbl">${lbl}</span><div class="seg small" data-pk="${pk}">${opts.map(([v, l]) => `<button type="button" data-v="${v}" class="${(off ? false : !!p[pk]) === v ? 'on' : ''}" ${adm && !off ? '' : 'disabled'}>${l}</button>`).join('')}</div>${off ? '<span class="note">Con "Solo ND" le prenotazioni si possono solo vedere.</span>' : ''}</div>`; }).join('')}
+          ${p.completo ? '' : `<div class="prof-opt"><span class="lbl">Pagine</span><div class="pg-chips">${PAGES.map(([pk, l]) => `<label class="pg-chip"><input type="checkbox" data-ppg="${pk}" ${(p.pagine || []).includes(pk) ? 'checked' : ''} ${adm ? '' : 'disabled'}><span>${l}</span></label>`).join('')}</div></div>`}
+        </div>`; }).join('') : '<p class="note">Nessun profilo. Creane uno, poi assegnalo agli account qui sotto.</p>';
+    };
+    if ($('#prof-card')) {
+      drawProf();
+      const upd = (pid, f) => { const pm = JSON.parse(JSON.stringify(profMap())); if (!pm[pid]) return; f(pm[pid]); profSave(pm); };
+      $('#prof-list').addEventListener('click', e => {
+        const it = e.target.closest('[data-pid]'); if (!it) return; const pid = it.dataset.pid;
+        const b = e.target.closest('[data-pk] button'); if (b && !b.disabled) { const pk = b.closest('[data-pk]').dataset.pk; upd(pid, p => { p[pk] = b.dataset.v === 'true'; if (pk === 'dettaglio' && !p.dettaglio) p.modifica = false; }); return; }
+        if (e.target.closest('[data-pdel]')) { const pm = JSON.parse(JSON.stringify(profMap())); delete pm[pid]; profSave(pm); toast('Profilo eliminato'); }
+      });
+      $('#prof-list').addEventListener('change', e => {
+        const it = e.target.closest('[data-pid]'); if (!it) return; const pid = it.dataset.pid;
+        const cb = e.target.closest('[data-ppg]'); if (cb) { upd(pid, p => { const s0 = new Set(p.pagine || []); if (cb.checked) s0.add(cb.dataset.ppg); else s0.delete(cb.dataset.ppg); p.pagine = PAGES.map(x => x[0]).filter(k => s0.has(k)); }); return; }
+        const nm = e.target.closest('[data-pn]'); if (nm && nm.value.trim()) upd(pid, p => { p.nome = nm.value.trim(); });
+      });
+      const pa = $('#prof-add'); if (pa) pa.addEventListener('submit', e => {
+        e.preventDefault(); const nome = $('#prof-name').value.trim(); if (!nome) { $('#prof-name').focus(); return; }
+        const pm = JSON.parse(JSON.stringify(profMap())); const id = S.uid('p');
+        pm[id] = { nome, completo: false, acquisto: false, dettaglio: true, modifica: false, pagine: ['disponibilita', 'ville'], ville: [] };
+        $('#prof-name').value = ''; profSave(pm); toast(`Profilo ${nome} creato: ora condividi le ville dalla loro scheda`);
+      });
+    }
+    // ---- protezione dei dati nel database (una volta sola) ----
+    const drawProt = () => {
+      const box = $('#prot-card'); if (!box) return;
+      if (data().protezione) { box.innerHTML = `<h2>Protezione dei dati</h2><div class="warn ok">Attiva. Prezzi di acquisto e dettagli delle prenotazioni stanno in archivi separati: ogni profilo riceve solo le ville e i dati che gli spettano.</div>`; return; }
+      box.innerHTML = `<h2>Protezione dei dati: da attivare</h2>
+        <p class="note">Finché non è attiva, i profili limitano solo quello che si vede nell'app. Per attivarla:</p>
+        <ol class="prot-steps"><li>Pubblica le <b>nuove regole di Firestore</b> nella console Firebase (Firestore → Regole).</li><li>Torna qui e premi <b>Attiva la protezione</b>. L'app scarica prima un backup completo, poi sposta prezzi di acquisto e dettagli riservati negli archivi protetti. Ville, prezzi e prenotazioni restano gli stessi.</li></ol>
+        <div><button type="button" class="btn danger solid" id="prot-go">Attiva la protezione</button></div><div id="prot-msg"></div>`;
+      $('#prot-go').onclick = async () => {
+        const m = $('#prot-msg'); const go = $('#prot-go'); go.disabled = true;
+        try {
+          const blob = new Blob([JSON.stringify(Object.assign({ exportedAt: new Date().toISOString(), nota: 'backup prima della protezione dei dati' }, data()), null, 1)], { type: 'application/json' });
+          const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'summer-database-backup-prima-protezione-' + new Date().toISOString().slice(0, 10) + '.json'; document.body.appendChild(a); a.click(); a.remove();
+          const r = await store.protectData(t => { m.innerHTML = `<p class="note">${esc(t)}</p>`; });
+          m.innerHTML = `<div class="warn ok">Protezione attiva: ${r.villas} ville e ${r.bookings} prenotazioni. L'app si ricarica…</div>`;
+          setTimeout(() => location.reload(), 1500);
+        } catch (x) {
+          go.disabled = false;
+          m.innerHTML = `<div class="warn err">${x && x.code === 'permission-denied' ? 'Le nuove regole di Firestore non sono ancora pubblicate: pubblicale e riprova. Non è stato modificato nulla.' : 'Operazione non riuscita: ' + esc(x.message || x)}</div>`;
+        }
+      };
+    };
+    drawProt();
     // ---- stati delle prenotazioni (settings.stati) ----
     const stSave = list => { st.stati = list.map(x => ({ key: x.key, label: x.label, color: x.color, blocks: !!x.blocks })); save(); };
     const stDraft = cfg => stati(cfg).map(x => ({ key: x.key, label: x.label, color: x.color, blocks: x.blocks, base: x.base }));

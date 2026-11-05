@@ -130,7 +130,13 @@
 
   function priceAt(villa, tariff, i, mode) {
     const p = villa.pricing && villa.pricing[tariff];
-    if (!p) return null;
+    if (!p) {
+      // profili senza prezzi di acquisto: solo il listino di vendita già calcolato (villa.listino)
+      const l = villa.listino && villa.listino[tariff]; const x = l ? l[i] : null;
+      if (x === undefined || x === null) return null;
+      if (x === 'ND') return 'ND';
+      return mode === 'netto' ? null : Number(x);
+    }
     const acq = p.acquisto ? p.acquisto[i] : null;
     if (mode === 'netto') {
       if (acq === null || acq === undefined || acq === '') return null;

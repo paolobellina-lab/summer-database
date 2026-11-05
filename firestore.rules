@@ -2,30 +2,93 @@ rules_version = '2';
 // Regole di sicurezza di Cloud Firestore, progetto summer-database.
 // Il database è condiviso con le app Scontrini e Spese Ville: mantenere SEMPRE le righe scontrini e scontrini_foto.
 // Le email reali sono solo nella console Firebase (questo repository è pubblico).
+//
+// Profili utente (meta/profili.profili[id]) assegnati agli account con meta/accessi.profiloDi[email]:
+//   completo  = vede e modifica tutto
+//   ville     = ville condivise con il profilo
+//   acquisto  = vede i prezzi di acquisto (villas_acquisto, bookings_acquisto)
+//   dettaglio = vede le prenotazioni (altrimenti solo occupazione/{villaId}, cioè periodi ND)
+//   modifica  = aggiunge e modifica prenotazioni delle ville condivise
+//   pagine    = pagine visibili (qui conta solo "appunti")
 service cloud.firestore {
   match /databases/{database}/documents {
     function emailUtente() { return request.auth.token.email.lower(); }
-    // amministratori: entrano sempre e sono gli unici che possono modificare l'elenco degli account
+    // amministratori: entrano sempre, vedono tutto e sono gli unici che modificano account e profili
     function amministratore() {
       return request.auth != null
         && request.auth.token.email_verified == true
         && emailUtente() in ['EMAIL-1@gmail.com', 'EMAIL-2@gmail.com'];
     }
+    function accessi() { return get(/databases/$(database)/documents/meta/accessi).data; }
     // account autorizzati: amministratori + elenco gestito dall'app (meta/accessi, campo "emails")
     function autorizzato() {
       return amministratore()
         || (request.auth != null
           && request.auth.token.email_verified == true
           && exists(/databases/$(database)/documents/meta/accessi)
-          && emailUtente() in get(/databases/$(database)/documents/meta/accessi).data.emails);
+          && emailUtente() in accessi().emails);
     }
-    match /villas/{id}   { allow read, write: if autorizzato(); }
-    match /bookings/{id} { allow read, write: if autorizzato(); }
-    match /meta/accessi  { allow read: if autorizzato(); allow write: if amministratore(); }
-    // lettura di tutta la cartella meta per gli autorizzati; scrittura di meta/accessi solo agli amministratori
-    match /meta/{id}     { allow read: if autorizzato(); allow write: if autorizzato() && id != 'accessi'; }
-    match /villas_foto/{id}  { allow read, write: if autorizzato(); }
-    match /villas_thumb/{id} { allow read, write: if autorizzato(); }
+    // profilo dell'account; {} se non ne ha uno (in quel caso non vede nessuna villa)
+    function profilo() {
+      return get(/databases/$(database)/documents/meta/profili).data.get('profili', {})
+        .get(accessi().get('profiloDi', {}).get(emailUtente(), '-'), {});
+    }
+    function completo() { return amministratore() || (autorizzato() && profilo().get('completo', false) == true); }
+    function puo(k) { return completo() || (autorizzato() && profilo().get(k, false) == true); }
+    function villaVisibile(villaId) { return completo() || (autorizzato() && villaId in profilo().get('ville', [])); }
+    function pagina(p) { return completo() || (autorizzato() && p in profilo().get('pagine', [])); }
+    // account abilitati alle app Scontrini / Spese Ville: leggono tutte le ville e prenotazioni (dati di base)
+    function appScontrini() { return autorizzato() && emailUtente() in accessi().get('scontrini', []); }
+
+    // ville: dati e listino di vendita
+    match /villas/{id} {
+      allow read: if villaVisibile(id) || appScontrini();
+      allow write: if completo();
+    }
+    // prezzi di acquisto delle ville
+    match /villas_acquisto/{id} {
+      allow read: if completo() || (puo('acquisto') && villaVisibile(id));
+      allow write: if completo();
+    }
+    // prenotazioni (senza prezzi di acquisto)
+    match /bookings/{id} {
+      allow read: if completo() || appScontrini() || (puo('dettaglio') && villaVisibile(resource.data.villaId));
+      allow create: if completo() || (puo('modifica') && puo('dettaglio') && villaVisibile(request.resource.data.villaId));
+      allow update: if completo() || (puo('modifica') && puo('dettaglio') && villaVisibile(resource.data.villaId) && villaVisibile(request.resource.data.villaId));
+      allow delete: if completo() || (puo('modifica') && puo('dettaglio') && villaVisibile(resource.data.villaId));
+    }
+    // prezzi di acquisto delle prenotazioni
+    match /bookings_acquisto/{id} {
+      allow read: if completo() || (puo('acquisto') && puo('dettaglio') && villaVisibile(resource.data.villaId));
+      allow create, update: if completo() || (puo('modifica') && puo('acquisto') && villaVisibile(request.resource.data.villaId));
+      allow delete: if completo() || (puo('modifica') && puo('acquisto') && villaVisibile(resource.data.villaId));
+    }
+    // periodi occupati senza dettagli, per i profili "solo ND"
+    match /occupazione/{villaId} {
+      allow read: if villaVisibile(villaId);
+      allow write: if completo() || (puo('modifica') && villaVisibile(villaId));
+    }
+    match /villas_foto/{id} {
+      allow read: if villaVisibile(resource.data.villaId);
+      allow write: if completo();
+    }
+    match /villas_thumb/{id} {
+      allow read: if villaVisibile(id);
+      allow write: if completo();
+    }
+
+    // meta: un documento alla volta (l'app non legge più la cartella intera)
+    match /meta/accessi   { allow read: if autorizzato(); allow write: if amministratore(); }
+    match /meta/profili   { allow read: if autorizzato(); allow write: if amministratore(); }
+    match /meta/settings  { allow read: if autorizzato(); allow write: if completo(); }
+    match /meta/sicurezza { allow read: if autorizzato(); allow write: if completo(); }
+    match /meta/notes     { allow read, write: if pagina('appunti'); }
+    match /meta/{id} {
+      allow read: if autorizzato() && id != 'notes';
+      allow write: if autorizzato() && !(id in ['accessi', 'profili', 'settings', 'sicurezza', 'notes']);
+    }
+
+    // app Scontrini: invariato
     match /scontrini/{id}      { allow read, write: if autorizzato(); }
     match /scontrini_foto/{id} { allow read, write: if autorizzato(); }
     match /{document=**} { allow read, write: if false; }

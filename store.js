@@ -58,6 +58,7 @@
       // pulizia di fine stagione (protetta da password nell'interfaccia)
       wipeBookings() { const n = state.bookings.length; state.bookings = []; (state.assegnazioni || []).forEach(a => { a.prenotazioni = []; }); persist(); return Promise.resolve(n); },
       setAssegnazioni(l) { state.assegnazioni = l; persist(); },
+      setProfili(m) { state.profili = m; persist(); return Promise.resolve(); },
       replaceAll(data) { state = Object.assign(emptyState(), clone(data)); if (!state.settings) state.settings = window.SDB.defaultSettings(); persist(); },
       mergeAll(data) {
         const d = clone(data);
@@ -120,46 +121,164 @@
       setTimeout(() => { t.hidden = true; }, 5000);
     }
     const upsertLocal = (list, item) => { const i = list.findIndex(x => x.id === item.id); if (i >= 0) list[i] = item; else list.push(item); };
+    const FV = () => firebase.firestore.FieldValue;
+    const col = c => db.collection(c);
 
+    /* ---------------- Profili e dati protetti ----------------
+       Con la protezione attiva (meta/profili.protezione) i dati sensibili stanno in collezioni a parte:
+         villas/{id}             dati della villa + "listino" (solo prezzi di vendita già calcolati)
+         villas_acquisto/{id}    { villaId, pricing }  prezzi di acquisto e parametri della formula
+         bookings/{id}           prenotazione senza prezzi di acquisto (campi letti dalle altre app invariati)
+         bookings_acquisto/{id}  { villaId, prezzoAcquisto, servizi: { chiave: acquisto } }
+         occupazione/{villaId}   { villaId, periodi: [{ from, to, earlyIn, lateOut }] }  per i profili "solo ND"
+       Le regole Firestore danno a ogni profilo solo le collezioni e le ville che gli spettano. */
+    const raw = { villas: {}, villasAcq: {}, bookings: {}, bookingsAcq: {}, occ: {} };
+    let prof = { full: true, admin: false, none: false, acquisto: true, modifica: true, dettaglio: true, pagine: null, ville: [], id: '' };
+    const protetto = () => !!state.protezione;
+    const canAcq = () => prof.full || prof.acquisto;
+    const S = window.SDB;
+    function listinoOf(v) {
+      const out = {};
+      S.TARIFFE.forEach(t => {
+        const p = v.pricing && v.pricing[t.key]; if (!p) return;
+        out[t.key] = (p.acquisto || []).map((a, i) => { const x = S.salePrice(a, p, p.rettifica ? p.rettifica[i] : 0, p.fisso ? p.fisso[i] : null); return x === undefined ? null : x; });
+      });
+      return out;
+    }
+    const villaPub = v => { const x = clone(v); delete x.pricing; x.listino = listinoOf(v); return x; };
+    const villaPriv = v => ({ villaId: v.id, pricing: clone(v.pricing || {}) });
+    const bookingPub = b => { const x = clone(b); delete x.prezzoAcquisto; delete x._nd; if (x.serviziDett) Object.keys(x.serviziDett).forEach(k => { if (x.serviziDett[k]) delete x.serviziDett[k].acquisto; }); return x; };
+    const bookingPriv = b => { const servizi = {}; Object.keys(b.serviziDett || {}).forEach(k => { const d = b.serviziDett[k]; if (d && typeof d.acquisto === 'number') servizi[k] = d.acquisto; }); return { villaId: b.villaId, prezzoAcquisto: typeof b.prezzoAcquisto === 'number' ? b.prezzoAcquisto : null, servizi }; };
+    const blocca = st => { if (st === 'richiesta') return false; const c = ((state.settings || {}).stati || []).find(x => x && x.key === st); if (c && typeof c.blocks === 'boolean') return c.blocks; const b = S.STATI.find(x => x.key === st); return b ? b.blocks : true; };
+    const occOf = villaId => ({ villaId, periodi: Object.values(raw.bookings).filter(b => b.villaId === villaId && blocca(b.status)).sort((a, b) => (a.from < b.from ? -1 : 1)).map(b => ({ from: b.from, to: b.to, earlyIn: !!b.earlyIn, lateOut: !!b.lateOut })) });
+    const sameOcc = (a, b) => JSON.stringify((a && a.periodi) || []) === JSON.stringify((b && b.periodi) || []);
+    // ricompongo ville e prenotazioni per l'app, togliendo quello che il profilo non deve vedere
+    function rebuild() {
+      state.villas = Object.values(raw.villas).map(v => {
+        const x = clone(v); const a = raw.villasAcq[v.id];
+        if (a && a.pricing) x.pricing = a.pricing;
+        if (x.pricing && (!x.listino || !Object.keys(x.listino).length)) x.listino = listinoOf(x);
+        if (!canAcq()) delete x.pricing;
+        return x;
+      });
+      if (!prof.full && !prof.dettaglio) {
+        // solo ND: periodi occupati senza alcun dettaglio
+        const src = protetto() ? Object.values(raw.occ) : Object.keys(raw.villas).map(occOf);
+        state.bookings = [];
+        src.forEach(o => (o.periodi || []).forEach((p, i) => state.bookings.push({ id: 'nd-' + o.villaId + '-' + i, villaId: o.villaId, from: p.from, to: p.to, earlyIn: !!p.earlyIn, lateOut: !!p.lateOut, status: '_nd', _nd: true, cliente: '', note: '' })));
+        return;
+      }
+      state.bookings = Object.values(raw.bookings).map(b => {
+        const x = clone(b); const a = raw.bookingsAcq[b.id];
+        if (a) {
+          if (typeof a.prezzoAcquisto === 'number') x.prezzoAcquisto = a.prezzoAcquisto;
+          Object.keys(a.servizi || {}).forEach(k => { x.serviziDett = x.serviziDett || {}; x.serviziDett[k] = Object.assign({}, x.serviziDett[k] || {}, { acquisto: a.servizi[k] }); });
+        }
+        if (!canAcq()) { delete x.prezzoAcquisto; if (x.serviziDett) Object.keys(x.serviziDett).forEach(k => { if (x.serviziDett[k]) delete x.serviziDett[k].acquisto; }); }
+        return x;
+      });
+    }
+    // occupazione: la tiene aggiornata chi modifica le prenotazioni; chi ha accesso completo la riallinea
+    function writeOcc(villaId) { if (!protetto() || !villaId) return; const o = occOf(villaId); if (sameOcc(o, raw.occ[villaId])) return; raw.occ[villaId] = o; col('occupazione').doc(villaId).set(o).catch(fail); }
+    let occT; const reconcileOcc = () => { if (!prof.full || !protetto()) return; clearTimeout(occT); occT = setTimeout(() => { Object.keys(raw.villas).forEach(writeOcc); }, 1500); };
+
+    // proprietà calcolate (Object.assign copierebbe solo il valore del momento)
+    Object.defineProperty(api, 'profile', { get: () => prof });
+    Object.defineProperty(api, 'needsProtection', { get: () => !protetto() && (Object.values(raw.villas).some(v => v.pricing) || Object.values(raw.bookings).some(b => typeof b.prezzoAcquisto === 'number')) });
     // scritture: aggiorno subito lo stato locale, poi Firestore (che funziona anche offline e sincronizza dopo)
     Object.assign(api, {
-      upsertVilla(v) { upsertLocal(state.villas, v); db.collection('villas').doc(v.id).set(strip(v)).catch(fail); emit('local'); },
-      removeVilla(id) {
-        const bk = state.bookings.filter(b => b.villaId === id);
-        state.villas = state.villas.filter(v => v.id !== id); state.bookings = state.bookings.filter(b => b.villaId !== id);
-        const batch = db.batch(); batch.delete(db.collection('villas').doc(id)); bk.forEach(b => batch.delete(db.collection('bookings').doc(b.id)));
-        batch.commit().catch(fail); emit('local');
+      upsertVilla(v) {
+        if (protetto()) {
+          raw.villas[v.id] = villaPub(v); raw.villasAcq[v.id] = villaPriv(v);
+          const b = db.batch(); b.set(col('villas_acquisto').doc(v.id), strip(villaPriv(v))); b.set(col('villas').doc(v.id), strip(villaPub(v))); b.commit().catch(fail);
+        } else { const x = Object.assign(clone(v), { listino: listinoOf(v) }); raw.villas[v.id] = x; col('villas').doc(v.id).set(strip(x)).catch(fail); }
+        rebuild(); emit('local');
       },
-      upsertBooking(b) { upsertLocal(state.bookings, b); db.collection('bookings').doc(b.id).set(strip(b)).catch(fail); emit('local'); },
-      removeBooking(id) { state.bookings = state.bookings.filter(b => b.id !== id); db.collection('bookings').doc(id).delete().catch(fail); emit('local'); },
-      setSettings(s) { state.settings = s; db.collection('meta').doc('settings').set(strip(s)).catch(fail); emit('local'); },
-      setNotes(t) { state.notes = t; db.collection('meta').doc('notes').set({ text: t }).catch(fail); emit('local'); },
+      removeVilla(id) {
+        const bk = Object.values(raw.bookings).filter(b => b.villaId === id);
+        delete raw.villas[id]; delete raw.villasAcq[id]; delete raw.occ[id]; bk.forEach(b => { delete raw.bookings[b.id]; delete raw.bookingsAcq[b.id]; });
+        const batch = db.batch(); batch.delete(col('villas').doc(id));
+        if (protetto()) { batch.delete(col('villas_acquisto').doc(id)); batch.delete(col('occupazione').doc(id)); }
+        bk.forEach(b => { batch.delete(col('bookings').doc(b.id)); if (protetto()) batch.delete(col('bookings_acquisto').doc(b.id)); });
+        batch.commit().catch(fail); rebuild(); emit('local');
+      },
+      upsertBooking(b0) {
+        const b = clone(b0); delete b._nd;
+        const old = raw.bookings[b.id]; const oldVilla = old && old.villaId;
+        // chi non vede i prezzi di acquisto non deve cancellarli salvando
+        if (!canAcq() && !protetto() && old) {
+          if ('prezzoAcquisto' in old) b.prezzoAcquisto = old.prezzoAcquisto;
+          Object.keys(old.serviziDett || {}).forEach(k => { const d = old.serviziDett[k]; if (d && 'acquisto' in d) { b.serviziDett = b.serviziDett || {}; b.serviziDett[k] = Object.assign({}, b.serviziDett[k] || {}, { acquisto: d.acquisto }); } });
+        }
+        if (protetto()) {
+          raw.bookings[b.id] = bookingPub(b);
+          const batch = db.batch(); batch.set(col('bookings').doc(b.id), strip(bookingPub(b)));
+          if (canAcq()) { raw.bookingsAcq[b.id] = bookingPriv(b); batch.set(col('bookings_acquisto').doc(b.id), strip(bookingPriv(b))); }
+          batch.commit().catch(fail);
+          writeOcc(b.villaId); if (oldVilla && oldVilla !== b.villaId) writeOcc(oldVilla);
+        } else { raw.bookings[b.id] = b; col('bookings').doc(b.id).set(strip(b)).catch(fail); }
+        rebuild(); emit('local');
+      },
+      removeBooking(id) {
+        const old = raw.bookings[id]; delete raw.bookings[id]; delete raw.bookingsAcq[id];
+        col('bookings').doc(id).delete().catch(fail);
+        if (protetto()) { if (canAcq()) col('bookings_acquisto').doc(id).delete().catch(() => {}); if (old) writeOcc(old.villaId); }
+        rebuild(); emit('local');
+      },
+      setSettings(s) { state.settings = s; col('meta').doc('settings').set(strip(s)).catch(fail); emit('local'); },
+      setNotes(t) { state.notes = t; col('meta').doc('notes').set({ text: t }).catch(fail); emit('local'); },
       // elenchi dei preferiti, condivisi tra gli account: meta/preferiti
-      setPreferiti(l) { state.preferiti = l; db.collection('meta').doc('preferiti').set({ liste: strip(l) }).catch(fail); emit('local'); },
+      setPreferiti(l) { state.preferiti = l; col('meta').doc('preferiti').set({ liste: strip(l) }).catch(fail); emit('local'); },
       // account dell'app Scontrini con le ville/prenotazioni assegnate: meta/assegnazioni (letto anche dall'app Scontrini)
-      setAssegnazioni(l) { state.assegnazioni = l; db.collection('meta').doc('assegnazioni').set({ account: strip(l), aggiornatoDa: api.user || '', aggiornatoIl: firebase.firestore.FieldValue.serverTimestamp() }).catch(fail); emit('local'); },
+      setAssegnazioni(l) { state.assegnazioni = l; col('meta').doc('assegnazioni').set({ account: strip(l), aggiornatoDa: api.user || '', aggiornatoIl: FV().serverTimestamp() }).catch(fail); emit('local'); },
       // Import di un backup: AGGIUNGE e AGGIORNA ville e prenotazioni, non cancella mai nulla (ID stabili, scontrini collegati al sicuro).
-      // Agisce SOLO su villas, bookings e meta. Le collezioni scontrini / scontrini_foto (altre app) non vanno mai toccate.
+      // Agisce SOLO su villas, bookings (e le loro parti protette) e meta. Le collezioni scontrini / scontrini_foto (altre app) non vanno mai toccate.
       async mergeAll(data) {
         const d = clone(data);
         const ops = [];
-        (d.villas || []).forEach(v => { if (v && v.id) ops.push(['villas', v.id, v]); });
-        (d.bookings || []).forEach(b => { if (b && b.id) ops.push(['bookings', b.id, b]); });
+        (d.villas || []).forEach(v => { if (!v || !v.id) return; if (protetto()) { ops.push(['villas_acquisto', v.id, villaPriv(v)]); ops.push(['villas', v.id, villaPub(v)]); } else ops.push(['villas', v.id, Object.assign(clone(v), { listino: listinoOf(v) })]); });
+        (d.bookings || []).forEach(b => { if (!b || !b.id) return; if (protetto()) { ops.push(['bookings_acquisto', b.id, bookingPriv(b)]); ops.push(['bookings', b.id, bookingPub(b)]); } else ops.push(['bookings', b.id, b]); });
         if (d.settings) ops.push(['meta', 'settings', d.settings]);
         if (typeof d.notes === 'string') ops.push(['meta', 'notes', { text: d.notes }]);
         for (let i = 0; i < ops.length; i += 400) {
           const batch = db.batch();
-          ops.slice(i, i + 400).forEach(([col, id, val]) => batch.set(db.collection(col).doc(id), strip(val)));
+          ops.slice(i, i + 400).forEach(([c, id, val]) => batch.set(col(c).doc(id), strip(val)));
           await batch.commit();
         }
-        (d.villas || []).forEach(v => v && v.id && upsertLocal(state.villas, v));
-        (d.bookings || []).forEach(b => b && b.id && upsertLocal(state.bookings, b));
+        ops.forEach(([c, id, val]) => { if (c === 'villas') raw.villas[id] = val; if (c === 'villas_acquisto') raw.villasAcq[id] = val; if (c === 'bookings') raw.bookings[id] = val; if (c === 'bookings_acquisto') raw.bookingsAcq[id] = val; });
         if (d.settings) state.settings = Object.assign(window.SDB.defaultSettings(), d.settings);
         if (typeof d.notes === 'string') state.notes = d.notes;
-        emit('local');
+        rebuild(); reconcileOcc(); emit('local');
         return { villas: (d.villas || []).length, bookings: (d.bookings || []).length };
       },
       resetToSeed() { return Promise.reject(new Error('non disponibile online')); },
+      /* Protezione dei dati (una volta sola, da un amministratore, dopo aver pubblicato le nuove regole):
+         copia prezzi di acquisto e dettagli riservati nelle collezioni protette, poi li toglie da villas e bookings.
+         Prima scrive le copie protette: se le regole non sono ancora pubblicate si ferma senza togliere nulla. */
+      async protectData(onStep) {
+        const step = t => { if (onStep) onStep(t); };
+        const run = async ops => { for (let i = 0; i < ops.length; i += 400) { const b = db.batch(); ops.slice(i, i + 400).forEach(([c, id, val]) => b.set(col(c).doc(id), strip(val))); await b.commit(); } };
+        const villas = Object.values(raw.villas).map(v => Object.assign(clone(v), raw.villasAcq[v.id] && !v.pricing ? { pricing: raw.villasAcq[v.id].pricing } : {}));
+        const books = Object.values(raw.bookings).map(b => { const x = clone(b); const a = raw.bookingsAcq[b.id]; if (a && typeof x.prezzoAcquisto !== 'number') x.prezzoAcquisto = a.prezzoAcquisto; return x; });
+        step('Copia dei prezzi di acquisto nelle collezioni protette…');
+        await run(villas.map(v => ['villas_acquisto', v.id, villaPriv(v)]).concat(books.map(b => ['bookings_acquisto', b.id, bookingPriv(b)])));
+        step('Pulizia delle schede ville e delle prenotazioni…');
+        await run(villas.map(v => ['villas', v.id, villaPub(v)]).concat(books.map(b => ['bookings', b.id, bookingPub(b)])));
+        villas.forEach(v => { raw.villas[v.id] = villaPub(v); raw.villasAcq[v.id] = villaPriv(v); });
+        books.forEach(b => { raw.bookings[b.id] = bookingPub(b); raw.bookingsAcq[b.id] = bookingPriv(b); });
+        step('Calendario per i profili senza dettagli…');
+        await run(villas.map(v => ['occupazione', v.id, occOf(v.id)]));
+        await col('meta').doc('profili').set({ protezione: true, protezioneDa: api.user || '', protezioneIl: FV().serverTimestamp() }, { merge: true });
+        state.protezione = true; rebuild(); emit('local');
+        return { villas: villas.length, bookings: books.length };
+      },
+      // profili utente: meta/profili.profili = { id: { nome, completo, acquisto, modifica, dettaglio, pagine, ville } }
+      setProfili(map) {
+        state.profili = clone(map);
+        emit('local');
+        return col('meta').doc('profili').set({ profili: strip(map), aggiornatoDa: api.user || '', aggiornatoIl: FV().serverTimestamp() }, { merge: true })
+          .then(() => col('meta').doc('profili').update({ profili: strip(map) }));
+      },
       // Scontrini (dell'app Scontrini): lettura, modifica con storico, cancellazione. Nessuna altra scrittura.
       listenScontrini(cb, onErr) {
         return db.collection('scontrini').onSnapshot(snap => cb(snap.docs.map(d => Object.assign({}, d.data(), { id: d.id }))), onErr);
@@ -183,21 +302,26 @@
       /* Account autorizzati (meta/accessi): le regole Firestore leggono "emails" per decidere chi entra.
          Solo gli amministratori scritti nelle regole possono modificarlo. */
       setAccessi(utenti) {
-        const clean = utenti.map(u => Object.assign({ email: String(u.email || '').trim().toLowerCase(), nome: u.nome || '', app: Array.isArray(u.app) ? u.app : [] }, Array.isArray(u.pagine) ? { pagine: u.pagine } : {})).filter(u => u.email);
-        const doc = { utenti: clean, emails: Array.from(new Set(clean.map(u => u.email))), aggiornatoDa: api.user || '', aggiornatoIl: firebase.firestore.FieldValue.serverTimestamp() };
-        return db.collection('meta').doc('accessi').set(doc).then(() => { state.accessi = Object.assign({}, doc, { aggiornatoIl: new Date().toISOString() }); emit('local'); });
+        const clean = utenti.map(u => Object.assign({ email: String(u.email || '').trim().toLowerCase(), nome: u.nome || '', app: Array.isArray(u.app) ? u.app : [] }, u.profilo ? { profilo: u.profilo } : {})).filter(u => u.email);
+        const profiloDi = {}; clean.forEach(u => { if (u.profilo) profiloDi[u.email] = u.profilo; });
+        // emails: chi entra (regole); scontrini: chi usa le app Scontrini / Spese Ville; profiloDi: profilo di ogni account (regole)
+        const doc = { utenti: clean, emails: Array.from(new Set(clean.map(u => u.email))), scontrini: clean.filter(u => u.app.includes('scontrini')).map(u => u.email), profiloDi, aggiornatoDa: api.user || '', aggiornatoIl: FV().serverTimestamp() };
+        return col('meta').doc('accessi').set(doc).then(() => { state.accessi = Object.assign({}, doc, { aggiornatoIl: new Date().toISOString() }); emit('local'); });
       },
       /* ---- Pulizia di fine stagione: richiesta esplicitamente dal proprietario, protetta da password nell'interfaccia.
          wipeBookings: cancella tutti i documenti di "bookings" (e svuota le prenotazioni assegnate agli account).
          wipeScontrini: cancella tutti gli scontrini e le loro foto (stesso ID). Nessun'altra collezione viene toccata. ---- */
       async wipeBookings() {
-        const q = await db.collection('bookings').get();
-        const ids = q.docs.map(d => d.id);
-        for (let i = 0; i < ids.length; i += 400) { const b = db.batch(); ids.slice(i, i + 400).forEach(id => b.delete(db.collection('bookings').doc(id))); await b.commit(); }
+        const cols = protetto() ? ['bookings', 'bookings_acquisto', 'occupazione'] : ['bookings'];
+        let n = 0;
+        for (const c of cols) {
+          const q = await col(c).get(); const ids = q.docs.map(d => d.id); if (c === 'bookings') n = ids.length;
+          for (let i = 0; i < ids.length; i += 400) { const b = db.batch(); ids.slice(i, i + 400).forEach(id => b.delete(col(c).doc(id))); await b.commit(); }
+        }
         const acc = JSON.parse(JSON.stringify(state.assegnazioni || []));
-        if (acc.some(a => (a.prenotazioni || []).length)) { acc.forEach(a => { a.prenotazioni = []; }); await db.collection('meta').doc('assegnazioni').set({ account: acc, aggiornatoDa: api.user || '', aggiornatoIl: firebase.firestore.FieldValue.serverTimestamp() }); }
-        state.bookings = []; emit('local');
-        return ids.length;
+        if (acc.some(a => (a.prenotazioni || []).length)) { acc.forEach(a => { a.prenotazioni = []; }); await col('meta').doc('assegnazioni').set({ account: acc, aggiornatoDa: api.user || '', aggiornatoIl: FV().serverTimestamp() }); }
+        raw.bookings = {}; raw.bookingsAcq = {}; raw.occ = {}; rebuild(); emit('local');
+        return n;
       },
       async listScontriniArchivio() {
         const q = await db.collection('scontrini').get();
@@ -212,7 +336,10 @@
       /* ---- foto delle ville: villas_foto (immagini) e villas_thumb/{villaId} (copertina piccola per le schede) ----
          Non stanno in "villas" per non appesantire le altre app che leggono quella collezione. */
       listenThumbs(cb, onErr) {
-        return db.collection('villas_thumb').onSnapshot(snap => { const m = {}; snap.docs.forEach(d => { m[d.id] = d.data(); }); cb(m); }, onErr);
+        if (prof.full) return col('villas_thumb').onSnapshot(snap => { const m = {}; snap.docs.forEach(d => { m[d.id] = d.data(); }); cb(m); }, onErr);
+        // profilo limitato: solo le copertine delle ville condivise, una per una
+        const m = {}; const offs = prof.ville.map(id => col('villas_thumb').doc(id).onSnapshot(d => { if (d.exists) m[id] = d.data(); else delete m[id]; cb(Object.assign({}, m)); }, () => {}));
+        cb({}); return () => offs.forEach(f => f());
       },
       listFoto(villaId) {
         return db.collection('villas_foto').where('villaId', '==', villaId).get()
@@ -290,37 +417,93 @@
               // un amministratore non deve mai restare chiuso fuori: se può scrivere meta/accessi (solo gli
               // amministratori possono), riabilito da solo il suo accesso a Summer Database; altrimenti blocco.
               const fixed = ((d.data() || {}).utenti || []).map(x => String(x.email).toLowerCase() === String(user.email).toLowerCase() ? Object.assign({}, x, { app: Array.from(new Set((x.app || []).concat(['summer']))) }) : x);
-              db.collection('meta').doc('accessi').update({ utenti: fixed, aggiornatoDa: user.email, aggiornatoIl: firebase.firestore.FieldValue.serverTimestamp() })
-                .then(() => { markOk(user.email); start(); }, () => block());
+              db.collection('meta').doc('accessi').update({ utenti: fixed, aggiornatoDa: user.email, aggiornatoIl: FV().serverTimestamp() })
+                .then(() => { markOk(user.email); setAdmin(user.email); begin(); }, () => block());
               return;
             }
-            markOk(user.email); start();
-          }, () => { markOk(user.email); start(); });
+            markOk(user.email); begin();
+          }, () => { markOk(user.email); begin(); });
         });
+        /* Profilo dell'account:
+           - non presente nell'elenco account → è un amministratore scritto nelle regole: vede tutto;
+           - con un profilo → quello del profilo ("completo" = vede e modifica tutto);
+           - senza profilo → se è un amministratore (può scrivere meta/accessi) vede tutto, altrimenti niente. */
+        const ADMKEY = 'summer-db-amministratore';
+        function setAdmin(e) { try { localStorage.setItem(ADMKEY, String(e).toLowerCase()); } catch (_) {} }
+        const isAdminCached = e => { try { return localStorage.getItem(ADMKEY) === String(e).toLowerCase(); } catch (_) { return false; } };
+        const email = String(user.email).toLowerCase();
+        let mySig = '';
+        const FULL = { full: true, admin: false, none: false, acquisto: true, modifica: true, dettaglio: true, pagine: null, ville: [], id: '' };
+        function profileFrom(acc, pm) {
+          const u = ((acc || {}).utenti || []).find(x => String(x.email).toLowerCase() === email);
+          if (!u) return Object.assign({}, FULL, { admin: true });
+          const pr = u.profilo && ((pm || {}).profili || {})[u.profilo];
+          if (pr && pr.completo) return Object.assign({}, FULL, { id: u.profilo, nome: pr.nome || '' });
+          if (pr) return { full: false, admin: false, none: false, id: u.profilo, nome: pr.nome || '', acquisto: !!pr.acquisto, dettaglio: !!pr.dettaglio, modifica: !!pr.modifica && !!pr.dettaglio, pagine: Array.isArray(pr.pagine) ? pr.pagine : [], ville: Array.isArray(pr.ville) ? pr.ville.slice() : [] };
+          return { full: false, admin: false, none: true, id: '', acquisto: false, dettaglio: false, modifica: false, pagine: [], ville: [] };
+        }
+        const sigOf = p => JSON.stringify([p.full, p.none, p.id, p.acquisto, p.dettaglio, p.modifica, p.pagine, (p.ville || []).slice().sort()]);
+        async function begin() {
+          let acc = {}, pm = {};
+          try { const d = await col('meta').doc('accessi').get(); acc = d.exists ? d.data() : {}; } catch (_) {}
+          try { const d = await col('meta').doc('profili').get(); pm = d.exists ? d.data() : {}; } catch (_) {}
+          let p = profileFrom(acc, pm);
+          if (p.none) {
+            // amministratore presente nell'elenco senza profilo: lo riconosco perché può scrivere meta/accessi
+            if (isAdminCached(email)) p = Object.assign({}, FULL, { admin: true });
+            else {
+              try { await col('meta').doc('accessi').update({ verificaAmministratore: email }); setAdmin(email); p = Object.assign({}, FULL, { admin: true }); } catch (_) {}
+            }
+          }
+          prof = p; state.protezione = !!pm.protezione; state.profili = pm.profili || {}; state.accessi = acc;
+          // amministratore: aggiungo a meta/accessi i campi letti dalle nuove regole (scontrini, profiloDi), se mancano
+          if (p.admin && Array.isArray(acc.utenti) && (!Array.isArray(acc.scontrini) || !acc.profiloDi)) { try { await api.setAccessi(acc.utenti); acc = state.accessi; } catch (_) {} }
+          mySig = sigOf(p);
+          start();
+        }
         function start() {
-          let got = { villas: false, bookings: false, meta: false };
-          const maybeStart = () => { if (!blocked && !started && got.villas && got.bookings && got.meta) { started = true; document.getElementById('app').innerHTML = ''; resolve(); } };
+          const need = new Set(); const ready = k => { need.delete(k); maybeStart(); };
+          const maybeStart = () => { if (!blocked && !started && !need.size) { started = true; rebuild(); document.getElementById('app').innerHTML = ''; resolve(); } };
           // 2) se in seguito l'accesso viene revocato, l'app si chiude e i dati sul dispositivo vengono cancellati
           const denied = err => { if (err && err.code === 'permission-denied') block(); else fail(err); };
           const opts = { includeMetadataChanges: false };
-          const on = (col, fn) => db.collection(col).onSnapshot(opts, snap => {
-            if (blocked) return;
-            fn(snap);
-            if (started) emit(snap.metadata.hasPendingWrites ? 'local' : 'remote'); else maybeStart();
-          }, denied);
-          on('villas', snap => { state.villas = snap.docs.map(d => d.data()); got.villas = true; });
-          on('bookings', snap => { state.bookings = snap.docs.map(d => d.data()); got.bookings = true; });
-          on('meta', snap => {
-            snap.docs.forEach(d => {
-              if (d.id === 'settings') state.settings = Object.assign(window.SDB.defaultSettings(), d.data());
-              if (d.id === 'notes') state.notes = d.data().text || '';
-              if (d.id === 'preferiti') state.preferiti = (d.data() || {}).liste || [];
-              if (d.id === 'assegnazioni') state.assegnazioni = (d.data() || {}).account || [];
-              if (d.id === 'sicurezza') state.sicurezza = d.data() || null;
-              if (d.id === 'accessi') state.accessi = d.data() || null;
+          const changed = meta => { if (blocked) return; rebuild(); if (started) emit(meta && meta.hasPendingWrites ? 'local' : 'remote'); };
+          // collezione intera (accesso completo); "core" = un rifiuto vuol dire account revocato
+          const onCol = (c, key, core, fn) => { need.add(key); col(c).onSnapshot(opts, snap => { fn(snap); changed(snap.metadata); ready(key); }, err => { if (core) denied(err); ready(key); }); };
+          const onDoc = (c, id, key, fn) => { need.add(key); col(c).doc(id).onSnapshot(opts, d => { fn(d); changed(d.metadata); ready(key); }, () => { ready(key); }); };
+          const onQuery = (c, villaId, key, fn) => { need.add(key); col(c).where('villaId', '==', villaId).onSnapshot(opts, snap => { fn(snap); changed(snap.metadata); ready(key); }, () => { ready(key); }); };
+          const toMap = snap => { const m = {}; snap.docs.forEach(d => { m[d.id] = d.data(); }); return m; };
+          if (prof.full) {
+            onCol('villas', 'v', true, snap => { raw.villas = {}; snap.docs.forEach(d => { raw.villas[d.id] = Object.assign({ id: d.id }, d.data()); }); });
+            onCol('bookings', 'b', true, snap => { raw.bookings = {}; snap.docs.forEach(d => { raw.bookings[d.id] = Object.assign({ id: d.id }, d.data()); }); reconcileOcc(); });
+            if (state.protezione) {
+              onCol('villas_acquisto', 'va', false, snap => { raw.villasAcq = toMap(snap); });
+              onCol('bookings_acquisto', 'ba', false, snap => { raw.bookingsAcq = toMap(snap); });
+              onCol('occupazione', 'o', false, snap => { raw.occ = toMap(snap); reconcileOcc(); });
+            }
+          } else {
+            // profilo limitato: solo le ville condivise, documento per documento (le regole non permettono di leggere le altre)
+            const bySet = (obj, villaId, snap) => { Object.keys(obj).forEach(k => { if (obj[k].villaId === villaId) delete obj[k]; }); snap.docs.forEach(d => { obj[d.id] = Object.assign({ id: d.id }, d.data()); }); };
+            prof.ville.forEach(id => {
+              onDoc('villas', id, 'v' + id, d => { if (d.exists) raw.villas[id] = Object.assign({ id }, d.data()); else delete raw.villas[id]; });
+              if (prof.acquisto && state.protezione) onDoc('villas_acquisto', id, 'va' + id, d => { if (d.exists) raw.villasAcq[id] = d.data(); else delete raw.villasAcq[id]; });
+              if (prof.dettaglio || !state.protezione) onQuery('bookings', id, 'b' + id, snap => bySet(raw.bookings, id, snap));
+              if (prof.dettaglio && prof.acquisto && state.protezione) onQuery('bookings_acquisto', id, 'ba' + id, snap => { Object.keys(raw.bookingsAcq).forEach(k => { if (raw.bookingsAcq[k].villaId === id) delete raw.bookingsAcq[k]; }); snap.docs.forEach(d => { raw.bookingsAcq[d.id] = d.data(); }); });
+              if (!prof.dettaglio && state.protezione) onDoc('occupazione', id, 'o' + id, d => { if (d.exists) raw.occ[id] = d.data(); else delete raw.occ[id]; });
             });
-            got.meta = true;
-          });
+          }
+          // meta: un documento alla volta (gli appunti si leggono solo se il profilo ha la pagina Appunti)
+          onDoc('meta', 'settings', 'ms', d => { state.settings = Object.assign(window.SDB.defaultSettings(), d.exists ? d.data() : {}); });
+          if (prof.full || (prof.pagine || []).includes('appunti')) onDoc('meta', 'notes', 'mn', d => { state.notes = d.exists ? d.data().text || '' : ''; });
+          onDoc('meta', 'preferiti', 'mp', d => { state.preferiti = d.exists ? (d.data() || {}).liste || [] : []; });
+          onDoc('meta', 'assegnazioni', 'mg', d => { state.assegnazioni = d.exists ? (d.data() || {}).account || [] : []; });
+          onDoc('meta', 'sicurezza', 'mz', d => { state.sicurezza = d.exists ? d.data() || null : null; });
+          // se cambia il mio profilo (ville condivise, permessi) o si attiva la protezione, ricarico l'app
+          let accNow = state.accessi, pmNow = { profili: state.profili, protezione: state.protezione };
+          const recheck = () => { if (!started) return; const p = profileFrom(accNow, pmNow); const keep = prof.admin && p.none; if (!keep && sigOf(p) !== mySig) location.reload(); };
+          onDoc('meta', 'accessi', 'ma', d => { accNow = d.exists ? d.data() : {}; state.accessi = accNow; recheck(); });
+          onDoc('meta', 'profili', 'mf', d => { pmNow = d.exists ? d.data() : {}; state.profili = pmNow.profili || {}; if (!!pmNow.protezione !== !!state.protezione) { if (started) location.reload(); } recheck(); });
+          maybeStart();
         }
       });
     });

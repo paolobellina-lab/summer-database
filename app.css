@@ -764,3 +764,32 @@ input[type="color"].dot::-moz-color-swatch { border: 0; border-radius: 50%; }
 
 /* tema chiaro: dichiarato "solo chiaro" così il telefono non lo scurisce da solo */
 :root[data-theme="light"] { color-scheme: only light; }
+
+/* ---------- profili utente ---------- */
+.prof-item { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--field); }
+.prof-item + .prof-item { margin-top: 10px; }
+.prof-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.prof-top input[data-pn] { flex: 0 1 260px; min-width: 0; font-weight: 500; }
+.prof-top .btn { margin-left: auto; }
+.prof-opt { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.prof-opt .lbl { min-width: 190px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.seg button:disabled { opacity: .55; cursor: default; }
+.prot-steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; }
+.share-chips { margin-top: 2px; }
+.acc-tbl select { max-width: 260px; }
+.dlg.readonly input:disabled, .dlg.readonly select:disabled, .dlg.readonly textarea:disabled { opacity: 1; color: var(--fg); -webkit-text-fill-color: var(--fg); }
+@media (max-width: 760px) { .prof-opt .lbl { min-width: 0; flex-basis: 100%; } }
+/* account sul cellulare: una scheda per account, profilo ben visibile */
+@media (max-width: 760px) {
+  .acc-tbl thead { display: none; }
+  .acc-tbl, .acc-tbl tbody { display: block; width: 100%; }
+  .acc-tbl tr { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 10px 0; border-bottom: 1px solid var(--line-soft); }
+  .prices.acc-tbl td { display: block; padding: 0; border: 0; background: none; }
+  .acc-tbl td.acc-app { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+  .acc-tbl td.acc-app::after { content: attr(data-l); color: var(--muted); }
+  .acc-tbl td.acc-prof { order: 5; flex-basis: 100%; }
+  .acc-tbl td.acc-prof select { width: 100%; max-width: none; }
+  .acc-tbl td:last-child { order: 2; margin-left: auto; }
+  .acc-tbl td:first-child { flex-basis: auto; flex: 1 1 auto; order: 1; }
+  .acc-tbl td.acc-app { order: 3; }
+}
