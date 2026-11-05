@@ -1168,17 +1168,17 @@ window.SDBStore.ready.then(function () {
         <label class="field"><span>Inizio calendario</span><input type="date" id="s-start" value="${esc(st.seasonStart)}"></label>
         <label class="field"><span>Fine calendario</span><input type="date" id="s-end" value="${esc(st.seasonEnd)}"></label></div></section>`)}
       ${store.mode === 'online' && isFull() ? pg('account', `${isAdmin() ? `<section class="card${data().protezione ? '' : ' danger-card'}" id="prot-card"></section>` : ''}
-      <section class="card" id="prof-card"><h2>Profili utente</h2>
-        <p class="note">Ogni account usa un profilo, che decide cosa vede e cosa può fare. Le ville si condividono dalla scheda di ogni villa, nella sezione "Condivisa con": un profilo nuovo e una villa nuova non sono condivisi con nessuno. Gli amministratori vedono sempre tutto.</p>
-        <div id="prof-list"></div>
-        ${isAdmin() ? '<form class="loc-new" id="prof-add" autocomplete="off"><input id="prof-name" placeholder="Nome del profilo (es. Agenti esterni)"><button class="btn small">Aggiungi profilo</button></form>' : ''}
-        <div id="prof-msg"></div>
-      </section>
       <section class="card" id="acc-card"><h2>Account autorizzati</h2>
         <p class="note">Chi è in questo elenco può accedere con il proprio account Google. Scegli a quale app può entrare e, per Summer Database, il suo profilo. Senza profilo l'account non vede nessuna villa. Solo gli amministratori possono modificare l'elenco.</p>
         <div id="acc-list"></div>
         <form class="loc-new" id="acc-add" autocomplete="off"><input id="acc-email" type="email" placeholder="email Google"><input id="acc-nome" placeholder="Nome (facoltativo)"><button class="btn small">Aggiungi account</button></form>
         <div id="acc-msg"></div>
+      </section>
+      <section class="card" id="prof-card"><h2>Profili utente</h2>
+        <p class="note">Ogni account usa un profilo, che decide cosa vede e cosa può fare. Le ville si condividono dalla scheda di ogni villa, nella sezione "Condivisa con": un profilo nuovo e una villa nuova non sono condivisi con nessuno. Gli amministratori vedono sempre tutto.</p>
+        <div id="prof-list"></div>
+        ${isAdmin() ? '<form class="loc-new" id="prof-add" autocomplete="off"><input id="prof-name" placeholder="Nome del profilo (es. Agenti esterni)"><button class="btn small">Aggiungi profilo</button></form>' : ''}
+        <div id="prof-msg"></div>
       </section>
       <section class="card"><h2>Questo dispositivo</h2>
         <p class="note">Accesso come <b>${esc(store.user || '')}</b>.</p>
@@ -1307,21 +1307,28 @@ window.SDBStore.ready.then(function () {
     ];
     const profMsg = h => { const m = $('#prof-msg'); if (m) m.innerHTML = h || ''; };
     const profSave = map => Promise.resolve(store.setProfili(map)).then(() => { profMsg(''); drawProf(); drawAcc(); }, err => profMsg(`<div class="warn err">${err && err.code === 'permission-denied' ? 'Solo un amministratore può modificare i profili.' : 'Salvataggio non riuscito: ' + esc(err.message || err)}</div>`));
+    // profili aperti/chiusi (si ricordano su questo dispositivo); il profilo appena creato si apre
+    const PROFKEY = 'summer-db-profili-aperti';
+    const profOpen = (() => { try { return new Set(JSON.parse(localStorage.getItem(PROFKEY) || '[]')); } catch (_) { return new Set(); } })();
+    const saveOpen = () => { try { localStorage.setItem(PROFKEY, JSON.stringify(Array.from(profOpen))); } catch (_) {} };
     const drawProf = () => {
       const box = $('#prof-list'); if (!box) return; const pm = profMap(); const users = accUsers(); const adm = isAdmin();
       box.innerHTML = profIds().length ? profIds().map(k => { const p = pm[k]; const nAcc = users.filter(u => u.profilo === k).length; const nV = (p.ville || []).filter(id => villaById(id)).length;
-        return `<div class="prof-item" data-pid="${esc(k)}">
+        const riass = p.completo ? 'Completo: vede e modifica tutto' : [(p.pagine || []).length ? (p.pagine || []).map(x => (PAGES.find(y => y[0] === x) || [x, x])[1]).join(', ') : 'nessuna pagina', p.acquisto ? 'anche acquisto' : 'solo vendita', (p.pagine || []).includes('disponibilita') ? (!p.dettaglio ? 'solo ND' : p.modifica ? 'modifica prenotazioni' : 'vede prenotazioni') : ''].filter(Boolean).join(' · ');
+        return `<details class="prof-item" data-pid="${esc(k)}"${profOpen.has(k) ? ' open' : ''}>
+          <summary class="prof-sum"><b>${esc(p.nome || 'Profilo')}</b><span class="note">${nAcc} account · ${p.completo ? 'tutte le ville' : nV + (nV === 1 ? ' villa' : ' ville')} · ${esc(riass)}</span><i class="chev" aria-hidden="true"></i></summary>
+          <div class="prof-body">
           <div class="prof-top"><input data-pn value="${esc(p.nome || '')}" aria-label="Nome del profilo" ${adm ? '' : 'disabled'}>
-            <span class="note">${nAcc} ${nAcc === 1 ? 'account' : 'account'} · ${p.completo ? 'tutte le ville' : nV + (nV === 1 ? ' villa condivisa' : ' ville condivise')}</span>
             ${adm && !nAcc ? '<button type="button" class="btn small danger" data-pdel>Elimina</button>' : ''}</div>
           <div class="prof-opt"><span class="lbl">Accesso</span><div class="seg small" data-pk="completo">${[[false, 'Limitato'], [true, 'Completo: vede e modifica tutto']].map(([v, l]) => `<button type="button" data-v="${v}" class="${!!p.completo === v ? 'on' : ''}" ${adm ? '' : 'disabled'}>${l}</button>`).join('')}</div></div>
           ${p.completo ? '' : `<div class="prof-opt"><span class="lbl">Pagine</span><div class="pg-chips">${PAGES.map(([pk, l]) => `<label class="pg-chip"><input type="checkbox" data-ppg="${pk}" ${(p.pagine || []).includes(pk) ? 'checked' : ''} ${adm ? '' : 'disabled'}><span>${l}</span></label>`).join('')}</div></div>`}
           ${p.completo ? '' : PROF_OPTS.filter(([pk]) => pk === 'acquisto' ? (p.pagine || []).includes('disponibilita') || (p.pagine || []).includes('ville') : (p.pagine || []).includes('disponibilita')).map(([pk, lbl, opts]) => { const off = pk === 'modifica' && !p.dettaglio; return `<div class="prof-opt"><span class="lbl">${lbl}</span><div class="seg small" data-pk="${pk}">${opts.map(([v, l]) => `<button type="button" data-v="${v}" class="${(off ? false : !!p[pk]) === v ? 'on' : ''}" ${adm && !off ? '' : 'disabled'}>${l}</button>`).join('')}</div>${off ? '<span class="note">Con "Solo ND" le prenotazioni si possono solo vedere.</span>' : ''}</div>`; }).join('')}
           ${p.completo || !(p.pagine || []).includes('ville') ? '' : `<div class="prof-opt"><span class="lbl">Dati della scheda villa nascosti</span><div class="pg-chips ris-chips">${RIS_FIELDS.map(([fk, l]) => `<label class="pg-chip"><input type="checkbox" data-pris="${fk}" ${S.nascostiDi(p).includes(fk) ? 'checked' : ''} ${adm ? '' : 'disabled'}><span>${l}</span></label>`).join('')}</div></div>`}
-        </div>`; }).join('') : '<p class="note">Nessun profilo. Creane uno, poi assegnalo agli account qui sotto.</p>';
+        </div></details>`; }).join('') : '<p class="note">Nessun profilo. Creane uno, poi assegnalo agli account qui sopra.</p>';
     };
     if ($('#prof-card')) {
       drawProf();
+      $('#prof-list').addEventListener('toggle', e => { const d = e.target; if (!d.matches || !d.matches('details.prof-item')) return; if (d.open) profOpen.add(d.dataset.pid); else profOpen.delete(d.dataset.pid); saveOpen(); }, true);
       const upd = (pid, f) => { const pm = JSON.parse(JSON.stringify(profMap())); if (!pm[pid]) return; f(pm[pid]); profSave(pm); };
       $('#prof-list').addEventListener('click', e => {
         const it = e.target.closest('[data-pid]'); if (!it) return; const pid = it.dataset.pid;
@@ -1336,7 +1343,7 @@ window.SDBStore.ready.then(function () {
       });
       const pa = $('#prof-add'); if (pa) pa.addEventListener('submit', e => {
         e.preventDefault(); const nome = $('#prof-name').value.trim(); if (!nome) { $('#prof-name').focus(); return; }
-        const pm = JSON.parse(JSON.stringify(profMap())); const id = S.uid('p');
+        const pm = JSON.parse(JSON.stringify(profMap())); const id = S.uid('p'); profOpen.add(id); saveOpen();
         pm[id] = { nome, completo: false, acquisto: false, dettaglio: true, modifica: false, nascosti: S.CAMPI_NASCOSTI_DEFAULT.slice(), pagine: ['disponibilita', 'ville'], ville: [] };
         $('#prof-name').value = ''; profSave(pm); toast(`Profilo ${nome} creato: ora condividi le ville dalla loro scheda`);
       });

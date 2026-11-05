@@ -806,3 +806,13 @@ input[type="color"].dot::-moz-color-swatch { border: 0; border-radius: 50%; }
 /* assegnazioni: freccia accanto al numero di prenotazioni, gira quando la villa è aperta */
 .as-villa.can-open > summary > span::after { content: ''; display: inline-block; width: 7px; height: 7px; margin-left: 9px; border-right: 1.6px solid currentColor; border-bottom: 1.6px solid currentColor; transform: translateY(-3px) rotate(45deg); transition: transform .15s; }
 .as-villa.can-open[open] > summary > span::after { transform: translateY(1px) rotate(-135deg); }
+/* profili compattabili */
+details.prof-item { padding: 0; gap: 0; }
+.prof-sum { display: flex; align-items: center; gap: 6px 14px; flex-wrap: wrap; padding: 12px 14px; cursor: pointer; list-style: none; }
+.prof-sum::-webkit-details-marker { display: none; }
+.prof-sum b { font-weight: 500; font-size: 15px; }
+.prof-sum .note { flex: 1 1 260px; min-width: 0; }
+.prof-sum .chev { width: 8px; height: 8px; margin-left: auto; border-right: 1.6px solid var(--muted); border-bottom: 1.6px solid var(--muted); transform: translateY(-3px) rotate(45deg); transition: transform .15s; flex: 0 0 auto; }
+details.prof-item[open] > .prof-sum { border-bottom: 1px solid var(--line-soft); }
+details.prof-item[open] > .prof-sum .chev { transform: translateY(1px) rotate(-135deg); }
+.prof-body { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; }
