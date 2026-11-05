@@ -59,7 +59,7 @@
       wipeBookings() { const n = state.bookings.length; state.bookings = []; (state.assegnazioni || []).forEach(a => { a.prenotazioni = []; }); persist(); return Promise.resolve(n); },
       setAssegnazioni(l) { state.assegnazioni = l; persist(); },
       setProfili(m) { state.profili = m; persist(); return Promise.resolve(); },
-      setCampiRiservati() { return Promise.reject(new Error('non disponibile senza i dati online')); },
+      separaCampi() { return Promise.reject(new Error('non disponibile senza i dati online')); },
       replaceAll(data) { state = Object.assign(emptyState(), clone(data)); if (!state.settings) state.settings = window.SDB.defaultSettings(); persist(); },
       mergeAll(data) {
         const d = clone(data);
@@ -133,10 +133,16 @@
          bookings_acquisto/{id}  { villaId, prezzoAcquisto, servizi: { chiave: acquisto } }
          occupazione/{villaId}   { villaId, periodi: [{ from, to, earlyIn, lateOut }] }  per i profili "solo ND"
        Le regole Firestore danno a ogni profilo solo le collezioni e le ville che gli spettano. */
-    const raw = { villas: {}, villasAcq: {}, villasRis: {}, bookings: {}, bookingsAcq: {}, occ: {} };
-    // campi riservati delle schede villa (meta/profili.campiRiservati): stanno in villas_riservati/{id}
-    const riservati = () => (Array.isArray(state.campiRiservati) ? state.campiRiservati : []);
-    const canScheda = () => prof.full || prof.scheda;
+    const raw = { villas: {}, villasAcq: {}, villasRis: {}, villasCampi: {}, bookings: {}, bookingsAcq: {}, occ: {} };
+    /* Campi della scheda che un profilo può non vedere (S.CAMPI_SCHEDA).
+       Con meta/profili.campiSeparati ogni campo sta in villas_campi/{villaId}/campi/{campo} = { villaId, valore }:
+       le regole danno a ogni profilo solo i campi che non ha tra i "nascosti".
+       (villas_riservati / campiRiservati: versione precedente, un blocco unico; viene convertita dal pulsante.) */
+    const CAMPI = window.SDB.CAMPI_SCHEDA.map(c => c[0]);
+    const separati = () => !!state.campiSeparati;
+    const riservati = () => separati() ? CAMPI : (Array.isArray(state.campiRiservati) ? state.campiRiservati : []);
+    const nascosti = () => prof.full ? [] : (prof.nascosti || []);
+    const campoPath = (villaId) => 'villas_campi/' + villaId + '/campi';
     let prof = { full: true, admin: false, none: false, acquisto: true, modifica: true, dettaglio: true, pagine: null, ville: [], id: '' };
     const protetto = () => !!state.protezione;
     const canAcq = () => prof.full || prof.acquisto;
@@ -160,9 +166,10 @@
     // ricompongo ville e prenotazioni per l'app, togliendo quello che il profilo non deve vedere
     function rebuild() {
       state.villas = Object.values(raw.villas).map(v => {
-        const x = clone(v); const a = raw.villasAcq[v.id]; const r = raw.villasRis[v.id];
+        const x = clone(v); const a = raw.villasAcq[v.id]; const r = raw.villasRis[v.id]; const c = raw.villasCampi[v.id];
         if (r) Object.keys(r).forEach(k => { if (k !== 'villaId') x[k] = r[k]; });
-        if (!canScheda()) riservati().forEach(k => { delete x[k]; });
+        if (c) Object.keys(c).forEach(k => { x[k] = c[k]; });
+        nascosti().forEach(k => { delete x[k]; });
         if (a && a.pricing) x.pricing = a.pricing;
         if (x.pricing && (!x.listino || !Object.keys(x.listino).length)) x.listino = listinoOf(x);
         if (!canAcq()) delete x.pricing;
@@ -198,7 +205,10 @@
         if (protetto()) {
           raw.villas[v.id] = villaPub(v); raw.villasAcq[v.id] = villaPriv(v);
           const b = db.batch(); b.set(col('villas_acquisto').doc(v.id), strip(villaPriv(v)));
-          if (riservati().length) { raw.villasRis[v.id] = villaRis(v); b.set(col('villas_riservati').doc(v.id), strip(villaRis(v))); }
+          if (separati()) {
+            const cur = raw.villasCampi[v.id] = raw.villasCampi[v.id] || {};
+            CAMPI.forEach(k => { const val = v[k] === undefined || v[k] === null ? '' : v[k]; if (cur[k] !== val) { cur[k] = val; b.set(col(campoPath(v.id)).doc(k), { villaId: v.id, valore: val }); } });
+          } else if (riservati().length) { raw.villasRis[v.id] = villaRis(v); b.set(col('villas_riservati').doc(v.id), strip(villaRis(v))); }
           b.set(col('villas').doc(v.id), strip(villaPub(v))); b.commit().catch(fail);
         } else { const x = Object.assign(clone(v), { listino: listinoOf(v) }); raw.villas[v.id] = x; col('villas').doc(v.id).set(strip(x)).catch(fail); }
         rebuild(); emit('local');
@@ -207,7 +217,8 @@
         const bk = Object.values(raw.bookings).filter(b => b.villaId === id);
         delete raw.villas[id]; delete raw.villasAcq[id]; delete raw.villasRis[id]; delete raw.occ[id]; bk.forEach(b => { delete raw.bookings[b.id]; delete raw.bookingsAcq[b.id]; });
         const batch = db.batch(); batch.delete(col('villas').doc(id));
-        if (protetto()) { batch.delete(col('villas_acquisto').doc(id)); batch.delete(col('occupazione').doc(id)); if (riservati().length) batch.delete(col('villas_riservati').doc(id)); }
+        if (protetto()) { batch.delete(col('villas_acquisto').doc(id)); batch.delete(col('occupazione').doc(id)); if (separati()) CAMPI.forEach(k => batch.delete(col(campoPath(id)).doc(k))); else if (riservati().length) batch.delete(col('villas_riservati').doc(id)); }
+        delete raw.villasCampi[id];
         bk.forEach(b => { batch.delete(col('bookings').doc(b.id)); if (protetto()) batch.delete(col('bookings_acquisto').doc(b.id)); });
         batch.commit().catch(fail); rebuild(); emit('local');
       },
@@ -245,7 +256,7 @@
       async mergeAll(data) {
         const d = clone(data);
         const ops = [];
-        (d.villas || []).forEach(v => { if (!v || !v.id) return; if (protetto()) { ops.push(['villas_acquisto', v.id, villaPriv(v)]); if (riservati().length) ops.push(['villas_riservati', v.id, villaRis(v)]); ops.push(['villas', v.id, villaPub(v)]); } else ops.push(['villas', v.id, Object.assign(clone(v), { listino: listinoOf(v) })]); });
+        (d.villas || []).forEach(v => { if (!v || !v.id) return; if (protetto()) { ops.push(['villas_acquisto', v.id, villaPriv(v)]); if (separati()) CAMPI.forEach(k => ops.push([campoPath(v.id), k, { villaId: v.id, valore: v[k] === undefined || v[k] === null ? '' : v[k] }])); else if (riservati().length) ops.push(['villas_riservati', v.id, villaRis(v)]); ops.push(['villas', v.id, villaPub(v)]); } else ops.push(['villas', v.id, Object.assign(clone(v), { listino: listinoOf(v) })]); });
         (d.bookings || []).forEach(b => { if (!b || !b.id) return; if (protetto()) { ops.push(['bookings_acquisto', b.id, bookingPriv(b)]); ops.push(['bookings', b.id, bookingPub(b)]); } else ops.push(['bookings', b.id, b]); });
         if (d.settings) ops.push(['meta', 'settings', d.settings]);
         if (typeof d.notes === 'string') ops.push(['meta', 'notes', { text: d.notes }]);
@@ -254,7 +265,7 @@
           ops.slice(i, i + 400).forEach(([c, id, val]) => batch.set(col(c).doc(id), strip(val)));
           await batch.commit();
         }
-        ops.forEach(([c, id, val]) => { if (c === 'villas') raw.villas[id] = val; if (c === 'villas_acquisto') raw.villasAcq[id] = val; if (c === 'villas_riservati') raw.villasRis[id] = val; if (c === 'bookings') raw.bookings[id] = val; if (c === 'bookings_acquisto') raw.bookingsAcq[id] = val; });
+        ops.forEach(([c, id, val]) => { if (c === 'villas') raw.villas[id] = val; if (c === 'villas_acquisto') raw.villasAcq[id] = val; if (c === 'villas_riservati') raw.villasRis[id] = val; if (/^villas_campi\//.test(c)) { const vid = c.split('/')[1]; (raw.villasCampi[vid] = raw.villasCampi[vid] || {})[id] = val.valore; } if (c === 'bookings') raw.bookings[id] = val; if (c === 'bookings_acquisto') raw.bookingsAcq[id] = val; });
         if (d.settings) state.settings = Object.assign(window.SDB.defaultSettings(), d.settings);
         if (typeof d.notes === 'string') state.notes = d.notes;
         rebuild(); reconcileOcc(); emit('local');
@@ -281,19 +292,29 @@
         state.protezione = true; rebuild(); emit('local');
         return { villas: villas.length, bookings: books.length };
       },
-      /* Campi riservati delle schede villa: scrive prima villas_riservati (se le regole non lo permettono si ferma
-         senza togliere nulla), poi riscrive villas senza quei campi, infine salva l'elenco in meta/profili. */
-      async setCampiRiservati(list) {
+      /* Campi della scheda per profilo (una volta sola, dopo aver pubblicato le regole aggiornate):
+         scrive ogni campo in villas_campi/{villaId}/campi/{campo}, poi toglie quei campi da villas,
+         cancella i vecchi villas_riservati e fissa per ogni profilo l'elenco dei campi nascosti.
+         Se le regole non permettono la prima scrittura si ferma senza togliere nulla. */
+      async separaCampi(onStep) {
         if (!protetto()) throw new Error('Attiva prima la protezione dei dati');
-        const run = async ops => { for (let i = 0; i < ops.length; i += 400) { const b = db.batch(); ops.slice(i, i + 400).forEach(([c, id, val]) => b.set(col(c).doc(id), strip(val))); await b.commit(); } };
+        const step = t => { if (onStep) onStep(t); };
+        const run = async ops => { for (let i = 0; i < ops.length; i += 400) { const b = db.batch(); ops.slice(i, i + 400).forEach(([c, id, val]) => val === null ? b.delete(col(c).doc(id)) : b.set(col(c).doc(id), strip(val))); await b.commit(); } };
         const full = Object.values(raw.villas).map(v => { const x = clone(v); const r = raw.villasRis[v.id]; if (r) Object.keys(r).forEach(k => { if (k !== 'villaId') x[k] = r[k]; }); const a = raw.villasAcq[v.id]; if (a && a.pricing) x.pricing = a.pricing; return x; });
-        const prev = state.campiRiservati; state.campiRiservati = list.slice();
+        step('Copia dei campi della scheda…');
+        await run([].concat(...full.map(v => CAMPI.map(k => [campoPath(v.id), k, { villaId: v.id, valore: v[k] === undefined || v[k] === null ? '' : v[k] }]))));
+        const prev = state.campiSeparati; state.campiSeparati = true;
         try {
-          await run(full.map(v => ['villas_riservati', v.id, villaRis(v)]));
+          step('Aggiornamento delle schede…');
           await run(full.map(v => ['villas', v.id, villaPub(v)]));
-          await col('meta').doc('profili').set({ campiRiservati: list.slice() }, { merge: true });
-        } catch (e) { state.campiRiservati = prev; throw e; }
-        full.forEach(v => { raw.villas[v.id] = villaPub(v); raw.villasRis[v.id] = villaRis(v); });
+          const old = Object.keys(raw.villasRis); if (old.length) { step('Pulizia della versione precedente…'); await run(old.map(id => ['villas_riservati', id, null])).catch(() => {}); }
+          const pm = clone(state.profili || {}); Object.keys(pm).forEach(k => { pm[k].nascosti = window.SDB.nascostiDi(pm[k]); delete pm[k].scheda; });
+          await col('meta').doc('profili').set({ campiSeparati: true }, { merge: true });
+          await col('meta').doc('profili').update({ profili: strip(pm) });
+          state.profili = pm;
+        } catch (e) { state.campiSeparati = prev; throw e; }
+        full.forEach(v => { raw.villas[v.id] = villaPub(v); const m = {}; CAMPI.forEach(k => { m[k] = v[k] === undefined || v[k] === null ? '' : v[k]; }); raw.villasCampi[v.id] = m; });
+        raw.villasRis = {};
         rebuild(); emit('local');
         return full.length;
       },
@@ -458,16 +479,16 @@
         const isAdminCached = e => { try { return localStorage.getItem(ADMKEY) === String(e).toLowerCase(); } catch (_) { return false; } };
         const email = String(user.email).toLowerCase();
         let mySig = '';
-        const FULL = { full: true, admin: false, none: false, scheda: true, acquisto: true, modifica: true, dettaglio: true, pagine: null, ville: [], id: '' };
+        const FULL = { full: true, admin: false, none: false, scheda: true, nascosti: [], acquisto: true, modifica: true, dettaglio: true, pagine: null, ville: [], id: '' };
         function profileFrom(acc, pm) {
           const u = ((acc || {}).utenti || []).find(x => String(x.email).toLowerCase() === email);
           if (!u) return Object.assign({}, FULL, { admin: true });
           const pr = u.profilo && ((pm || {}).profili || {})[u.profilo];
           if (pr && pr.completo) return Object.assign({}, FULL, { id: u.profilo, nome: pr.nome || '' });
-          if (pr) return { full: false, admin: false, none: false, id: u.profilo, nome: pr.nome || '', scheda: !!pr.scheda, acquisto: !!pr.acquisto, dettaglio: !!pr.dettaglio, modifica: !!pr.modifica && !!pr.dettaglio, pagine: Array.isArray(pr.pagine) ? pr.pagine : [], ville: Array.isArray(pr.ville) ? pr.ville.slice() : [] };
+          if (pr) return { full: false, admin: false, none: false, id: u.profilo, nome: pr.nome || '', scheda: !!pr.scheda, nascosti: window.SDB.nascostiDi(pr), acquisto: !!pr.acquisto, dettaglio: !!pr.dettaglio, modifica: !!pr.modifica && !!pr.dettaglio, pagine: Array.isArray(pr.pagine) ? pr.pagine : [], ville: Array.isArray(pr.ville) ? pr.ville.slice() : [] };
           return { full: false, admin: false, none: true, id: '', acquisto: false, dettaglio: false, modifica: false, pagine: [], ville: [] };
         }
-        const sigOf = p => JSON.stringify([p.full, p.none, p.id, p.scheda, p.acquisto, p.dettaglio, p.modifica, p.pagine, (p.ville || []).slice().sort()]);
+        const sigOf = p => JSON.stringify([p.full, p.none, p.id, (p.nascosti || []).slice().sort(), p.acquisto, p.dettaglio, p.modifica, p.pagine, (p.ville || []).slice().sort()]);
         async function begin() {
           let acc = {}, pm = {};
           try { const d = await col('meta').doc('accessi').get(); acc = d.exists ? d.data() : {}; } catch (_) {}
@@ -480,7 +501,7 @@
               try { await col('meta').doc('accessi').update({ verificaAmministratore: email }); setAdmin(email); p = Object.assign({}, FULL, { admin: true }); } catch (_) {}
             }
           }
-          prof = p; state.protezione = !!pm.protezione; state.profili = pm.profili || {}; state.accessi = acc; state.campiRiservati = Array.isArray(pm.campiRiservati) ? pm.campiRiservati : null;
+          prof = p; state.protezione = !!pm.protezione; state.profili = pm.profili || {}; state.accessi = acc; state.campiRiservati = Array.isArray(pm.campiRiservati) ? pm.campiRiservati : null; state.campiSeparati = !!pm.campiSeparati;
           // amministratore: aggiungo a meta/accessi i campi letti dalle nuove regole (scontrini, profiloDi), se mancano
           if (p.admin && Array.isArray(acc.utenti) && (!Array.isArray(acc.scontrini) || !acc.profiloDi)) { try { await api.setAccessi(acc.utenti); acc = state.accessi; } catch (_) {} }
           mySig = sigOf(p);
@@ -503,7 +524,8 @@
             onCol('bookings', 'b', true, snap => { raw.bookings = {}; snap.docs.forEach(d => { raw.bookings[d.id] = Object.assign({ id: d.id }, d.data()); }); reconcileOcc(); });
             if (state.protezione) {
               onCol('villas_acquisto', 'va', false, snap => { raw.villasAcq = toMap(snap); });
-              if (state.campiRiservati) onCol('villas_riservati', 'vr', false, snap => { raw.villasRis = toMap(snap); });
+              if (state.campiRiservati && !state.campiSeparati) onCol('villas_riservati', 'vr', false, snap => { raw.villasRis = toMap(snap); });
+              if (state.campiSeparati) { need.add('vc'); db.collectionGroup('campi').onSnapshot(opts, snap => { raw.villasCampi = {}; snap.docs.forEach(d => { const x = d.data(); if (!x || !x.villaId) return; (raw.villasCampi[x.villaId] = raw.villasCampi[x.villaId] || {})[d.id] = x.valore; }); changed(snap.metadata); ready('vc'); }, () => ready('vc')); }
               onCol('bookings_acquisto', 'ba', false, snap => { raw.bookingsAcq = toMap(snap); });
               onCol('occupazione', 'o', false, snap => { raw.occ = toMap(snap); reconcileOcc(); });
             }
@@ -512,7 +534,8 @@
             const bySet = (obj, villaId, snap) => { Object.keys(obj).forEach(k => { if (obj[k].villaId === villaId) delete obj[k]; }); snap.docs.forEach(d => { obj[d.id] = Object.assign({ id: d.id }, d.data()); }); };
             prof.ville.forEach(id => {
               onDoc('villas', id, 'v' + id, d => { if (d.exists) raw.villas[id] = Object.assign({ id }, d.data()); else delete raw.villas[id]; });
-              if (prof.scheda && state.campiRiservati) onDoc('villas_riservati', id, 'vr' + id, d => { if (d.exists) raw.villasRis[id] = d.data(); else delete raw.villasRis[id]; });
+              if (state.campiSeparati) CAMPI.filter(k => !(prof.nascosti || []).includes(k)).forEach(k => onDoc(campoPath(id), k, 'vc' + id + k, d => { const m = raw.villasCampi[id] = raw.villasCampi[id] || {}; if (d.exists) m[k] = (d.data() || {}).valore; else delete m[k]; }));
+              if (prof.scheda && state.campiRiservati && !state.campiSeparati) onDoc('villas_riservati', id, 'vr' + id, d => { if (d.exists) raw.villasRis[id] = d.data(); else delete raw.villasRis[id]; });
               if (prof.acquisto && state.protezione) onDoc('villas_acquisto', id, 'va' + id, d => { if (d.exists) raw.villasAcq[id] = d.data(); else delete raw.villasAcq[id]; });
               if (prof.dettaglio || !state.protezione) onQuery('bookings', id, 'b' + id, snap => bySet(raw.bookings, id, snap));
               if (prof.dettaglio && prof.acquisto && state.protezione) onQuery('bookings_acquisto', id, 'ba' + id, snap => { Object.keys(raw.bookingsAcq).forEach(k => { if (raw.bookingsAcq[k].villaId === id) delete raw.bookingsAcq[k]; }); snap.docs.forEach(d => { raw.bookingsAcq[d.id] = d.data(); }); });
@@ -529,7 +552,7 @@
           let accNow = state.accessi, pmNow = { profili: state.profili, protezione: state.protezione };
           const recheck = () => { if (!started) return; const p = profileFrom(accNow, pmNow); const keep = prof.admin && p.none; if (!keep && sigOf(p) !== mySig) location.reload(); };
           onDoc('meta', 'accessi', 'ma', d => { accNow = d.exists ? d.data() : {}; state.accessi = accNow; recheck(); });
-          onDoc('meta', 'profili', 'mf', d => { pmNow = d.exists ? d.data() : {}; state.profili = pmNow.profili || {}; if (!!pmNow.protezione !== !!state.protezione || JSON.stringify(pmNow.campiRiservati || null) !== JSON.stringify(state.campiRiservati || null)) { if (started) location.reload(); } recheck(); });
+          onDoc('meta', 'profili', 'mf', d => { pmNow = d.exists ? d.data() : {}; state.profili = pmNow.profili || {}; if (!!pmNow.protezione !== !!state.protezione || JSON.stringify(pmNow.campiRiservati || null) !== JSON.stringify(state.campiRiservati || null) || !!pmNow.campiSeparati !== !!state.campiSeparati) { if (started) location.reload(); } recheck(); });
           maybeStart();
         }
       });

@@ -5,7 +5,7 @@ rules_version = '2';
 //
 // Profili utente (meta/profili.profili[id]) assegnati agli account con meta/accessi.profiloDi[email]:
 //   completo  = vede e modifica tutto
-//   scheda    = vede i campi riservati delle schede villa (villas_riservati)
+//   nascosti  = campi della scheda villa che il profilo non vede (villas_campi)
 //   ville     = ville condivise con il profilo
 //   acquisto  = vede i prezzi di acquisto (villas_acquisto, bookings_acquisto)
 //   dettaglio = vede le prenotazioni (altrimenti solo occupazione/{villaId}, cioè periodi ND)
@@ -46,10 +46,19 @@ service cloud.firestore {
       allow read: if villaVisibile(id) || appScontrini();
       allow write: if completo();
     }
-    // campi riservati delle schede villa (meta/profili.campiRiservati): solo con "Dati schede villa: Completa"
+    // versione precedente dei campi riservati (un blocco per villa): resta finché non si aggiorna la protezione
     match /villas_riservati/{id} {
       allow read: if completo() || (puo('scheda') && villaVisibile(id));
       allow write: if completo();
+    }
+    // campi della scheda villa, uno per documento: ogni profilo legge solo quelli che non ha tra i "nascosti"
+    match /villas_campi/{villaId}/campi/{campo} {
+      allow read: if completo() || (villaVisibile(villaId) && !(campo in profilo().get('nascosti', [])));
+      allow write: if completo();
+    }
+    // lettura di tutti i campi in una volta (accesso completo)
+    match /{percorso=**}/campi/{campo} {
+      allow read: if completo();
     }
     // prezzi di acquisto delle ville
     match /villas_acquisto/{id} {

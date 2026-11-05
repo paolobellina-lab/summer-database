@@ -866,10 +866,8 @@ window.SDBStore.ready.then(function () {
     link: [['linkSito', 'Link sito'], ['mediaProprietario', 'Media proprietario'], ['googleMaps', 'Google Maps'], ['youtube', 'Video YouTube'], ['vimeo', 'Video Vimeo'], ['psw', 'Password']]
   };
   let villaTab = 'settimanale';
-  // campi della scheda che si possono riservare ai profili con "Dati schede villa: Completa"
-  const RIS_FIELDS = [['nomeReale', 'Nome reale'], ['proprietario', 'Proprietario'], ['realEstate', 'Real estate'], ['indirizzo', 'Indirizzo'], ['seafront', 'Seafront – Seaview'], ['servizi', 'Servizi inclusi'], ['note', 'Note'], ['linkSito', 'Link sito'], ['mediaProprietario', 'Media proprietario'], ['googleMaps', 'Google Maps'], ['youtube', 'Video YouTube'], ['vimeo', 'Video Vimeo'], ['psw', 'Password']];
-  const RIS_DEFAULT = ['nomeReale', 'proprietario', 'realEstate', 'indirizzo', 'note', 'mediaProprietario', 'googleMaps', 'psw'];
-  const hiddenField = k => !isFull() && !ME().scheda && (data().campiRiservati || RIS_DEFAULT).includes(k);
+  const RIS_FIELDS = S.CAMPI_SCHEDA;
+  const hiddenField = k => !isFull() && (ME().nascosti || S.CAMPI_NASCOSTI_DEFAULT).includes(k);
 
   function viewVilla(id) {
     const v0 = villaById(id);
@@ -1174,7 +1172,6 @@ window.SDBStore.ready.then(function () {
         ${isAdmin() ? '<form class="loc-new" id="prof-add" autocomplete="off"><input id="prof-name" placeholder="Nome del profilo (es. Agenti esterni)"><button class="btn small">Aggiungi profilo</button></form>' : ''}
         <div id="prof-msg"></div>
       </section>
-      ${isAdmin() ? '<section class="card" id="ris-card"></section>' : ''}
       <section class="card" id="acc-card"><h2>Account autorizzati</h2>
         <p class="note">Chi è in questo elenco può accedere con il proprio account Google. Scegli a quale app può entrare e, per Summer Database, il suo profilo. Senza profilo l'account non vede nessuna villa. Solo gli amministratori possono modificare l'elenco.</p>
         <div id="acc-list"></div>
@@ -1302,7 +1299,6 @@ window.SDBStore.ready.then(function () {
     }
     // ---- profili utente (meta/profili) ----
     const PROF_OPTS = [
-      ['scheda', 'Dati schede villa', [[false, 'Limitata'], [true, 'Completa']]],
       ['acquisto', 'Prezzi', [[false, 'Solo listino di vendita'], [true, 'Anche prezzi di acquisto']]],
       ['dettaglio', 'Prenotazioni nel calendario', [[true, 'Con tutti i dettagli'], [false, 'Solo ND, senza dettagli']]],
       ['modifica', 'Prenotazioni', [[false, 'Solo visualizzare'], [true, 'Aggiungere e modificare']]]
@@ -1318,6 +1314,7 @@ window.SDBStore.ready.then(function () {
             ${adm && !nAcc ? '<button type="button" class="btn small danger" data-pdel>Elimina</button>' : ''}</div>
           <div class="prof-opt"><span class="lbl">Accesso</span><div class="seg small" data-pk="completo">${[[false, 'Limitato'], [true, 'Completo: vede e modifica tutto']].map(([v, l]) => `<button type="button" data-v="${v}" class="${!!p.completo === v ? 'on' : ''}" ${adm ? '' : 'disabled'}>${l}</button>`).join('')}</div></div>
           ${p.completo ? '' : PROF_OPTS.map(([pk, lbl, opts]) => { const off = pk === 'modifica' && !p.dettaglio; return `<div class="prof-opt"><span class="lbl">${lbl}</span><div class="seg small" data-pk="${pk}">${opts.map(([v, l]) => `<button type="button" data-v="${v}" class="${(off ? false : !!p[pk]) === v ? 'on' : ''}" ${adm && !off ? '' : 'disabled'}>${l}</button>`).join('')}</div>${off ? '<span class="note">Con "Solo ND" le prenotazioni si possono solo vedere.</span>' : ''}</div>`; }).join('')}
+          ${p.completo ? '' : `<div class="prof-opt"><span class="lbl">Campi della scheda villa nascosti</span><div class="pg-chips ris-chips">${RIS_FIELDS.map(([fk, l]) => `<label class="pg-chip"><input type="checkbox" data-pris="${fk}" ${S.nascostiDi(p).includes(fk) ? 'checked' : ''} ${adm ? '' : 'disabled'}><span>${l}</span></label>`).join('')}</div></div>`}
           ${p.completo ? '' : `<div class="prof-opt"><span class="lbl">Pagine</span><div class="pg-chips">${PAGES.map(([pk, l]) => `<label class="pg-chip"><input type="checkbox" data-ppg="${pk}" ${(p.pagine || []).includes(pk) ? 'checked' : ''} ${adm ? '' : 'disabled'}><span>${l}</span></label>`).join('')}</div></div>`}
         </div>`; }).join('') : '<p class="note">Nessun profilo. Creane uno, poi assegnalo agli account qui sotto.</p>';
     };
@@ -1331,38 +1328,34 @@ window.SDBStore.ready.then(function () {
       });
       $('#prof-list').addEventListener('change', e => {
         const it = e.target.closest('[data-pid]'); if (!it) return; const pid = it.dataset.pid;
+        const rc = e.target.closest('[data-pris]'); if (rc) { upd(pid, p => { const s0 = new Set(S.nascostiDi(p)); if (rc.checked) s0.add(rc.dataset.pris); else s0.delete(rc.dataset.pris); p.nascosti = RIS_FIELDS.map(f => f[0]).filter(k => s0.has(k)); delete p.scheda; }); return; }
         const cb = e.target.closest('[data-ppg]'); if (cb) { upd(pid, p => { const s0 = new Set(p.pagine || []); if (cb.checked) s0.add(cb.dataset.ppg); else s0.delete(cb.dataset.ppg); p.pagine = PAGES.map(x => x[0]).filter(k => s0.has(k)); }); return; }
         const nm = e.target.closest('[data-pn]'); if (nm && nm.value.trim()) upd(pid, p => { p.nome = nm.value.trim(); });
       });
       const pa = $('#prof-add'); if (pa) pa.addEventListener('submit', e => {
         e.preventDefault(); const nome = $('#prof-name').value.trim(); if (!nome) { $('#prof-name').focus(); return; }
         const pm = JSON.parse(JSON.stringify(profMap())); const id = S.uid('p');
-        pm[id] = { nome, completo: false, acquisto: false, dettaglio: true, modifica: false, pagine: ['disponibilita', 'ville'], ville: [] };
+        pm[id] = { nome, completo: false, acquisto: false, dettaglio: true, modifica: false, nascosti: S.CAMPI_NASCOSTI_DEFAULT.slice(), pagine: ['disponibilita', 'ville'], ville: [] };
         $('#prof-name').value = ''; profSave(pm); toast(`Profilo ${nome} creato: ora condividi le ville dalla loro scheda`);
       });
     }
-    // ---- campi riservati delle schede villa (meta/profili.campiRiservati) ----
-    let risDraft = null;
-    const drawRis = () => {
-      const box = $('#ris-card'); if (!box) return;
-      const applied = data().campiRiservati; const sel = risDraft || applied || RIS_DEFAULT.slice();
-      const changed = !applied || JSON.stringify(sel.slice().sort()) !== JSON.stringify(applied.slice().sort());
-      box.innerHTML = `<h2>Campi riservati delle schede villa</h2>
-        <p class="note">I profili con "Dati schede villa: Limitata" non ricevono questi campi: nella scheda non compaiono. Con "Completa" li vedono tutti.</p>
-        <div class="pg-chips">${RIS_FIELDS.map(([k, l]) => `<label class="pg-chip"><input type="checkbox" data-ris="${k}" ${sel.includes(k) ? 'checked' : ''}><span>${l}</span></label>`).join('')}</div>
-        <div class="ris-foot">${applied && !changed ? '<span class="note">Applicati.</span>' : `<span class="note">${applied ? 'Modifiche da applicare.' : 'Non ancora applicati: per ora i profili limitati li ricevono ancora.'}</span><button type="button" class="btn small primary" id="ris-go"${data().protezione ? '' : ' disabled title="Attiva prima la protezione dei dati"'}>Applica</button>`}</div><div id="ris-msg"></div>`;
-      const go = $('#ris-go'); if (go) go.onclick = async () => {
-        go.disabled = true; $('#ris-msg').innerHTML = '<p class="note">Aggiornamento delle schede…</p>';
-        try { const n = await store.setCampiRiservati(sel); risDraft = null; toast(`Campi riservati applicati a ${n} ville`); drawRis(); }
-        catch (x) { go.disabled = false; $('#ris-msg').innerHTML = `<div class="warn err">${x && x.code === 'permission-denied' ? 'Le regole di Firestore aggiornate non sono ancora pubblicate: pubblicale e riprova. Non è stato modificato nulla.' : 'Operazione non riuscita: ' + esc(x.message || x)}</div>`; }
-      };
-    };
-    drawRis();
-    if ($('#ris-card')) $('#ris-card').addEventListener('change', e => { const cb = e.target.closest('[data-ris]'); if (!cb) return; const cur = new Set(risDraft || data().campiRiservati || RIS_DEFAULT); if (cb.checked) cur.add(cb.dataset.ris); else cur.delete(cb.dataset.ris); risDraft = RIS_FIELDS.map(f => f[0]).filter(k => cur.has(k)); drawRis(); });
     // ---- protezione dei dati nel database (una volta sola) ----
     const drawProt = () => {
       const box = $('#prot-card'); if (!box) return;
-      if (data().protezione) { box.innerHTML = `<h2>Protezione dei dati</h2><div class="warn ok">Attiva. Prezzi di acquisto e dettagli delle prenotazioni stanno in archivi separati: ogni profilo riceve solo le ville e i dati che gli spettano.</div>`; return; }
+      if (data().protezione && data().campiSeparati) { box.className = 'card'; box.innerHTML = `<h2>Protezione dei dati</h2><div class="warn ok">Attiva. Prezzi di acquisto, dettagli delle prenotazioni e campi delle schede stanno in archivi separati: ogni profilo riceve solo le ville e i dati che gli spettano.</div>`; return; }
+      if (data().protezione) {
+        box.className = 'card danger-card';
+        box.innerHTML = `<h2>Protezione dei campi delle schede: da aggiornare</h2>
+          <p class="note">Per scegliere i campi nascosti profilo per profilo, ogni campo della scheda va salvato a parte. Una volta sola:</p>
+          <ol class="prot-steps"><li>Pubblica le <b>regole di Firestore aggiornate</b>.</li><li>Premi <b>Aggiorna la protezione</b>. Le schede restano identiche; finché non lo fai, i campi nascosti si nascondono solo sullo schermo.</li></ol>
+          <div><button type="button" class="btn danger solid" id="sep-go">Aggiorna la protezione</button></div><div id="sep-msg"></div>`;
+        $('#sep-go').onclick = async () => {
+          const m = $('#sep-msg'); const go = $('#sep-go'); go.disabled = true;
+          try { const n = await store.separaCampi(t => { m.innerHTML = `<p class="note">${esc(t)}</p>`; }); m.innerHTML = `<div class="warn ok">Fatto: ${n} schede aggiornate. L'app si ricarica…</div>`; setTimeout(() => location.reload(), 1500); }
+          catch (x) { go.disabled = false; m.innerHTML = `<div class="warn err">${x && x.code === 'permission-denied' ? 'Le regole di Firestore aggiornate non sono ancora pubblicate: pubblicale e riprova. Non è stato modificato nulla.' : 'Operazione non riuscita: ' + esc(x.message || x)}</div>`; }
+        };
+        return;
+      }
       box.innerHTML = `<h2>Protezione dei dati: da attivare</h2>
         <p class="note">Finché non è attiva, i profili limitano solo quello che si vede nell'app. Per attivarla:</p>
         <ol class="prot-steps"><li>Pubblica le <b>nuove regole di Firestore</b> nella console Firebase (Firestore → Regole).</li><li>Torna qui e premi <b>Attiva la protezione</b>. L'app scarica prima un backup completo, poi sposta prezzi di acquisto e dettagli riservati negli archivi protetti. Ville, prezzi e prenotazioni restano gli stessi.</li></ol>
