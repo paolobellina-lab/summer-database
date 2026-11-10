@@ -55,5 +55,8 @@ Elenco condiviso in `meta/settings` → `localita` (maiuscolo). Nella scheda vil
 ## Pulizia di fine stagione
 In Impostazioni, protetta da password (impronta SHA-256 con sale in `meta/sicurezza`, mai in chiaro): "Cancella tutte le prenotazioni" (`bookings` + prenotazioni assegnate agli account) e "Cancella tutte le note spese" (`scontrini` + `scontrini_foto`). Prima scarica un archivio JSON. Non tocca mai `villas` (schede e listini), `villas_foto`, `villas_thumb`, `meta/preferiti`, `meta/settings`.
 
+## Backup
+`buildBackup` in `app.js`: JSON con `data()` completo (ville con listini, prenotazioni con acquisto, impostazioni, profili, account) e, con accesso completo, `scontrini` senza foto solo come archivio (l'importazione non li tocca). "Backup automatico su questo dispositivo" (Impostazioni → Dati e backup, `localStorage`): all'apertura dell'app, una volta al giorno, scarica il file nei Download. Niente scrittura in cartelle scelte (File System Access): un sito con quel permesso potrebbe anche sovrascrivere i backup.
+
 ## Dati
 Nessun dato reale nel repository: `seed.js`, file Excel e backup sono in `.gitignore`.

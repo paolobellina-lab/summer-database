@@ -127,6 +127,37 @@ window.SDBStore.ready.then(function () {
   const isAdmin = () => store.mode !== 'online' || !!ME().admin;
   const allowedPages = () => isFull() ? PAGES.map(p => p[0]) : PAGES.map(p => p[0]).filter(k => (ME().pagine || []).includes(k));
   const canSee = p => store.mode !== 'online' || allowedPages().includes(p);
+
+  /* ---------- Backup ----------
+     File JSON con ville (listini completi), prenotazioni, impostazioni, appunti, profili e account.
+     Con accesso completo comprende anche le note spese dell'app Scontrini, senza foto, solo come archivio:
+     l'importazione non le rimette mai (vincolo 1 di CLAUDE.md).
+     Backup automatico: attivabile per dispositivo; quando l'app si apre, se oggi non è ancora stato fatto,
+     scarica il file nella cartella Download (un sito può solo aggiungere file lì, non cancellarli). */
+  const oggiLocale = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+  async function buildBackup() {
+    const out = Object.assign({ exportedAt: new Date().toISOString(), app: 'Summer Database' }, JSON.parse(JSON.stringify(data())));
+    if (store.mode === 'online' && isFull() && store.listScontriniArchivio) {
+      try { out.scontrini = await store.listScontriniArchivio(); out.notaScontrini = 'Note spese dell\'app Scontrini, senza foto: solo archivio, non vengono importate.'; } catch (_) {}
+    }
+    return JSON.stringify(out, null, 1);
+  }
+  function downloadText(name, txt) {
+    const blob = new Blob([txt], { type: 'application/json' }); const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+  }
+  const AUTOKEY = 'summer-db-backup-auto', LASTKEY = 'summer-db-backup-ultimo';
+  const lsGet = k => { try { return localStorage.getItem(k); } catch (_) { return null; } };
+  const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (_) {} };
+  async function autoBackup(force) {
+    if (store.mode !== 'online' || !isFull()) return false;
+    if (!force && (lsGet(AUTOKEY) !== 'si' || lsGet(LASTKEY) === oggiLocale())) return false;
+    const txt = await buildBackup();
+    downloadText('summer-database-backup-' + oggiLocale() + '.json', txt);
+    lsSet(LASTKEY, oggiLocale());
+    return true;
+  }
   const spese = { list: [], ready: false, error: null };
   let spesePage = null; const speseHooks = new Set();
   const speseChanged = () => { if (spesePage) spesePage.render(); speseHooks.forEach(f => { try { f(); } catch (_) {} }); };
@@ -1210,7 +1241,12 @@ window.SDBStore.ready.then(function () {
       <section class="card"><h2>Valori iniziali per una nuova villa</h2><div class="tbl-wrap"><table class="prices ptable"><thead><tr><th>Tariffa</th><th>Spese servizi €</th><th>Arrotonda a €</th><th>Margine %</th></tr></thead><tbody>
         ${S.TARIFFE.map(x => `<tr><td class="per">${x.label}</td><td><input data-d="${x.key}" data-k="spese" value="${esc(st.defaults[x.key].spese)}"></td><td><input data-d="${x.key}" data-k="arrotonda" value="${esc(st.defaults[x.key].arrotonda)}"></td><td><input data-d="${x.key}" data-k="margine" value="${esc(Math.round(st.defaults[x.key].margine * 1000) / 10)}"></td></tr>`).join('')}
       </tbody></table></div></section>`)}
-      ${pg('dati', `<section class="card"><h2>Backup e dati</h2>
+      ${pg('dati', `${store.mode === 'online' && isFull() ? `<section class="card" id="ab-card"><h2>Backup automatico su questo dispositivo</h2>
+        <p class="note">Ogni giorno, la prima volta che apri l'app, scarica da solo un backup completo nella cartella <b>Download</b>: ville con listini di acquisto e vendita, prenotazioni, impostazioni, profili e note spese (senza foto). Una volta a settimana copia i file su una chiavetta e staccala: una copia scollegata resta al sicuro anche se Firebase venisse cancellato.</p>
+        <label class="flag ab-flag"><input type="checkbox" id="ab-on" ${lsGet(AUTOKEY) === 'si' ? 'checked' : ''}><span><b>Scarica un backup ogni giorno</b><small>Vale solo per questo computer o telefono. Consigliato sul computer.</small></span></label>
+        <p class="note" id="ab-last">${lsGet(LASTKEY) ? 'Ultimo backup automatico su questo dispositivo: ' + esc(S.dmy(lsGet(LASTKEY))) + '.' : 'Nessun backup automatico ancora su questo dispositivo.'}</p>
+      </section>` : ''}
+      <section class="card"><h2>Backup e dati</h2>
         <p class="note">${store.mode === 'online' ? `Dati online, condivisi tra gli account autorizzati. Accesso come <b>${esc(store.user || '')}</b>. Esporta comunque un backup ogni tanto.` : 'I dati sono salvati solo in questo browser. Esporta un backup ogni tanto.'}</p>
         <div style="display:flex;flex-wrap:wrap;gap:8px">
           <button class="btn" id="s-export">Esporta backup (.json)</button>
@@ -1540,17 +1576,19 @@ window.SDBStore.ready.then(function () {
     };
     $('#w-book').addEventListener('click', () => askWipe('book'));
     if ($('#w-sc')) $('#w-sc').addEventListener('click', () => askWipe('sc'));
-    const backup = () => JSON.stringify(Object.assign({ exportedAt: new Date().toISOString() }, data()), null, 1);
-    $('#s-export').addEventListener('click', () => {
+    if ($('#ab-on')) $('#ab-on').addEventListener('change', e => {
+      lsSet(AUTOKEY, e.target.checked ? 'si' : 'no');
+      if (e.target.checked) autoBackup(true).then(() => { toast('Backup automatico attivo: primo backup scaricato'); const l = $('#ab-last'); if (l) l.textContent = 'Ultimo backup automatico su questo dispositivo: ' + S.dmy(oggiLocale()) + '.'; }, () => toast('Backup non riuscito'));
+      else toast('Backup automatico disattivato su questo dispositivo');
+    });
+    $('#s-export').addEventListener('click', async () => {
       try {
-        const blob = new Blob([backup()], { type: 'application/json' }); const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob); a.download = 'summer-database-backup-' + new Date().toISOString().slice(0, 10) + '.json';
-        document.body.appendChild(a); a.click(); a.remove();
+        downloadText('summer-database-backup-' + oggiLocale() + '.json', await buildBackup());
         msg('<p class="note">Se il download non parte, usa “Copia backup negli appunti” e incolla il testo in un file.</p>');
       } catch (e) { msg('<p class="note">Il download non è disponibile qui: usa “Copia backup negli appunti”.</p>'); }
     });
-    $('#s-copy').addEventListener('click', () => {
-      const txt = backup();
+    $('#s-copy').addEventListener('click', async () => {
+      const txt = await buildBackup();
       navigator.clipboard && navigator.clipboard.writeText(txt).then(() => toast('Backup copiato'), () => {
         msg(`<textarea readonly rows="6" id="s-bk">${esc(txt)}</textarea>`); const ta = $('#s-bk'); ta.focus(); ta.select();
       });
@@ -1576,4 +1614,6 @@ window.SDBStore.ready.then(function () {
 
   window.addEventListener('resize', (() => { let t; return () => { clearTimeout(t); t = setTimeout(() => { if ($('#cal')) drawCalendar(); }, 200); }; })());
   route();
+  // backup automatico del giorno (se attivo su questo dispositivo)
+  setTimeout(() => { autoBackup().then(ok => { if (ok) toast('Backup del giorno scaricato nella cartella Download'); }, () => {}); }, 2500);
 });
