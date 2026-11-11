@@ -961,6 +961,7 @@ window.SDBStore.ready.then(function () {
       <div class="cols2">
         <section class="card"><h2>Anagrafica</h2><div class="grid wide">${FIELDS.anagrafica.filter(([k]) => !hiddenField(k)).map(([k, l]) => k === 'location' ? locSelect() : inp(k, l)).join('')}</div></section>
         <section class="card"><h2>Servizi e note</h2>
+          <label class="field"><span>Descrizione (per offerte e clienti)</span><textarea data-k="descrizione" rows="5">${esc(v.descrizione || '')}</textarea></label>
           ${hiddenField('servizi') ? '' : `<label class="field"><span>Servizi inclusi</span><textarea data-k="servizi" rows="4">${esc(v.servizi)}</textarea></label>`}
           ${hiddenField('note') ? '' : `<label class="field"><span>Note</span><textarea data-k="note" rows="4">${esc(v.note)}</textarea></label>`}${hiddenField('servizi') && hiddenField('note') ? '<p class="note">Riservati.</p>' : ''}</section>
       </div>
@@ -1272,6 +1273,7 @@ window.SDBStore.ready.then(function () {
         <label class="flag ab-flag"><input type="checkbox" id="ab-on" ${lsGet(AUTOKEY) === 'si' ? 'checked' : ''}><span><b>Scarica un backup ogni giorno</b><small>Vale solo per questo computer o telefono. Consigliato sul computer.</small></span></label>
         <p class="note" id="ab-last">${lsGet(LASTKEY) ? 'Ultimo backup automatico su questo dispositivo: ' + esc(S.dmy(lsGet(LASTKEY))) + '.' : 'Nessun backup automatico ancora su questo dispositivo.'}</p>
       </section>` : ''}
+      ${store.mode === 'online' && isFull() && window.SDBImportaSito ? '<section class="card" id="is-card"></section>' : ''}
       <section class="card"><h2>Backup e dati</h2>
         <p class="note">${store.mode === 'online' ? `Dati online, condivisi tra gli account autorizzati. Accesso come <b>${esc(store.user || '')}</b>. Esporta comunque un backup ogni tanto.` : 'I dati sono salvati solo in questo browser. Esporta un backup ogni tanto.'}</p>
         <div style="display:flex;flex-wrap:wrap;gap:8px">
@@ -1612,6 +1614,7 @@ window.SDBStore.ready.then(function () {
     };
     $('#w-book').addEventListener('click', () => askWipe('book'));
     if ($('#w-sc')) $('#w-sc').addEventListener('click', () => askWipe('sc'));
+    if ($('#is-card')) window.SDBImportaSito.mount($('#is-card'), { data, store, esc, $, $$, toast, compressImage, coverOf: id => (thumbs.map[id] || {}).fotoId || null });
     if ($('#ab-on')) $('#ab-on').addEventListener('change', e => {
       lsSet(AUTOKEY, e.target.checked ? 'si' : 'no');
       if (e.target.checked) autoBackup(true).then(() => { toast('Backup automatico attivo: primo backup scaricato'); const l = $('#ab-last'); if (l) l.textContent = 'Ultimo backup automatico su questo dispositivo: ' + S.dmy(oggiLocale()) + '.'; }, () => toast('Backup non riuscito'));

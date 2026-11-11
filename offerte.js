@@ -171,6 +171,7 @@
           if (fs[0]) B.push({ img: { bytes: X.dataUrlBytes(fs[0].url).bytes, w: fs[0].w, h: fs[0].h, width: 7800 } });
           const rest = fs.slice(1); for (let k = 0; k < rest.length; k += 3) { const row = rest.slice(k, k + 3).map(f => ({ bytes: X.dataUrlBytes(f.url).bytes, w: f.w, h: f.h })); while (row.length < 3) row.push(null); B.push({ imgs: row }); }
           const info = infoVilla(v); if (info.length) B.push({ kv: info });
+          if (vis(v, 'descrizione')) B.push({ p: String(v.descrizione) });
           if (vis(v, 'servizi')) B.push({ h2: l.servizi }, { p: String(v.servizi) });
           if (vis(v, 'linkSito')) B.push({ p: `${l.sito}: ${v.linkSito}`, small: true });
           const pr = prezzoDi(v); B.push({ price: [l.prezzo, pr === null ? l.richiesta : euro(pr)] });
@@ -199,6 +200,7 @@
         if (fs.length > 1) h += `<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%;max-width:600px"><tr>${fs.slice(1, 5).map(f => `<td style="padding:0 6px 6px 0;vertical-align:top"><img src="${f.url}" alt="" width="${Math.floor(600 / Math.min(4, fs.length - 1)) - 6}" style="width:100%;height:auto;display:block"></td>`).join('')}</tr></table>`;
         const info = infoVilla(v);
         if (info.length) h += `<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:8px 0;font-size:14px">${info.map(([k, x]) => `<tr><td style="padding:3px 18px 3px 0;color:#6b6b6b">${esc(k)}</td><td style="padding:3px 0">${esc(x)}</td></tr>`).join('')}</table>`;
+        if (vis(v, 'descrizione')) h += `<p style="margin:8px 0;font-size:14px;line-height:1.5">${esc(v.descrizione).replace(/\n/g, '<br>')}</p>`;
         if (vis(v, 'servizi')) h += `<p style="margin:8px 0 4px;color:${gold};font-size:12px;font-weight:bold;letter-spacing:1px">${esc(l.servizi.toUpperCase())}</p><p style="margin:0 0 8px;font-size:14px">${esc(v.servizi).replace(/\n/g, '<br>')}</p>`;
         h += `<p style="margin:10px 0 0;padding:10px 12px;background:#fbf8f2;border-top:2px solid ${gold};border-bottom:2px solid ${gold};color:${navy};font-size:15px"><b>${esc(l.prezzo)}: ${esc(pr === null ? l.richiesta : euro(pr))}</b></p>`;
         if (vis(v, 'linkSito')) h += `<p style="margin:6px 0 0;font-size:13px"><a href="${esc(v.linkSito)}" style="color:${navy}">${esc(l.sito)}</a></p>`;
