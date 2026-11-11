@@ -57,7 +57,8 @@
       <div class="head"><div><h1>Offerte</h1><div class="sub">Scegli il periodo e le ville: prepari un documento Word o una mail per il cliente, con foto, informazioni e prezzo</div></div></div>
       <section class="card"><h2>1 · Periodo</h2>
         <div class="seg off-tar" id="off-tar">${S.TARIFFE.map(t => `<button type="button" data-t="${t.key}" class="${o.tariff === t.key ? 'on' : ''}">${t.label}</button>`).join('')}</div>
-        <label class="field"><span>Periodo</span><select id="off-per"></select></label>
+        <div class="off-pernav"><button type="button" class="btn" id="off-prev" aria-label="Periodo precedente">‹</button><div class="off-persel" id="off-persel"></div><button type="button" class="btn" id="off-next" aria-label="Periodo successivo">›</button></div>
+        <div class="off-cal" id="off-cal"></div>
         <p class="note">Le ville con giorno di cambio o periodi diversi mostrano le loro date esatte.</p>
       </section>
       <section class="card"><h2>2 · Ville <span class="off-count" id="off-count"></span></h2>
@@ -85,10 +86,30 @@
     </div></div>`;
 
     // periodi della tariffa (date del giorno di cambio predefinito)
+    const iso = t => new Date(t).toISOString().slice(0, 10);
+    const MESI = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'];
     const drawPer = () => {
       const ps = baseP(); if (o.idx >= ps.length) o.idx = 0;
-      $('#off-per').innerHTML = ps.map((p, i) => `<option value="${i}" ${i === o.idx ? 'selected' : ''}>${esc(o.tariff === 'settimanale' ? p.label : p.label + ' · ' + S.dm(p.from) + ' → ' + S.dm(p.to))}</option>`).join('');
+      const p = ps[o.idx];
+      $('#off-persel').innerHTML = p ? `<b>${esc(o.tariff === 'settimanale' ? 'Settimana ' + (o.idx + 1) : p.label)}</b><span>${esc(S.dm(p.from) + ' → ' + S.dm(p.to))}</span>` : '<span class="note">Nessun periodo</span>';
+      $('#off-prev').disabled = o.idx <= 0; $('#off-next').disabled = o.idx >= ps.length - 1;
+      if (!ps.length) { $('#off-cal').innerHTML = ''; return; }
+      const idxOf = d => { for (let i = 0; i < ps.length; i++) if (ps[i].from <= d && d < ps[i].to) return i; return -1; };
+      const first = new Date(ps[0].from + 'T00:00:00Z'), last = new Date(ps[ps.length - 1].to + 'T00:00:00Z');
+      let html = '';
+      for (let y = first.getUTCFullYear(), m = first.getUTCMonth(); y < last.getUTCFullYear() || (y === last.getUTCFullYear() && m <= last.getUTCMonth()); m === 11 ? (y++, m = 0) : m++) {
+        const start = Date.UTC(y, m, 1), n = new Date(Date.UTC(y, m + 1, 0)).getUTCDate(), lead = (new Date(start).getUTCDay() + 6) % 7;
+        let cells = '<i></i>'.repeat(lead);
+        for (let k = 0; k < n; k++) {
+          const d = iso(start + k * 864e5), i = idxOf(d), sel = i === o.idx, out = p && d === p.to;
+          const cls = ['d', i < 0 ? 'off' : 'p' + (i % 2), sel ? 'sel' : '', sel && d === p.from ? 'first' : '', out ? 'out' : ''].filter(Boolean).join(' ');
+          cells += i < 0 && !out ? `<span class="${cls}">${k + 1}</span>` : `<button type="button" class="${cls}" data-i="${i < 0 ? o.idx : i}" title="${esc(i < 0 ? '' : ps[i].label)}">${k + 1}</button>`;
+        }
+        html += `<div class="off-month"><div class="off-mname">${MESI[m]} ${y}</div><div class="off-wd">${['L', 'M', 'M', 'G', 'V', 'S', 'D'].map(x => `<i>${x}</i>`).join('')}</div><div class="off-days">${cells}</div></div>`;
+      }
+      $('#off-cal').innerHTML = html;
     };
+    const setIdx = i => { const ps = baseP(); if (i < 0 || i >= ps.length || i === o.idx) return; o.idx = i; o.prezzi = {}; drawPer(); drawList(); drawTexts(); save(); };
     const drawList = () => {
       const q = (o.q || '').trim().toLowerCase();
       const list = ville().filter(v => !q || `${v.name} ${v.location || ''}`.toLowerCase().includes(q)).map(v => ({ v, s: stato(v), p: perOf(v), pr: listinoOf(v) }))
@@ -112,7 +133,9 @@
     drawPer(); drawList(); drawTexts();
 
     $('#off-tar').addEventListener('click', e => { const b = e.target.closest('[data-t]'); if (!b) return; o.tariff = b.dataset.t; o.idx = 0; o.prezzi = {}; $$('#off-tar button').forEach(x => x.classList.toggle('on', x === b)); drawPer(); drawList(); drawTexts(); save(); });
-    $('#off-per').addEventListener('change', e => { o.idx = Number(e.target.value); o.prezzi = {}; drawList(); drawTexts(); save(); });
+    $('#off-cal').addEventListener('click', e => { const b = e.target.closest('[data-i]'); if (b) setIdx(Number(b.dataset.i)); });
+    $('#off-prev').addEventListener('click', () => setIdx(o.idx - 1));
+    $('#off-next').addEventListener('click', () => setIdx(o.idx + 1));
     $('#off-q').addEventListener('input', e => { o.q = e.target.value; drawList(); save(); });
     $('#off-free').addEventListener('change', e => { o.soloLibere = e.target.checked; drawList(); save(); });
     $('#off-list').addEventListener('change', e => {

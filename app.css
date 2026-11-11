@@ -844,6 +844,26 @@ details.prof-item[open] > .prof-sum .chev { transform: translateY(1px) rotate(-1
 /* ---------- Offerte ---------- */
 .off-tar { display: grid; grid-template-columns: repeat(4, 1fr); margin-bottom: 10px; }
 .off-tar button { text-align: center; }
+.off-pernav { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.off-pernav .btn { width: 40px; padding-left: 0; padding-right: 0; text-align: center; font-size: 1.2em; }
+.off-persel { flex: 1; display: flex; flex-wrap: wrap; align-items: baseline; justify-content: center; gap: 4px 12px; padding: 8px 12px; border: 1px solid var(--accent); background: var(--accent-soft); border-radius: 8px; text-align: center; }
+.off-persel span { color: var(--muted); }
+.off-cal { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 14px 18px; }
+.off-mname { font-weight: 600; text-transform: uppercase; letter-spacing: .06em; font-size: .82em; margin-bottom: 4px; }
+.off-wd, .off-days { display: grid; grid-template-columns: repeat(7, 1fr); }
+.off-wd i { font-style: normal; text-align: center; font-size: .72em; color: var(--muted); padding: 2px 0; }
+.off-days > * { height: 30px; display: flex; align-items: center; justify-content: center; font: inherit; font-size: .86em; border: 0; padding: 0; margin: 1px 0; color: var(--fg); background: transparent; border-radius: 0; }
+.off-days button { cursor: pointer; }
+.off-days .off { color: var(--muted); opacity: .45; }
+.off-days .p0 { background: var(--surface-2); }
+.off-days .p1 { background: transparent; }
+.off-days button:hover { box-shadow: inset 0 0 0 1px var(--accent); }
+.off-days .sel { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.off-days .first { border-radius: 8px 0 0 8px; }
+.off-days .out { background: linear-gradient(90deg, var(--accent) 50%, transparent 50%); color: var(--fg); font-weight: 600; }
+.off-days .out.p0 { background: linear-gradient(90deg, var(--accent) 50%, var(--surface-2) 50%); }
+.off-days .out.p1 { background: linear-gradient(90deg, var(--accent) 50%, transparent 50%); }
+@media (max-width: 600px) { .off-cal { grid-template-columns: 1fr 1fr; gap: 12px; } .off-days > * { height: 26px; font-size: .78em; } }
 .off-count { font-weight: 400; color: var(--muted); letter-spacing: 0; text-transform: none; }
 .off-tools { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 10px; }
 .off-tools input[type="search"] { flex: 1 1 220px; }
