@@ -1,7 +1,7 @@
 /*
- * Pagina "Spese": scontrini inseriti con l'app Scontrini, in SOLA LETTURA.
- * Legge "scontrini" in tempo reale e "scontrini_foto" solo quando si apre una foto.
- * Non scrive mai su queste collezioni e non tocca villas/bookings.
+ * Pagina "Spese": scontrini dell'app Scontrini. Si possono inserire nuove spese, modificarle (con storico),
+ * cancellarle e aggiungere allegati (foto o PDF). Esporta in Excel (CSV) o in Word per prenotazione,
+ * con uno zip delle foto e degli allegati. "scontrini_foto" e "scontrini_allegati" si leggono solo quando servono.
  */
 (function () {
   const fmtEuro = new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' });
@@ -63,6 +63,7 @@
   /* ---------------------------------------------------------------- pagina */
   function mount(main, ctx) {
     const { ui, saveUI, esc, data, spese, store, $, $$, toast } = ctx;
+    const X = window.SDBExport;
     if (!ui.spPeriodo) ui.spPeriodo = 'anno';
     let ordinati = [];
 
@@ -80,9 +81,10 @@
     main.innerHTML = `<div class="page"><div class="wrap">
       <div class="head"><div><h1>Spese</h1><div class="sub">Scontrini dell'app Scontrini · modificabili, aggiornati in tempo reale</div></div>
         <div class="actions no-print">
+          <button class="btn primary" type="button" id="sp-new">+ Nuova spesa</button>
           <button class="btn" type="button" id="sp-assign">Account e assegnazioni</button>
           <button class="btn" type="button" id="sp-exp">Espandi tutto</button>
-          <button class="btn" type="button" id="sp-csv">Esporta per Excel</button>
+          <button class="btn" type="button" id="sp-csv">Esporta</button>
           <button class="btn" type="button" id="sp-print">Stampa</button>
         </div></div>
       <div class="card sp-filters no-print">
@@ -98,6 +100,7 @@
     </div></div>`;
 
     const out = $('#sp-out');
+    const nAll = s => (s.hasFoto ? 1 : 0) + Math.max(0, Number(s.allegati) || 0);
     function render() {
       if (!document.body.contains(out)) return;
       const bookings = data().bookings;
@@ -173,7 +176,7 @@
                 <div class="m">${esc(s.motivo || '—')}<small>${esc(s.categoria || '')}${s.creatoDa ? ' · ' + esc(s.creatoDa) : ''}${s.modificatoDa ? ` · <span class="sp-mod">modificato da ${esc(s.modificatoDa)}${s.modificatoIl ? ' il ' + esc(quando(s.modificatoIl)) : ''}</span>` : ''}</small></div>
                 <span class="amount">${euro(s.importo)}</span>
                 <div class="sp-act no-print">
-                  <button class="btn small" type="button" data-foto="${esc(s.id)}" ${s.hasFoto ? '' : 'disabled'}>${s.hasFoto ? 'Foto' : 'Nessuna foto'}</button>
+                  <button class="btn small" type="button" data-foto="${esc(s.id)}">${nAll(s) ? 'Allegati · ' + nAll(s) : '+ Allegato'}</button>
                   <button class="btn small" type="button" data-edit="${esc(s.id)}">Modifica</button>
                 </div>
                 ${Array.isArray(s.storico) && s.storico.length ? `<div class="sp-old">${s.storico.slice().reverse().map(o => `<div class="sp-old-row"><s><span>${dataIt(o.data)}</span> ${esc(o.motivo || '—')} · ${esc(o.categoria || '')}${o.villaId !== s.villaId || (o.prenotazioneId || null) !== (s.prenotazioneId || null) ? ' · ' + esc(descPren(o)) : ''} · <b>${euro(o.importo)}</b></s><small>versione sostituita${o.sostituitoDa ? ' da ' + esc(o.sostituitoDa) : ''}${o.sostituitoIl ? ' il ' + esc(quando(o.sostituitoIl)) : ''}</small></div>`).join('')}</div>` : ''}
@@ -277,40 +280,206 @@
       if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', '');
     }
 
-    // foto: letta da scontrini_foto solo adesso
-    out.addEventListener('click', async e => {
-      const b = e.target.closest('[data-foto]'); if (!b || b.disabled) return;
-      const s = spese.list.find(x => x.id === b.dataset.foto); if (!s) return;
-      const p = trovaPren(s, data().bookings);
-      const dlg = $('#dlg');
+    /* allegati: la foto principale (scontrini_foto, vista anche dall'app Scontrini) e gli altri allegati
+       (scontrini_allegati). Si leggono solo quando si apre la finestra. */
+    out.addEventListener('click', e => {
+      const b = e.target.closest('[data-foto]'); if (!b) return;
+      const s = spese.list.find(x => x.id === b.dataset.foto); if (s) openAllegati(s.id);
+    });
+    const MAXPDF = 700 * 1024;
+    async function leggiFile(f) {
+      if (f.type === 'application/pdf' || /\.pdf$/i.test(f.name)) {
+        if (f.size > MAXPDF) throw new Error(`${f.name}: il PDF supera 700 KB`);
+        const dati = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => rej(new Error('file non leggibile')); r.readAsDataURL(f); });
+        return { nome: f.name, tipo: 'application/pdf', dati: String(dati).replace(/^data:[^;]*;/, 'data:application/pdf;') };
+      }
+      return { nome: f.name.replace(/\.[^.]+$/, '') + '.jpg', tipo: 'image/jpeg', dati: await ctx.compressImage(f, 1500, 750000) };
+    }
+    async function openAllegati(id) {
+      const dlg = $('#dlg'); const s = () => spese.list.find(x => x.id === id) || {};
+      const p = trovaPren(s(), data().bookings);
       dlg.innerHTML = `<div class="dlg sp-photo">
-        <h3>${euro(s.importo)} · ${dataIt(s.data)}</h3>
-        <div class="note">${esc(nomeVilla(s.villaId))} · ${esc(p ? p.cliente : 'spesa generale')} · ${esc(s.motivo || '')}</div>
-        <div class="sp-photo-box"><p class="note" id="ph-msg">Caricamento foto…</p><img id="ph-img" alt="Foto dello scontrino" hidden></div>
-        <div class="foot"><a class="btn" id="ph-down" hidden>Scarica</a><button type="button" class="btn primary" id="ph-close">Chiudi</button></div></div>`;
+        <h3>${euro(s().importo)} · ${dataIt(s().data)}</h3>
+        <div class="note">${esc(nomeVilla(s().villaId))} · ${esc(p ? p.cliente : 'spesa generale')} · ${esc(s().motivo || '')}${s().creatoDa ? ' · inserito da ' + esc(s().creatoDa) : ''}</div>
+        <div id="al-list" class="al-list"><p class="note">Caricamento allegati…</p></div>
+        <div id="al-msg"></div>
+        <div class="foot"><label class="btn left" for="al-file">+ Aggiungi allegato</label><input type="file" id="al-file" accept="image/*,application/pdf" multiple hidden>
+          <button type="button" class="btn primary" id="ph-close">Chiudi</button></div></div>`;
       $('#ph-close').onclick = () => dlg.close();
       dlg.onclick = ev => { if (ev.target === dlg) dlg.close(); };
+      if (!dlg.open) { if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', ''); }
+      const draw = async () => {
+        const box = $('#al-list'); if (!box) return;
+        try {
+          const items = [];
+          if (s().hasFoto) { const img = await store.getFoto(id); if (img) items.push({ id: '', nome: 'Foto dello scontrino', tipo: 'image/jpeg', dati: img, principale: true }); }
+          (await store.listAllegati(id)).forEach(a => items.push(a));
+          if (!$('#al-list')) return;
+          box.innerHTML = items.length ? items.map((a, i) => `<figure class="al-item">${a.tipo === 'application/pdf' ? `<div class="al-pdf">PDF</div>` : `<img src="${a.dati}" alt="${esc(a.nome)}">`}
+            <figcaption><span>${esc(a.nome || 'Allegato')}${a.principale ? '' : a.creatoDa ? `<small>aggiunto da ${esc(a.creatoDa)}</small>` : ''}</span>
+              <a class="btn small" href="${a.dati}" download="${esc(X.nomeFile((a.nome || 'allegato').replace(/\.(jpg|pdf)$/i, '')) + (a.tipo === 'application/pdf' ? '.pdf' : '.jpg'))}">Scarica</a>
+              ${a.principale ? '' : `<button type="button" class="btn small danger" data-aldel="${esc(a.id)}">Togli</button>`}</figcaption></figure>`).join('')
+            : '<p class="note">Nessun allegato. Aggiungi una foto o un PDF.</p>';
+        } catch (x) { box.innerHTML = `<p class="note">Errore: ${esc(x.message || x)}</p>`; }
+      };
+      draw();
+      $('#al-list').addEventListener('click', async e => {
+        const b = e.target.closest('[data-aldel]'); if (!b) return;
+        b.disabled = true;
+        try { await store.deleteAllegato(s(), b.dataset.aldel); toast('Allegato tolto'); draw(); } catch (x) { b.disabled = false; $('#al-msg').innerHTML = `<div class="warn err">${esc(x.message || x)}</div>`; }
+      });
+      $('#al-file').addEventListener('change', async e => {
+        const files = [...e.target.files]; e.target.value = ''; if (!files.length) return;
+        const m = $('#al-msg'); m.innerHTML = '<p class="note">Salvataggio…</p>';
+        try {
+          for (const f of files) { const a = await leggiFile(f); await store.addAllegato(Object.assign({}, s()), a); await new Promise(r => setTimeout(r, 250)); }
+          m.innerHTML = ''; toast(files.length === 1 ? 'Allegato aggiunto' : files.length + ' allegati aggiunti'); draw();
+        } catch (x) { m.innerHTML = `<div class="warn err">${esc(x.code === 'permission-denied' ? 'Le regole di Firestore non permettono ancora gli allegati: pubblica le regole aggiornate.' : x.message || x)}</div>`; draw(); }
+      });
+    }
+
+    // nuova spesa: stessa struttura dell'app Scontrini
+    $('#sp-new').addEventListener('click', () => {
+      const dlg = $('#dlg'); const bookings = data().bookings;
+      const villa0 = ui.spVilla || (ville()[0] || {}).id || '';
+      const prenOpts = (vid, sel) => `<option value="">Spese generali della villa</option>` + bookings.filter(x => x.villaId === vid && !x._nd).sort((x, y) => String(y.from).localeCompare(String(x.from)))
+        .map(x => `<option value="${esc(x.id)}" ${x.id === sel ? 'selected' : ''}>${esc((x.cliente || '').trim() || 'Senza nome')} · ${dataBreve(x.from)} → ${dataBreve(x.to)}</option>`).join('');
+      let foto = null;
+      dlg.innerHTML = `<form class="dlg" id="nw-form" autocomplete="off">
+        <h3>Nuova spesa</h3>
+        <section class="dsec sec-date"><h4>Villa e prenotazione</h4>
+          <label class="field"><span>Villa</span><select id="nw-villa">${ville().map(v => `<option value="${esc(v.id)}" ${v.id === villa0 ? 'selected' : ''}>${esc(v.name)}</option>`).join('')}</select></label>
+          <label class="field"><span>Prenotazione</span><select id="nw-pren">${prenOpts(villa0, ui.spPren)}</select></label></section>
+        <section class="dsec sec-cli"><h4>Importo e data</h4>
+          <div class="row"><label class="field"><span>Importo €</span><input id="nw-imp" inputmode="decimal" required placeholder="0,00"></label>
+          <label class="field"><span>Data</span><input type="date" id="nw-data" value="${isoLocale(new Date())}" required></label></div></section>
+        <section class="dsec sec-srv"><h4>Descrizione</h4>
+          <label class="field"><span>Categoria</span><select id="nw-cat">${CATEGORIE.map(c => `<option>${esc(c)}</option>`).join('')}</select></label>
+          <label class="field"><span>Motivo</span><input id="nw-mot" placeholder="es. pulizia finale, lampadina…"></label></section>
+        <section class="dsec sec-st"><h4>Foto dello scontrino</h4>
+          <div class="nw-photo"><img id="nw-prev" alt="" hidden><span class="note" id="nw-none">Nessuna foto</span>
+            <label class="btn small" for="nw-cam">Scatta foto</label><input type="file" id="nw-cam" accept="image/*" capture="environment" hidden>
+            <label class="btn small" for="nw-gal">Scegli file</label><input type="file" id="nw-gal" accept="image/*" hidden></div>
+          <p class="note">Altri allegati, anche PDF, si aggiungono dopo con il pulsante Allegati.</p></section>
+        <div id="nw-msg"></div>
+        <div class="foot"><button type="button" class="btn" id="nw-cancel">Annulla</button><button type="submit" class="btn primary" id="nw-save">Salva</button></div></form>`;
+      $('#nw-villa').addEventListener('change', e => { $('#nw-pren').innerHTML = prenOpts(e.target.value, ''); });
+      const onFile = async e => { const f = e.target.files[0]; e.target.value = ''; if (!f) return; try { foto = await ctx.compressImage(f, 1500, 750000); const im = $('#nw-prev'); im.src = foto; im.hidden = false; $('#nw-none').hidden = true; } catch (_) { toast('Non riesco a leggere questa foto'); } };
+      $('#nw-cam').addEventListener('change', onFile); $('#nw-gal').addEventListener('change', onFile);
+      $('#nw-cancel').onclick = () => dlg.close();
+      $('#nw-form').addEventListener('submit', async e => {
+        e.preventDefault();
+        const importo = parseImporto($('#nw-imp').value);
+        if (!(importo > 0)) { $('#nw-msg').innerHTML = '<div class="warn err">Importo non valido.</div>'; return; }
+        const pv = $('#nw-pren').value; const bk = pv ? bookings.find(x => x.id === pv) : null;
+        const dati = { villaId: $('#nw-villa').value, prenotazioneId: bk ? bk.id : null, prenotazione: bk ? { cliente: (bk.cliente || '').trim() || 'Prenotazione senza nome', from: bk.from, to: bk.to } : null, data: $('#nw-data').value, importo, categoria: $('#nw-cat').value, motivo: $('#nw-mot').value.trim() };
+        $('#nw-save').disabled = true;
+        try { await store.addScontrino(dati, foto); dlg.close(); toast('Spesa salvata: la vede anche l\'app Scontrini'); }
+        catch (x) { $('#nw-save').disabled = false; $('#nw-msg').innerHTML = `<div class="warn err">Salvataggio non riuscito: ${esc(x.message || x)}</div>`; }
+      });
       if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', '');
-      try {
-        const img = await store.getFoto(s.id);
-        if (!img) { $('#ph-msg').textContent = 'Foto non trovata.'; return; }
-        const im = $('#ph-img'); im.src = img; im.hidden = false; $('#ph-msg').hidden = true;
-        const dl = $('#ph-down'); dl.href = img; dl.download = `scontrino_${s.data}_${String(s.id).slice(0, 6)}.jpg`; dl.hidden = false;
-      } catch (x) { $('#ph-msg').textContent = 'Errore: ' + (x.message || x); }
+      setTimeout(() => $('#nw-imp') && $('#nw-imp').focus(), 50);
     });
 
     // CSV per Excel: separatore ";", BOM UTF-8, importi con la virgola
-    $('#sp-csv').addEventListener('click', () => {
+    function exportCsv() {
       if (!ordinati.length) { toast('Niente da esportare'); return; }
       const cella = v => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`;
-      const rows = [['Villa', 'Prenotazione', 'Check-in', 'Check-out', 'Data scontrino', 'Categoria', 'Motivo', 'Importo', 'Inserito da']];
-      ordinati.forEach(({ s, villa, p }) => rows.push([villa, p ? p.cliente : 'Spese generali', p ? dataIt(p.from) : '', p ? dataIt(p.to) : '', dataIt(s.data), s.categoria || '', s.motivo || '', (Number(s.importo) || 0).toFixed(2).replace('.', ','), s.creatoDa || '']));
+      const rows = [['Villa', 'Prenotazione', 'Check-in', 'Check-out', 'Data scontrino', 'Categoria', 'Motivo', 'Importo', 'Inserito da', 'Allegati']];
+      ordinati.forEach(({ s, villa, p }) => rows.push([villa, p ? p.cliente : 'Spese generali', p ? dataIt(p.from) : '', p ? dataIt(p.to) : '', dataIt(s.data), s.categoria || '', s.motivo || '', (Number(s.importo) || 0).toFixed(2).replace('.', ','), s.creatoDa || '', nAll(s)]));
       const testo = '﻿' + rows.map(r => r.map(cella).join(';')).join('\r\n');
       const aEl = document.createElement('a');
       aEl.href = URL.createObjectURL(new Blob([testo], { type: 'text/csv;charset=utf-8' }));
       aEl.download = `spese-ville_${isoLocale(new Date())}.csv`;
       document.body.appendChild(aEl); aEl.click(); aEl.remove();
       setTimeout(() => URL.revokeObjectURL(aEl.href), 1500);
+    }
+
+
+    /* Word: un file per prenotazione (una villa alla volta) con la scheda prenotazione, le note spese e i totali;
+       a parte uno zip con le foto e gli allegati di tutti gli scontrini esportati. */
+    const speseDi = (villaId, pid, bookings) => spese.list.filter(s => { if (s.villaId !== villaId) return false; const p = trovaPren(s, bookings); return pid === '__gen' ? !p : p && p.id === pid; }).sort((x, y) => String(x.data).localeCompare(String(y.data)));
+    function wordDoc(villaId, pid, bookings) {
+      const l = speseDi(villaId, pid, bookings);
+      const sc = pid !== '__gen' && ctx.schedaPren ? ctx.schedaPren(pid) : null;
+      const old = !sc && pid !== '__gen' ? (l.map(s => trovaPren(s, bookings)).find(Boolean) || null) : null;
+      const titolo = pid === '__gen' ? 'Spese generali della villa' : sc ? sc.cliente : old ? old.cliente : 'Prenotazione';
+      const B = [{ h1: nomeVilla(villaId) + ' · ' + titolo }];
+      if (sc) B.push({ p: `${dataIt(sc.from)} → ${dataIt(sc.to)}`, small: true }, { h2: 'Scheda prenotazione' }, { kv: sc.righe });
+      else if (old) B.push({ p: `${dataIt(old.from)} → ${dataIt(old.to)} · prenotazione non più in calendario`, small: true });
+      else B.push({ p: 'Spese non legate a una prenotazione', small: true });
+      if (sc && sc.servizi.length) B.push({ h2: 'Servizi' }, { table: sc.acq ? { head: ['Servizio', 'Modalità', 'Acquisto', 'Vendita', 'Note'], widths: [2100, 1800, 1300, 1300, 3138], right: [2, 3], rows: sc.servizi } : { head: ['Servizio', 'Modalità', 'Vendita', 'Note'], widths: [2400, 2000, 1500, 3738], right: [2], rows: sc.servizi } });
+      B.push({ h2: 'Note spese' });
+      if (l.length) B.push({ table: { head: ['Data', 'Categoria', 'Motivo', 'Inserito da', 'All.', 'Importo'], widths: [1150, 1650, 2900, 2050, 600, 1288], right: [4, 5], rows: l.map(s => [dataIt(s.data), s.categoria || '', s.motivo || '', s.creatoDa || '', String(nAll(s) || ''), euro(s.importo)]), total: ['', '', '', 'Totale spese', '', euro(somma(l))] } });
+      else B.push({ p: 'Nessuna nota spese.' });
+      B.push({ h2: 'Totali' });
+      const tot = [];
+      if (sc) tot.push(['Totale vendita (affitto + servizi a parte)', sc.haPrezzo ? ctxMoney(sc.totVendita) : 'prezzo di vendita non inserito']);
+      tot.push(['Totale spese', euro(somma(l))]);
+      if (sc && sc.acq && sc.totAcquisto) tot.push(['Totale acquisto (affitto + servizi a parte)', ctxMoney(sc.totAcquisto)]);
+      B.push({ kv: tot });
+      B.push({ p: `Esportato il ${new Date().toLocaleString('it-IT')} da ${store.user || ''}. Foto e allegati sono nel file zip scaricato insieme.`, small: true });
+      const nome = X.nomeFile(`Spese ${nomeVilla(villaId)} - ${titolo}${sc ? ' ' + sc.from : old ? ' ' + old.from : ''}`) + '.docx';
+      return { nome, blob: new Blob([X.docx(B)], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }), spese: l, cartella: X.nomeFile(titolo + (sc ? ' ' + sc.from : old ? ' ' + old.from : '')) };
+    }
+    const ctxMoney = n => euro(n).replace(/,00\s?€$/, ' €');
+    async function zipAllegati(gruppi, onStep) {
+      const entries = []; const used = new Set(); let n = 0, tot = gruppi.reduce((t, g) => t + g.spese.length, 0);
+      for (const g of gruppi) for (const s of g.spese) {
+        n++; onStep(`Foto e allegati: scontrino ${n} di ${tot}…`);
+        const base = `${g.cartella}/${s.data || 'senza-data'}_${(Number(s.importo) || 0).toFixed(2).replace('.', ',')}_${X.nomeFile(s.categoria || 'spesa')}`;
+        const add = (u, ext) => { const b = X.dataUrlBytes(u); if (!b) return; let nm = base + '.' + ext, i = 2; while (used.has(nm)) nm = base + '_' + (i++) + '.' + ext; used.add(nm); entries.push({ name: nm, data: b.bytes }); };
+        if (s.hasFoto) { try { const img = await store.getFoto(s.id); if (img) add(img, 'jpg'); } catch (_) {} }
+        if (Number(s.allegati) > 0) { try { (await store.listAllegati(s.id)).forEach(a => add(a.dati, a.tipo === 'application/pdf' ? 'pdf' : 'jpg')); } catch (_) {} }
+      }
+      return entries;
+    }
+    $('#sp-csv').addEventListener('click', () => {
+      const dlg = $('#dlg'); const bookings = data().bookings;
+      const villeCon = ville().filter(v => bookings.some(b => b.villaId === v.id && !b._nd) || spese.list.some(s => s.villaId === v.id));
+      let modo = 'word'; let villa = ui.spVilla && villeCon.some(v => v.id === ui.spVilla) ? ui.spVilla : (villeCon[0] || {}).id || '';
+      const voci = vid => {
+        const l = bookings.filter(b => b.villaId === vid && !b._nd).sort((x, y) => String(y.from).localeCompare(String(x.from))).map(b => ({ id: b.id, label: `${(b.cliente || '').trim() || 'Senza nome'} · ${dataBreve(b.from)} → ${dataBreve(b.to)}` }));
+        // prenotazioni non più in calendario con scontrini
+        const old = new Map(); spese.list.filter(s => s.villaId === vid).forEach(s => { const p = trovaPren(s, bookings); if (p && p.nonInCalendario && !old.has(p.id)) old.set(p.id, { id: p.id, label: `${p.cliente} · ${dataBreve(p.from)} → ${dataBreve(p.to)} (non più in calendario)` }); });
+        const gen = spese.list.some(s => s.villaId === vid && !trovaPren(s, bookings)) ? [{ id: '__gen', label: 'Spese generali della villa' }] : [];
+        return l.concat([...old.values()], gen).map(o => Object.assign(o, { spese: speseDi(vid, o.id, bookings) }));
+      };
+      const draw = () => {
+        const v = voci(villa);
+        dlg.innerHTML = `<div class="dlg" id="ex-dlg"><h3>Esporta</h3>
+          <div class="seg ex-seg"><button type="button" data-m="word" class="${modo === 'word' ? 'on' : ''}">Word per prenotazione</button><button type="button" data-m="xls" class="${modo === 'xls' ? 'on' : ''}">Excel – tutti gli scontrini</button></div>
+          ${modo === 'xls' ? `<p class="note">Un file con tutti gli scontrini mostrati in questo momento (filtri attuali): <b>${ordinati.length}</b> ${ordinati.length === 1 ? 'scontrino' : 'scontrini'}. Si apre con Excel.</p>`
+          : `<label class="field"><span>Villa</span><select id="ex-villa">${villeCon.map(x => `<option value="${esc(x.id)}" ${x.id === villa ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></label>
+            <div class="ex-head"><span class="note">Un file Word per ogni prenotazione scelta: scheda prenotazione, note spese, totale spese e totale vendita.</span><button type="button" class="btn small" id="ex-all">Seleziona tutte</button></div>
+            <div class="ex-list">${v.length ? v.map(o => `<label class="flag"><input type="checkbox" data-ex="${esc(o.id)}" ${o.spese.length ? 'checked' : ''}><span><b>${esc(o.label)}</b><small>${o.spese.length ? o.spese.length + (o.spese.length === 1 ? ' scontrino · ' : ' scontrini · ') + euro(somma(o.spese)) : 'nessuna nota spese'}</small></span></label>`).join('') : '<p class="note">Nessuna prenotazione per questa villa.</p>'}</div>
+            <label class="flag"><input type="checkbox" id="ex-zip" checked><span><b>Scarica anche lo zip con foto e allegati</b><small>Un solo file zip, con una cartella per prenotazione.</small></span></label>`}
+          <div id="ex-msg"></div>
+          <div class="foot"><button type="button" class="btn" id="ex-close">Chiudi</button><button type="button" class="btn primary" id="ex-go">Scarica</button></div></div>`;
+        $$('.ex-seg button', dlg).forEach(b => b.onclick = () => { modo = b.dataset.m; draw(); });
+        $('#ex-close').onclick = () => dlg.close();
+        if ($('#ex-villa')) $('#ex-villa').onchange = e => { villa = e.target.value; draw(); };
+        if ($('#ex-all')) $('#ex-all').onclick = () => { const cbs = $$('[data-ex]', dlg); const all = cbs.every(c => c.checked); cbs.forEach(c => { c.checked = !all; }); };
+        $('#ex-go').onclick = async () => {
+          if (modo === 'xls') { exportCsv(); dlg.close(); return; }
+          const ids = $$('[data-ex]', dlg).filter(c => c.checked).map(c => c.dataset.ex);
+          if (!ids.length) { $('#ex-msg').innerHTML = '<div class="warn err">Scegli almeno una prenotazione.</div>'; return; }
+          const go = $('#ex-go'); go.disabled = true; const step = t => { const m = $('#ex-msg'); if (m) m.innerHTML = `<p class="note">${esc(t)}</p>`; };
+          try {
+            const docs = ids.map(id => wordDoc(villa, id, bookings));
+            for (let i = 0; i < docs.length; i++) { step(`File Word ${i + 1} di ${docs.length}…`); X.scarica(docs[i].nome, docs[i].blob); await new Promise(r => setTimeout(r, 450)); }
+            let nz = 0;
+            if ($('#ex-zip') && $('#ex-zip').checked) {
+              const entries = await zipAllegati(docs, step); nz = entries.length;
+              if (nz) X.scarica(X.nomeFile(`Allegati ${nomeVilla(villa)} ${isoLocale(new Date())}`) + '.zip', X.zip(entries));
+            }
+            step(`Scaricati ${docs.length} ${docs.length === 1 ? 'file Word' : 'file Word'}${$('#ex-zip') && $('#ex-zip').checked ? (nz ? ` e lo zip con ${nz} ${nz === 1 ? 'allegato' : 'allegati'}` : '; nessuna foto o allegato da mettere nello zip') : ''}.`);
+          } catch (x) { $('#ex-msg').innerHTML = `<div class="warn err">Esportazione non riuscita: ${esc(x.message || x)}</div>`; }
+          go.disabled = false;
+        };
+      };
+      draw();
+      if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', '');
     });
 
     render();

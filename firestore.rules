@@ -106,6 +106,8 @@ service cloud.firestore {
     // app Scontrini: invariato
     match /scontrini/{id}      { allow read, write: if autorizzato(); }
     match /scontrini_foto/{id} { allow read, write: if autorizzato(); }
+    // allegati in più degli scontrini (foto o PDF), aggiunti da Summer Database
+    match /scontrini_allegati/{id} { allow read, write: if autorizzato(); }
     match /{document=**} { allow read, write: if false; }
   }
 }

@@ -328,7 +328,7 @@
         return col('meta').doc('profili').set({ profili: strip(map), aggiornatoDa: api.user || '', aggiornatoIl: FV().serverTimestamp() }, { merge: true })
           .then(() => col('meta').doc('profili').update({ profili: strip(map) }));
       },
-      // Scontrini (dell'app Scontrini): lettura, modifica con storico, cancellazione. Nessuna altra scrittura.
+      // Scontrini (dell'app Scontrini): lettura, nuova spesa, modifica con storico, allegati, cancellazione.
       listenScontrini(cb, onErr) {
         return db.collection('scontrini').onSnapshot(snap => cb(snap.docs.map(d => Object.assign({}, d.data(), { id: d.id }))), onErr);
       },
@@ -340,12 +340,40 @@
         if (previous) upd.storico = FV.arrayUnion(strip(previous));
         return db.collection('scontrini').doc(id).update(upd);
       },
-      // Cancellazione: lo scontrino e, se c'è, la sua foto (stesso ID).
-      deleteScontrino(id, hasFoto) {
+      // Cancellazione: lo scontrino, la sua foto (stesso ID) e gli eventuali allegati aggiunti da Summer Database.
+      async deleteScontrino(id, hasFoto) {
+        const all = await db.collection('scontrini_allegati').where('scontrinoId', '==', id).get().then(q => q.docs.map(d => d.id), () => []);
         const batch = db.batch();
         batch.delete(db.collection('scontrini').doc(id));
         if (hasFoto) batch.delete(db.collection('scontrini_foto').doc(id));
+        all.forEach(a => batch.delete(db.collection('scontrini_allegati').doc(a)));
         return batch.commit();
+      },
+      /* Nuova spesa da Summer Database: stessa struttura dell'app Scontrini (scontrini + scontrini_foto con lo stesso ID). */
+      addScontrino(dati, foto) {
+        const FV = firebase.firestore.FieldValue;
+        const ref = db.collection('scontrini').doc();
+        const b = db.batch();
+        b.set(ref, Object.assign({}, strip(dati), { hasFoto: !!foto, creatoDa: api.user || '', creatoIl: FV.serverTimestamp() }));
+        if (foto) b.set(db.collection('scontrini_foto').doc(ref.id), { img: foto });
+        return b.commit().then(() => ref.id);
+      },
+      /* Allegati di uno scontrino. La prima foto va in scontrini_foto/{id} (la vede anche l'app Scontrini);
+         gli altri allegati (foto o PDF) in scontrini_allegati/{auto} = { scontrinoId, villaId, nome, tipo, dati, creatoDa, creatoIl },
+         con il loro numero in scontrini.allegati. */
+      addAllegato(sc, a) {
+        const FV = firebase.firestore.FieldValue; const b = db.batch(); const ref = db.collection('scontrini').doc(sc.id);
+        if (!sc.hasFoto && a.tipo === 'image/jpeg') { b.set(db.collection('scontrini_foto').doc(sc.id), { img: a.dati }); b.update(ref, { hasFoto: true }); }
+        else { b.set(db.collection('scontrini_allegati').doc(), { scontrinoId: sc.id, villaId: sc.villaId || '', nome: a.nome || '', tipo: a.tipo, dati: a.dati, creatoDa: api.user || '', creatoIl: FV.serverTimestamp() }); b.update(ref, { allegati: FV.increment(1) }); }
+        return b.commit();
+      },
+      listAllegati(scontrinoId) {
+        return db.collection('scontrini_allegati').where('scontrinoId', '==', scontrinoId).get().then(q => q.docs.map(d => Object.assign({}, d.data(), { id: d.id })).sort((x, y) => String(x.nome).localeCompare(String(y.nome))));
+      },
+      deleteAllegato(sc, allegatoId) {
+        const FV = firebase.firestore.FieldValue; const b = db.batch();
+        b.delete(db.collection('scontrini_allegati').doc(allegatoId)); b.update(db.collection('scontrini').doc(sc.id), { allegati: FV.increment(-1) });
+        return b.commit();
       },
       setSicurezza(x) { state.sicurezza = x; return db.collection('meta').doc('sicurezza').set(strip(x)); },
       /* Account autorizzati (meta/accessi): le regole Firestore leggono "emails" per decidere chi entra.
@@ -380,6 +408,9 @@
         const ids = list.map(x => x.id);
         // ogni scontrino conta 2 operazioni (scontrino + foto)
         for (let i = 0; i < ids.length; i += 200) { const b = db.batch(); ids.slice(i, i + 200).forEach(id => { b.delete(db.collection('scontrini').doc(id)); b.delete(db.collection('scontrini_foto').doc(id)); }); await b.commit(); }
+        // allegati aggiunti da Summer Database
+        const al = await db.collection('scontrini_allegati').get().then(q => q.docs.map(d => d.id), () => []);
+        for (let i = 0; i < al.length; i += 400) { const b = db.batch(); al.slice(i, i + 400).forEach(id => b.delete(db.collection('scontrini_allegati').doc(id))); await b.commit(); }
         return ids.length;
       },
       /* ---- foto delle ville: villas_foto (immagini) e villas_thumb/{villaId} (copertina piccola per le schede) ----

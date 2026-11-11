@@ -820,3 +820,20 @@ details.prof-item[open] > .prof-sum .chev { transform: translateY(1px) rotate(-1
 .set-head { position: sticky; top: -20px; z-index: 6; background: var(--bg); margin-top: -20px; padding: 20px 0 12px; }
 .set-nav { top: 76px; }
 @media (max-width: 760px) { .set-head { padding-bottom: 8px; } }
+
+/* ---------- Spese: allegati, nuova spesa, esportazione ---------- */
+.al-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; max-height: 60vh; overflow: auto; margin: 10px 0; }
+.al-item { margin: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--field); overflow: hidden; display: flex; flex-direction: column; }
+.al-item img { width: 100%; height: 140px; object-fit: cover; display: block; background: #eee; }
+.al-pdf { height: 140px; display: grid; place-items: center; font: 600 22px/1 var(--font-display); color: #a3172b; background: #f6ece9; letter-spacing: .1em; }
+.al-item figcaption { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px; font-size: 12.5px; }
+.al-item figcaption > span { flex: 1 1 100%; min-width: 0; overflow-wrap: anywhere; }
+.al-item figcaption small { display: block; color: var(--muted); }
+.nw-photo { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.nw-photo img { width: 72px; height: 72px; object-fit: cover; border-radius: 6px; border: 1px solid var(--line); }
+.nw-photo .note { flex: 1 1 auto; }
+.ex-seg { display: grid; grid-template-columns: 1fr 1fr; margin: 6px 0 12px; }
+.ex-seg button { text-align: center; }
+.ex-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 8px 0; }
+.ex-list { display: flex; flex-direction: column; gap: 6px; max-height: 42vh; overflow: auto; margin-bottom: 10px; }
+.ex-list .flag small { display: block; }

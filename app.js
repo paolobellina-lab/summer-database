@@ -236,6 +236,29 @@ window.SDBStore.ready.then(function () {
     while (url.length > maxLen && cc.width > 300) { const c2 = document.createElement('canvas'); c2.width = Math.round(cc.width * 0.75); c2.height = Math.round(cc.height * 0.75); c2.getContext('2d').drawImage(cc, 0, 0, c2.width, c2.height); cc = c2; url = cc.toDataURL('image/jpeg', 0.6); }
     return url;
   }
+  /* Dati della scheda prenotazione per l'esportazione Word della pagina Spese.
+     I prezzi di acquisto compaiono solo per chi li può vedere. */
+  function schedaPren(bookingId) {
+    const b = data().bookings.find(x => x.id === bookingId); if (!b) return null;
+    const v = villaById(b.villaId) || { name: b.villaId };
+    const notti = S.diffDays(b.from, b.to);
+    const acq = canAcq();
+    const assegn = (data().assegnazioni || []).filter(a => (a.prenotazioni || []).includes(b.id) || (a.ville || []).includes(b.villaId)).map(a => a.nome || a.email);
+    const righe = [
+      ['Villa', v.name], ['Località', v.location || ''], ['Cliente', b.cliente || ''],
+      ['Check-in', S.dmy(b.from) + (b.earlyIn ? ' · early check-in' : '')], ['Check-out', S.dmy(b.to) + (b.lateOut ? ' · late check-out' : '')],
+      ['Notti', String(notti)], ['Stato', statoLabel(b.status)],
+      ['Prezzo di vendita concordato', typeof b.prezzoVendita === 'number' ? S.money(b.prezzoVendita) : '—']
+    ];
+    if (acq) righe.push(['Prezzo di acquisto concordato', typeof b.prezzoAcquisto === 'number' ? S.money(b.prezzoAcquisto) : '—']);
+    if (assegn.length) righe.push(['Assegnata a (app Scontrini)', assegn.join(', ')]);
+    if (b.note) righe.push(['Note', b.note]);
+    const srvRighe = servizi().filter(x => hasSrv(b, x)).map(x => { const d = srvDet(b, x.key); return [x.label, d.incluso ? 'Incluso nel prezzo' : 'A parte'].concat(acq ? [d.incluso || typeof d.acquisto !== 'number' ? '' : S.money(d.acquisto)] : [], [d.incluso || typeof d.vendita !== 'number' ? '' : S.money(d.vendita), d.note || '']); });
+    const sv = srvTot(b);
+    const totVendita = (typeof b.prezzoVendita === 'number' ? b.prezzoVendita : 0) + sv.vendita;
+    const totAcquisto = acq ? (typeof b.prezzoAcquisto === 'number' ? b.prezzoAcquisto : 0) + sv.acquisto : null;
+    return { id: b.id, villaId: b.villaId, villa: v.name, cliente: b.cliente || 'Senza nome', from: b.from, to: b.to, righe, servizi: srvRighe, acq, totVendita, totAcquisto, haPrezzo: typeof b.prezzoVendita === 'number' };
+  }
   const goSpese = (opts) => { Object.assign(ui, { spVilla: '', spPren: '', spQ: '' }, opts); saveUI(); location.hash = 'spese'; };
   // pulsante "Installa app" (Chrome/Edge su Android, Windows, Mac)
   let installEvt = window.__sdbInstall || null;
@@ -272,7 +295,7 @@ window.SDBStore.ready.then(function () {
     if (h.startsWith('impostazioni-')) { refreshShell('impostazioni'); return viewSettings(h.slice(13)); }
     refreshShell(h);
     if (h === 'ville') return viewVillas();
-    if (h === 'spese' && window.SDBSpese) { spesePage = window.SDBSpese.mount(main, { ui, saveUI, esc, data, spese, store, $, $$, toast }); return; }
+    if (h === 'spese' && window.SDBSpese) { spesePage = window.SDBSpese.mount(main, { ui, saveUI, esc, data, spese, store, $, $$, toast, schedaPren, compressImage, canAcq }); return; }
     if (h === 'appunti') return viewNotes();
     if (h === 'impostazioni') return viewSettings();
     return viewAvail();
