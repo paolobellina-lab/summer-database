@@ -106,6 +106,7 @@ window.SDBStore.ready.then(function () {
       <nav class="nav" aria-label="Sezioni">
         <a href="#disponibilita" data-r="disponibilita"><span class="l-full">Disponibilità</span><span class="l-short">Calendario</span></a>
         <a href="#ville" data-r="ville">Ville</a>
+        <a href="#offerte" data-r="offerte">Offerte</a>
         <a href="#spese" data-r="spese">Spese</a>
         <a href="#appunti" data-r="appunti">Appunti</a>
         <a href="#impostazioni" data-r="impostazioni"><span class="l-full">Impostazioni</span><span class="l-short">Impost.</span></a>
@@ -120,7 +121,7 @@ window.SDBStore.ready.then(function () {
   /* Profilo dell'account collegato (store.profile, deciso all'accesso):
      full = vede e modifica tutto; altrimenti acquisto (prezzi di acquisto), modifica (prenotazioni),
      dettaglio (false = prenotazioni solo come ND), pagine visibili, ville condivise. */
-  const PAGES = [['disponibilita', 'Disponibilità'], ['ville', 'Ville'], ['spese', 'Spese'], ['appunti', 'Appunti'], ['impostazioni', 'Impostazioni']];
+  const PAGES = [['disponibilita', 'Disponibilità'], ['ville', 'Ville'], ['offerte', 'Offerte'], ['spese', 'Spese'], ['appunti', 'Appunti'], ['impostazioni', 'Impostazioni']];
   const ME = () => store.profile || { full: true, acquisto: true, modifica: true, dettaglio: true, pagine: null, ville: [] };
   const isFull = () => !!ME().full;
   const canAcq = () => isFull() || !!ME().acquisto;
@@ -299,6 +300,7 @@ window.SDBStore.ready.then(function () {
     if (h === 'ville') return viewVillas();
     if (h === 'spese' && window.SDBSpese) { spesePage = window.SDBSpese.mount(main, { ui, saveUI, esc, data, spese, store, $, $$, toast, schedaPren, compressImage, canAcq }); return; }
     if (h === 'appunti') return viewNotes();
+    if (h === 'offerte' && window.SDBOfferte) { return window.SDBOfferte.mount(main, { ui, saveUI, esc, data, store, $, $$, toast, S, settings, blocks, hiddenField, coverOf: id => (thumbs.map[id] || {}).fotoId || null }); }
     if (h === 'impostazioni') return viewSettings();
     return viewAvail();
   }

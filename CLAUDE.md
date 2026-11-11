@@ -23,6 +23,9 @@ Se una modifica richiesta va contro questi vincoli, avvisare prima di procedere.
 - **Esporta**: Excel (CSV degli scontrini filtrati) oppure Word per prenotazione (una villa alla volta; `ctx.schedaPren` da `app.js` + note spese + totale spese e totale vendita) con uno zip di foto e allegati. `export.js` crea .docx e .zip senza librerie esterne.
 Lettura tramite `store.listenScontrini` (solo `scontrini`); `scontrini_foto` e `scontrini_allegati` solo quando servono. Collegamento alle prenotazioni con `trovaPren`, nell'ordine: ID → stesse date → copia "non più in calendario" → spese generali.
 
+## Pagina Offerte
+`offerte.js` (`#offerte`, anche tra le pagine dei profili): tariffa + periodo (indice di `S.periodsFor`, date esatte per villa), scelta delle ville (libera/occupata/ND, prezzo di listino modificabile), cliente, lingua IT/EN, numero di foto. Produce un Word (`SDBExport.docx` con immagini, logo, riquadro prezzo, una villa per pagina) oppure HTML con foto incorporate copiato negli appunti per Gmail (+ "Apri Gmail" con oggetto e destinatario). Usa solo i campi visibili all'account (`hiddenField`). Bozza salvata in `ui.off`.
+
 ## Periodi tariffari
 `S.periodsFor(settings, villa, tariffa)` in `core.js`. Settimanale: segue il giorno di cambio (`settings.cambio` o `villa.cambio`, sabato/domenica). Bisettimanale/mensile/bimensile: `villa.periodi[tariffa]` → `settings.periodiPredefiniti[tariffa]` → date automatiche dell'Excel spostate in base al giorno di cambio. Il numero dei periodi è fisso (i prezzi sono collegati per posizione).
 

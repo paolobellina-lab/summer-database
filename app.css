@@ -546,8 +546,8 @@ dialog::backdrop { background: rgba(8, 20, 18, .45); }
   .topbar { flex-wrap: wrap; row-gap: 0; padding-block: 6px 0; }
   .topbar .brand { flex: 1; }
   .topbar #install { margin-left: auto; }
-  .nav { order: 3; width: 100%; margin-left: 0; display: grid; grid-template-columns: 1.3fr 1fr 1fr 1.1fr 1fr; overflow: visible; border-top: 1px solid var(--line-soft); }
-  .nav a { text-align: center; font-size: 11px; letter-spacing: .03em; padding: 10px 2px 9px; white-space: nowrap; overflow: hidden; text-overflow: clip; }
+  .nav { order: 3; width: 100%; margin-left: 0; display: grid; grid-template-columns: 1.6fr .75fr 1.05fr .85fr 1fr .95fr; overflow: visible; border-top: 1px solid var(--line-soft); }
+  .nav a { text-align: center; font-size: 10px; letter-spacing: 0; padding: 10px 0 9px; white-space: nowrap; overflow: hidden; text-overflow: clip; }
   .nav a .l-full { display: none; }
   .nav a .l-short { display: inline; }
 }
@@ -693,7 +693,8 @@ dialog:has(.assign) { width: min(640px, calc(100vw - 32px)); }
 .pg-chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 7px; border: 1px solid var(--line); border-radius: var(--radius); font-size: 11.5px; cursor: pointer; white-space: nowrap; }
 .pg-chip input { width: 14px; height: 14px; accent-color: var(--accent); }
 .pg-chip:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
-@media (max-width: 760px) { .nav { grid-template-columns: repeat(var(--n, 5), minmax(0, 1fr)) !important; } }
+/* menu sul cellulare: le voci si dividono la riga in base alla lunghezza del nome (anche se alcune pagine sono nascoste) */
+@media (max-width: 760px) { .nav { display: flex !important; justify-content: space-between; } .nav a { flex: 1 1 auto; } }
 
 .login-keep { display: flex; gap: 10px; align-items: flex-start; text-align: left; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius); cursor: pointer; }
 .login-keep input { width: 18px; height: 18px; margin-top: 2px; accent-color: var(--accent); flex: none; }
@@ -839,3 +840,25 @@ details.prof-item[open] > .prof-sum .chev { transform: translateY(1px) rotate(-1
 .ex-list .flag small { display: block; }
 .linkbtn { background: none; border: 0; padding: 4px 2px; color: var(--accent); text-decoration: underline; text-underline-offset: 3px; font: inherit; font-size: 13px; cursor: pointer; }
 .linkbtn:hover { color: var(--navy); }
+
+/* ---------- Offerte ---------- */
+.off-tar { display: grid; grid-template-columns: repeat(4, 1fr); margin-bottom: 10px; }
+.off-tar button { text-align: center; }
+.off-count { font-weight: 400; color: var(--muted); letter-spacing: 0; text-transform: none; }
+.off-tools { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 10px; }
+.off-tools input[type="search"] { flex: 1 1 220px; }
+.off-free { margin: 0; }
+.off-list { display: flex; flex-direction: column; gap: 6px; max-height: 60vh; overflow: auto; }
+.off-item { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--field); }
+.off-item.on { border-color: var(--accent); background: var(--accent-soft); }
+.off-item.busy:not(.on) { opacity: .7; }
+.off-pick { display: flex; align-items: center; gap: 10px; flex: 1 1 220px; min-width: 0; cursor: pointer; }
+.off-pick small { display: block; color: var(--muted); font-size: 12px; }
+.off-st { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; padding: 3px 8px; border-radius: 20px; }
+.off-st.st-libera { background: #e2f1df; color: #2a6b26; } .off-st.st-occupata { background: #f8dfdc; color: #a3172b; } .off-st.st-nd { background: #e7e7e7; color: #555; }
+.off-list-pr { min-width: 90px; text-align: right; font-variant-numeric: tabular-nums; }
+.off-price { display: flex; align-items: center; gap: 8px; flex: 1 1 100%; font-size: 12px; color: var(--muted); }
+.off-price input { max-width: 160px; }
+.off-row { display: grid; grid-template-columns: 1fr 1fr auto auto; gap: 10px; align-items: end; }
+.off-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0; }
+@media (max-width: 760px) { .off-tar { grid-template-columns: 1fr 1fr; } .off-row { grid-template-columns: 1fr; } }
