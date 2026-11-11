@@ -837,3 +837,5 @@ details.prof-item[open] > .prof-sum .chev { transform: translateY(1px) rotate(-1
 .ex-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 8px 0; }
 .ex-list { display: flex; flex-direction: column; gap: 6px; max-height: 42vh; overflow: auto; margin-bottom: 10px; }
 .ex-list .flag small { display: block; }
+.linkbtn { background: none; border: 0; padding: 4px 2px; color: var(--accent); text-decoration: underline; text-underline-offset: 3px; font: inherit; font-size: 13px; cursor: pointer; }
+.linkbtn:hover { color: var(--navy); }

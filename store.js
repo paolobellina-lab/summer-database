@@ -376,6 +376,13 @@
         return b.commit();
       },
       setSicurezza(x) { state.sicurezza = x; return db.collection('meta').doc('sicurezza').set(strip(x)); },
+      /* Conferma dell'identità prima di reimpostare la password di pulizia: nuovo accesso con Google
+         (stesso account già collegato). Se l'account scelto è diverso, Firebase rifiuta. */
+      reauthGoogle() {
+        const u = auth.currentUser; if (!u) return Promise.reject(new Error('Nessun account collegato'));
+        const p = new firebase.auth.GoogleAuthProvider(); p.setCustomParameters({ prompt: 'select_account', login_hint: u.email || '' });
+        return u.reauthenticateWithPopup(p).then(() => u.email);
+      },
       /* Account autorizzati (meta/accessi): le regole Firestore leggono "emails" per decidere chi entra.
          Solo gli amministratori scritti nelle regole possono modificarlo. */
       setAccessi(utenti) {

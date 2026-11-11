@@ -1547,20 +1547,30 @@ window.SDBStore.ready.then(function () {
     const checkPw = async pw => { const s0 = sec(); return !!(s0 && s0.hash && pw && (await hashPw(pw, s0.salt)) === s0.hash); };
     const drawPass = () => {
       const box = $('#wipe-pass'); const has = !!(sec() && sec().hash);
-      box.innerHTML = `<div class="wipe-pass"><span>${has ? 'Password di pulizia impostata.' : '<b>Prima imposta una password di pulizia.</b>'}</span><button type="button" class="btn small" id="pw-set">${has ? 'Cambia password' : 'Imposta password'}</button></div><div id="pw-form"></div>`;
-      $('#pw-set').onclick = () => {
-        $('#pw-form').innerHTML = `<form class="wipe-form" id="pw-f" autocomplete="off">${has ? '<input type="password" id="pw-old" placeholder="Password attuale" autocomplete="current-password">' : ''}<input type="password" id="pw-new" placeholder="Nuova password (almeno 6 caratteri)" autocomplete="new-password"><input type="password" id="pw-new2" placeholder="Ripeti la nuova password" autocomplete="new-password"><button class="btn small primary">Salva password</button><span class="wipe-err" id="pw-err"></span></form>`;
+      // solo gli amministratori impostano, cambiano o reimpostano la password (anche le regole lo impongono)
+      const adm = isAdmin();
+      box.innerHTML = `<div class="wipe-pass"><span>${has ? 'Password di pulizia impostata.' : '<b>Prima imposta una password di pulizia.</b>'}</span>${adm ? `<button type="button" class="btn small" id="pw-set">${has ? 'Cambia password' : 'Imposta password'}</button>${has && store.reauthGoogle ? '<button type="button" class="linkbtn" id="pw-forgot">Password dimenticata?</button>' : ''}` : '<span class="note">Solo un amministratore può impostarla o cambiarla.</span>'}</div><div id="pw-form"></div>`;
+      if (!adm) return;
+      // password dimenticata: nuovo accesso con Google per confermare che è l'amministratore, poi password nuova
+      if ($('#pw-forgot')) $('#pw-forgot').onclick = async () => {
+        const f = $('#pw-form'); f.innerHTML = '<p class="note">Conferma il tuo account Google nella finestra che si apre…</p>';
+        try { const em = await store.reauthGoogle(); showForm(false, `Accesso confermato come <b>${esc(em)}</b>. Scegli la nuova password di pulizia.`); }
+        catch (x) { f.innerHTML = `<div class="warn err">${x && /popup/i.test(x.code || '') ? 'Il browser ha bloccato la finestra di accesso: consenti i popup per questo sito e riprova.' : x && /mismatch|user-mismatch/i.test(x.code || '') ? 'Devi scegliere lo stesso account Google con cui sei collegato.' : 'Accesso non confermato: la password non è stata cambiata.'}</div>`; }
+      };
+      $('#pw-set').onclick = () => showForm(has);
+      function showForm(askOld, intro) {
+        $('#pw-form').innerHTML = `${intro ? `<p class="note">${intro}</p>` : ''}<form class="wipe-form" id="pw-f" autocomplete="off">${askOld ? '<input type="password" id="pw-old" placeholder="Password attuale" autocomplete="current-password">' : ''}<input type="password" id="pw-new" placeholder="Nuova password (almeno 6 caratteri)" autocomplete="new-password"><input type="password" id="pw-new2" placeholder="Ripeti la nuova password" autocomplete="new-password"><button class="btn small primary">Salva password</button><span class="wipe-err" id="pw-err"></span></form>`;
         $('#pw-f').addEventListener('submit', async e => {
           e.preventDefault(); const err = $('#pw-err');
-          if (has && !(await checkPw($('#pw-old').value))) { err.textContent = 'La password attuale non è corretta.'; return; }
+          if (askOld && !(await checkPw($('#pw-old').value))) { err.textContent = 'La password attuale non è corretta.'; return; }
           const n1 = $('#pw-new').value, n2 = $('#pw-new2').value;
           if (n1.length < 6) { err.textContent = 'Usa almeno 6 caratteri.'; return; }
           if (n1 !== n2) { err.textContent = 'Le due password non coincidono.'; return; }
           const salt = S.uid('s'); const hash = await hashPw(n1, salt);
-          try { await Promise.resolve(store.setSicurezza({ salt, hash, impostataDa: store.user || '', impostataIl: new Date().toISOString() })); toast('Password di pulizia salvata'); drawPass(); }
-          catch (x) { err.textContent = 'Salvataggio non riuscito: ' + (x.message || x); }
+          try { await Promise.resolve(store.setSicurezza({ salt, hash, impostataDa: store.user || '', impostataIl: new Date().toISOString() })); toast(askOld === false && intro ? 'Nuova password di pulizia salvata' : 'Password di pulizia salvata'); drawPass(); }
+          catch (x) { err.textContent = x && x.code === 'permission-denied' ? 'Solo un amministratore può cambiare la password.' : 'Salvataggio non riuscito: ' + (x.message || x); }
         });
-      };
+      }
     };
     drawPass();
     const downloadJson = (obj, name) => {

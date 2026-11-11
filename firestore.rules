@@ -96,7 +96,8 @@ service cloud.firestore {
     match /meta/accessi   { allow read: if autorizzato(); allow write: if amministratore(); }
     match /meta/profili   { allow read: if autorizzato(); allow write: if amministratore(); }
     match /meta/settings  { allow read: if autorizzato(); allow write: if completo(); }
-    match /meta/sicurezza { allow read: if autorizzato(); allow write: if completo(); }
+    // password di pulizia: la impostano e la reimpostano solo gli amministratori
+    match /meta/sicurezza { allow read: if autorizzato(); allow write: if amministratore(); }
     match /meta/notes     { allow read, write: if pagina('appunti'); }
     match /meta/{id} {
       allow read: if autorizzato() && id != 'notes';
