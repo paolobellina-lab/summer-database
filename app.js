@@ -86,7 +86,7 @@ window.SDBStore.ready.then(function () {
   const data = () => store.get();
   const settings = () => data().settings;
   const villaById = id => data().villas.find(v => v.id === id);
-  // ville in ordine alfabetico (calendario, menu, elenchi); "order" resta l'ordine dell'Excel
+  // ville in ordine alfabetico (calendario, menu, elenchi)
   const byName = (a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'it', { numeric: true, sensitivity: 'base' });
   const sortedVillas = () => data().villas.slice().sort(byName);
   const num = v => { const n = parseInt(String(v == null ? '' : v), 10); return isFinite(n) ? n : null; };
@@ -792,8 +792,8 @@ window.SDBStore.ready.then(function () {
   };
   function viewVillas() {
     const locs = locations();
-    const sortOpts = [['order', 'Ordine Excel'], ['name', 'Nome A–Z'], ['priceAsc', 'Prezzo più basso'], ['priceDesc', 'Prezzo più alto'], ['guests', 'Più ospiti'], ['free', 'Più settimane libere']];
-    ui.vsort = ui.vsort || 'name'; ui.vloc = ui.vloc || ''; ui.vlist = ui.vlist || '';
+    const sortOpts = [['name', 'Nome A–Z'], ['priceAsc', 'Prezzo più basso'], ['priceDesc', 'Prezzo più alto'], ['guests', 'Più ospiti'], ['free', 'Più settimane libere']];
+    if (!ui.vsort || ui.vsort === 'order') ui.vsort = 'name'; ui.vloc = ui.vloc || ''; ui.vlist = ui.vlist || '';
     main.innerHTML = `<div class="page"><div class="wrap">
       <div class="head"><div><h1>Ville</h1><div class="sub" id="vl-sub"></div></div>
         <div class="actions">${isFull() ? '<button class="btn primary" id="vl-add">+ Nuova villa</button>' : ''}</div></div>
@@ -846,7 +846,6 @@ window.SDBStore.ready.then(function () {
       const minP = x => { const n = x.s.prices.map(p => p.pr).filter(p => typeof p === 'number'); return n.length ? Math.min(...n) : null; };
       const maxP = x => { const n = x.s.prices.map(p => p.pr).filter(p => typeof p === 'number'); return n.length ? Math.max(...n) : null; };
       const cmp = {
-        order: (a, b) => (a.v.order ?? 0) - (b.v.order ?? 0),
         name: (a, b) => byName(a.v, b.v),
         priceAsc: (a, b) => (minP(a) ?? 1e12) - (minP(b) ?? 1e12),
         priceDesc: (a, b) => (maxP(b) ?? -1) - (maxP(a) ?? -1),
