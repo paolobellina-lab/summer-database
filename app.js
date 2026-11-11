@@ -86,7 +86,9 @@ window.SDBStore.ready.then(function () {
   const data = () => store.get();
   const settings = () => data().settings;
   const villaById = id => data().villas.find(v => v.id === id);
-  const sortedVillas = () => data().villas.slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  // ville in ordine alfabetico (calendario, menu, elenchi); "order" resta l'ordine dell'Excel
+  const byName = (a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'it', { numeric: true, sensitivity: 'base' });
+  const sortedVillas = () => data().villas.slice().sort(byName);
   const num = v => { const n = parseInt(String(v == null ? '' : v), 10); return isFinite(n) ? n : null; };
 
   /* ---------- toast ---------- */
@@ -791,7 +793,7 @@ window.SDBStore.ready.then(function () {
   function viewVillas() {
     const locs = locations();
     const sortOpts = [['order', 'Ordine Excel'], ['name', 'Nome A–Z'], ['priceAsc', 'Prezzo più basso'], ['priceDesc', 'Prezzo più alto'], ['guests', 'Più ospiti'], ['free', 'Più settimane libere']];
-    ui.vsort = ui.vsort || 'order'; ui.vloc = ui.vloc || ''; ui.vlist = ui.vlist || '';
+    ui.vsort = ui.vsort || 'name'; ui.vloc = ui.vloc || ''; ui.vlist = ui.vlist || '';
     main.innerHTML = `<div class="page"><div class="wrap">
       <div class="head"><div><h1>Ville</h1><div class="sub" id="vl-sub"></div></div>
         <div class="actions">${isFull() ? '<button class="btn primary" id="vl-add">+ Nuova villa</button>' : ''}</div></div>
@@ -844,14 +846,14 @@ window.SDBStore.ready.then(function () {
       const minP = x => { const n = x.s.prices.map(p => p.pr).filter(p => typeof p === 'number'); return n.length ? Math.min(...n) : null; };
       const maxP = x => { const n = x.s.prices.map(p => p.pr).filter(p => typeof p === 'number'); return n.length ? Math.max(...n) : null; };
       const cmp = {
-        order: () => 0,
-        name: (a, b) => a.v.name.localeCompare(b.v.name),
+        order: (a, b) => (a.v.order ?? 0) - (b.v.order ?? 0),
+        name: (a, b) => byName(a.v, b.v),
         priceAsc: (a, b) => (minP(a) ?? 1e12) - (minP(b) ?? 1e12),
         priceDesc: (a, b) => (maxP(b) ?? -1) - (maxP(a) ?? -1),
         guests: (a, b) => ((num(b.v.guests) ?? num(b.v.pax) ?? -1) - (num(a.v.guests) ?? num(a.v.pax) ?? -1)),
         free: (a, b) => b.s.free - a.s.free
       }[ui.vsort];
-      if (ui.vsort !== 'order') list.sort(cmp);
+      list.sort(cmp);
       $('#vl-sub').textContent = `${list.length} ville${cur ? ' nell\'elenco ' + cur.nome : ''}${ui.vloc ? ' a ' + ui.vloc : ''} · prezzi di vendita settimanali`;
       body.innerHTML = list.length ? list.map(({ v, s }) => {
         const mn = minP({ s }), mx = maxP({ s });
