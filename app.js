@@ -684,9 +684,15 @@ window.SDBStore.ready.then(function () {
       return out;
     }
     $$('#bform .srv-item').forEach(it => {
-      it.querySelector('.srv-cb').addEventListener('change', e => { it.classList.toggle('on', e.target.checked); it.querySelector('.srv-det').hidden = !e.target.checked; });
-      it.querySelector('.srv-mode').addEventListener('click', e => { const bt = e.target.closest('button'); if (!bt) return;
-        it.querySelectorAll('.srv-mode button').forEach(z => z.classList.toggle('on', z === bt)); it.querySelector('.srv-prices').hidden = bt.dataset.inc === '1'; check(); });
+      // prezzi predefiniti (Impostazioni → Servizi e inclusioni): riempiono solo le caselle vuote
+      const k = it.dataset.sk; const def = Object.assign({}, ((settings().prezziServizi || {})[k]) || {}); const defA = (data().serviziAcquisto || {})[k];
+      const riempi = () => { const v = it.querySelector('[data-sv]'), a = it.querySelector('[data-sa]');
+        if (!v.value.trim() && typeof def.vendita === 'number') v.value = fmtNum(def.vendita);
+        if (canAcq() && !a.value.trim() && typeof defA === 'number') a.value = fmtNum(defA); };
+      const modo = inc => { it.querySelectorAll('.srv-mode button').forEach(z => z.classList.toggle('on', (z.dataset.inc === '1') === inc)); it.querySelector('.srv-prices').hidden = inc; if (!inc) riempi(); };
+      it.querySelector('.srv-cb').addEventListener('change', e => { it.classList.toggle('on', e.target.checked); it.querySelector('.srv-det').hidden = !e.target.checked;
+        if (e.target.checked && !(b.serviziDett || {})[k]) { modo(def.incluso !== false); check(); } });
+      it.querySelector('.srv-mode').addEventListener('click', e => { const bt = e.target.closest('button'); if (!bt) return; modo(bt.dataset.inc === '1'); check(); });
     });
     // regola: check-out e check-in possono cadere nello stesso giorno (massimo 2 affitti in quel giorno);
     // se due affitti condividono anche una sola notte il salvataggio è bloccato.
@@ -910,7 +916,7 @@ window.SDBStore.ready.then(function () {
   function newVilla() {
     const st = settings();
     const order = Math.max(-1, ...data().villas.map(v => v.order ?? 0)) + 1;
-    const v = { id: S.uid('v'), order, name: 'NUOVA VILLA', codice: '', realEstate: '', nomeReale: '', proprietario: '', indirizzo: '', servizi: '', note: '', location: '', seafront: '', indoorSqm: '', outdoorSqm: '', pax: '', guests: '', staff: '', totalBedrooms: '', guestBedrooms: '', staffBedrooms: '', doubleBedrooms: '', twinBedrooms: '', singleBedrooms: '', bathrooms: '', pool: '', gym: '', spa: '', parking: '', kitchens: '', linkSito: '', mediaProprietario: '', googleMaps: '', youtube: '', vimeo: '', psw: '', pricing: S.emptyPricing(st) };
+    const v = { id: S.uid('v'), order, name: 'NUOVA VILLA', codice: '', realEstate: '', nomeReale: '', proprietario: '', indirizzo: '', servizi: '', note: '', location: '', seafront: '', indoorSqm: '', outdoorSqm: '', pax: '', guests: '', staff: '', totalBedrooms: '', guestBedrooms: '', staffBedrooms: '', doubleBedrooms: '', twinBedrooms: '', singleBedrooms: '', bathrooms: '', pool: '', gym: '', spa: '', parking: '', kitchens: '', linkSito: '', webBrochure: '', mediaProprietario: '', googleMaps: '', youtube: '', vimeo: '', psw: '', pricing: S.emptyPricing(st) };
     store.upsertVilla(v);
     location.hash = 'villa-' + v.id;
     setTimeout(() => { const n = $('[data-k="name"]'); if (n) { n.focus(); n.select(); } }, 50);
@@ -922,7 +928,7 @@ window.SDBStore.ready.then(function () {
   const FIELDS = {
     anagrafica: [['name', 'Nome'], ['codice', 'Codice (es. MRN-PRT)'], ['nomeReale', 'Nome reale'], ['proprietario', 'Proprietario'], ['realEstate', 'Real estate'], ['indirizzo', 'Indirizzo'], ['location', 'Location'], ['seafront', 'Seafront – Seaview']],
     caratteristiche: [['indoorSqm', 'Indoor mq'], ['outdoorSqm', 'Outdoor mq'], ['pax', 'Pax'], ['guests', 'N° ospiti'], ['staff', 'N° staff'], ['totalBedrooms', 'Camere totali'], ['guestBedrooms', 'Camere ospiti'], ['staffBedrooms', 'Camere staff'], ['doubleBedrooms', 'Matrimoniali'], ['twinBedrooms', 'Twin'], ['singleBedrooms', 'Singole'], ['bathrooms', 'Bagni'], ['pool', 'Piscina'], ['gym', 'Palestra'], ['spa', 'Spa'], ['parking', 'Parcheggio'], ['kitchens', 'Cucine']],
-    link: [['linkSito', 'Link sito'], ['mediaProprietario', 'Media proprietario'], ['googleMaps', 'Google Maps'], ['youtube', 'Video YouTube'], ['vimeo', 'Video Vimeo'], ['psw', 'Password']]
+    link: [['linkSito', 'Link sito'], ['webBrochure', 'Web brochure'], ['mediaProprietario', 'Media proprietario'], ['googleMaps', 'Google Maps'], ['youtube', 'Video YouTube'], ['vimeo', 'Video Vimeo'], ['psw', 'Password']]
   };
   let villaTab = 'settimanale';
   const RIS_FIELDS = S.CAMPI_SCHEDA;
@@ -1232,7 +1238,8 @@ window.SDBStore.ready.then(function () {
     return [
       ['generale', 'Generale', 'Tema, nome e date della stagione'],
       ['listini', 'Listini e periodi', 'Giorno di cambio, periodi, valori per le nuove ville'],
-      ['aspetto', 'Aspetto predefiniti', 'Stati e colori, servizi, ' + nLoc + ' località'],
+      ['aspetto', 'Aspetto predefiniti', 'Stati e colori, ' + nLoc + ' località'],
+      ['servizi', 'Servizi e inclusioni', 'Prezzi predefiniti dei servizi, voci incluse nelle offerte'],
       store.mode === 'online' && isFull() ? ['account', 'Account e accessi', nAcc ? nAcc + (nAcc === 1 ? ' account autorizzato' : ' account autorizzati') : 'Chi può entrare e in quali pagine'] : null,
       window.SDBReport ? ['schede', 'Schede incomplete', 'Campi non compilati di ogni villa'] : null,
       ['dati', 'Dati e backup', 'Backup e pulizia di fine stagione']
@@ -1278,15 +1285,20 @@ window.SDBStore.ready.then(function () {
         <div id="st-list" class="st-admin"></div>
         <form class="loc-new st-new" id="st-add" autocomplete="off"><input id="st-add-n" placeholder="Nuovo stato (es. Manutenzione)"><input type="color" class="dot" id="st-add-c" value="#2f6fd6" aria-label="Colore"><label class="st-blk"><input type="checkbox" id="st-add-b" checked> Blocca</label><button class="btn small">Aggiungi stato</button></form>
       </section>
-      <section class="card"><h2>Servizi</h2>
-        <p class="note">Sono le caselle della sezione Servizi nella finestra della prenotazione. Pulizia finale, cuoco e transfer sono di base; puoi aggiungerne altri, rinominarli e togliere quelli che nessuna prenotazione usa.</p>
-        <div id="srv-list" class="st-admin"></div>
-        <form class="loc-new" id="srv-add" autocomplete="off"><input id="srv-add-n" placeholder="Nuovo servizio (es. Baby sitter)"><button class="btn small">Aggiungi servizio</button></form>
-      </section>
       <section class="card"><h2>Località</h2>
         <p class="note">È l'elenco da cui scegli la località nella scheda di ogni villa e che usi come filtro. Se due nomi indicano lo stesso posto (es. P.CERVO e PORTO CERVO), usa "Unisci in…": tutte le ville passano al nome scelto.</p>
         <div id="loc-list" class="loc-admin"></div>
         <div class="loc-new"><input id="loc-add-in" placeholder="Nuova località"><button type="button" class="btn small" id="loc-add">Aggiungi</button></div>
+      </section>`)}
+      ${pg('servizi', `<section class="card"><h2>Servizi delle prenotazioni</h2>
+        <p class="note">Sono le caselle della sezione Servizi nella finestra della prenotazione. Qui scegli per ognuno se di norma è <b>incluso</b> nel prezzo dell'affitto o <b>a parte</b>, e i prezzi predefiniti: quando spunti il servizio in una prenotazione si compilano da soli, e lì puoi sempre cambiarli. Pulizia finale, cuoco e transfer sono di base; gli altri si rinominano e si tolgono se nessuna prenotazione li usa.${canAcq() ? ' I prezzi di acquisto li vede solo chi vede gli acquisti.' : ''}</p>
+        <div class="tbl-wrap"><table class="prices srv-tbl"><thead><tr><th>Servizio</th><th>Di norma</th>${canAcq() ? '<th>Acquisto €</th>' : ''}<th>Vendita €</th><th>Usato</th><th></th></tr></thead><tbody id="srv-list"></tbody></table></div>
+        <form class="loc-new" id="srv-add" autocomplete="off"><input id="srv-add-n" placeholder="Nuovo servizio (es. Baby sitter)"><button class="btn small">Aggiungi servizio</button></form>
+      </section>
+      <section class="card"><h2>Inclusioni delle offerte</h2>
+        <p class="note">Sono le voci "Le tariffe includono" della mail di offerta, in italiano e in inglese. Quelle con la spunta sono già selezionate in ogni nuova offerta; nell'offerta le puoi togliere o aggiungere una alla volta.</p>
+        <div id="inc-list" class="inc-admin"></div>
+        <form class="inc-new" id="inc-add" autocomplete="off"><input id="inc-add-it" placeholder="Nuova voce in italiano"><input id="inc-add-en" placeholder="In inglese"><button class="btn small">Aggiungi</button></form>
       </section>`)}
       ${pg('listini', `<section class="card"><h2>Giorno di cambio</h2>
         <div class="field"><span>Le settimane predefinite vanno</span><div class="seg" id="s-cambio">${[['sabato', 'Da sabato a sabato'], ['domenica', 'Da domenica a domenica']].map(([k, l]) => `<button type="button" data-c="${k}" class="${(st.cambio || 'domenica') === k ? 'on' : ''}">${l}</button>`).join('')}</div></div>
@@ -1520,13 +1532,43 @@ window.SDBStore.ready.then(function () {
     // ---- servizi (settings.servizi) ----
     const srvUsed = k => data().bookings.filter(b => Array.isArray(b.servizi) && b.servizi.includes(k)).length;
     const srvBaseUsed = k => data().bookings.filter(b => b[k]).length;
+    const prezziSrv = () => (st.prezziServizi = st.prezziServizi || {});
+    let acqSrv = JSON.parse(JSON.stringify(data().serviziAcquisto || {})); let tAcq = null;
+    const fmtP = x => typeof x === 'number' ? fmtNum(x) : '';
     const drawSrv = () => {
       const list = servizi(st.servizi);
-      $('#srv-list').innerHTML = list.map(x => { const n = x.base ? srvBaseUsed(x.key) : srvUsed(x.key); return `<div class="st-row" data-sk="${esc(x.key)}">
-        ${x.base ? `<b class="srv-n">${esc(x.label)}</b><span class="note">di base</span>` : `<input data-sl value="${esc(x.label)}" aria-label="Nome del servizio">`}
-        <span class="note">${n} ${n === 1 ? 'prenotazione' : 'prenotazioni'}</span>
-        <span class="loc-act">${!x.base && !n ? '<button type="button" class="btn small danger" data-sd>Togli</button>' : ''}</span></div>`; }).join('');
+      $('#srv-list').innerHTML = list.map(x => { const n = x.base ? srvBaseUsed(x.key) : srvUsed(x.key); const pz = prezziSrv()[x.key] || {}; const inc = pz.incluso !== false; return `<tr class="srv-tr" data-sk="${esc(x.key)}">
+        <td>${x.base ? `<b class="srv-n">${esc(x.label)}</b> <span class="note">di base</span>` : `<input data-sl value="${esc(x.label)}" aria-label="Nome del servizio">`}</td>
+        <td><div class="seg small" data-pi><button type="button" data-i="1" class="${inc ? 'on' : ''}">Incluso</button><button type="button" data-i="0" class="${inc ? '' : 'on'}">A parte</button></div></td>
+        ${canAcq() ? `<td><input data-pa inputmode="numeric" value="${esc(fmtP(acqSrv[x.key]))}" placeholder="—" aria-label="Acquisto predefinito"></td>` : ''}
+        <td><input data-pv inputmode="numeric" value="${esc(fmtP(pz.vendita))}" placeholder="—" aria-label="Vendita predefinita"></td>
+        <td class="note">${n} ${n === 1 ? 'prenot.' : 'prenot.'}</td>
+        <td class="loc-act">${!x.base && !n ? '<button type="button" class="btn small danger" data-sd>Togli</button>' : ''}</td></tr>`; }).join('');
     };
+    $('#srv-list').addEventListener('input', e => { const row = e.target.closest('[data-sk]'); if (!row) return; const k = row.dataset.sk;
+      if (e.target.matches('[data-pv]')) { const v = S.parseMoney(e.target.value); prezziSrv()[k] = Object.assign({}, prezziSrv()[k], { vendita: typeof v === 'number' ? v : null }); save(); }
+      if (e.target.matches('[data-pa]')) { const v = S.parseMoney(e.target.value); if (typeof v === 'number') acqSrv[k] = v; else delete acqSrv[k];
+        $('#saved').textContent = 'Modifiche in corso…'; clearTimeout(tAcq); tAcq = setTimeout(() => { Promise.resolve(store.setServiziAcquisto(JSON.parse(JSON.stringify(acqSrv)))).then(() => { $('#saved').textContent = 'Salvato'; }, err => { $('#saved').textContent = ''; toast(err && err.code === 'permission-denied' ? 'Per i prezzi di acquisto predefiniti bisogna pubblicare la nuova regola di Firestore' : 'Errore: ' + (err && err.message || err)); }); }, 500); }
+    });
+    $('#srv-list').addEventListener('click', e => { const bt = e.target.closest('[data-pi] button'); if (!bt) return; const k = bt.closest('[data-sk]').dataset.sk;
+      prezziSrv()[k] = Object.assign({}, prezziSrv()[k], { incluso: bt.dataset.i === '1' }); bt.parentNode.querySelectorAll('button').forEach(z => z.classList.toggle('on', z === bt)); save(); });
+    // ---- inclusioni delle offerte (settings.inclusioni) ----
+    const incList = () => (st.inclusioni = JSON.parse(JSON.stringify(S.inclusioniDi(st))));
+    const drawInc = () => {
+      $('#inc-list').innerHTML = S.inclusioniDi(st).map((x, i, l) => `<div class="inc-row" data-ii="${esc(x.id)}">
+        <label class="inc-on" title="Spuntata di norma nelle nuove offerte"><input type="checkbox" data-ion ${x.on !== false ? 'checked' : ''}></label>
+        <input data-iit value="${esc(x.it || '')}" placeholder="Italiano" aria-label="Voce in italiano"><input data-ien value="${esc(x.en || '')}" placeholder="English" aria-label="Voce in inglese">
+        <span class="inc-act"><button type="button" class="btn small" data-imv="-1" ${i ? '' : 'disabled'} aria-label="Sposta su">↑</button><button type="button" class="btn small" data-imv="1" ${i < l.length - 1 ? '' : 'disabled'} aria-label="Sposta giù">↓</button><button type="button" class="btn small danger" data-idel>Togli</button></span></div>`).join('') || '<p class="note">Nessuna voce.</p>';
+    };
+    drawInc();
+    $('#inc-list').addEventListener('input', e => { const row = e.target.closest('[data-ii]'); if (!row) return; const l = incList(); const x = l.find(y => y.id === row.dataset.ii); if (!x) return;
+      if (e.target.matches('[data-iit]')) x.it = e.target.value; else if (e.target.matches('[data-ien]')) x.en = e.target.value; else if (e.target.matches('[data-ion]')) x.on = e.target.checked; else return; st.inclusioni = l; save(); });
+    $('#inc-list').addEventListener('change', e => { if (!e.target.matches('[data-ion]')) return; const row = e.target.closest('[data-ii]'); const l = incList(); const x = l.find(y => y.id === row.dataset.ii); if (x) { x.on = e.target.checked; st.inclusioni = l; save(); } });
+    $('#inc-list').addEventListener('click', e => { const row = e.target.closest('[data-ii]'); if (!row) return; const l = incList(); const i = l.findIndex(y => y.id === row.dataset.ii); if (i < 0) return;
+      const mv = e.target.closest('[data-imv]'); if (mv) { const j = i + Number(mv.dataset.imv); if (j < 0 || j >= l.length) return; [l[i], l[j]] = [l[j], l[i]]; st.inclusioni = l; save(); drawInc(); return; }
+      if (e.target.closest('[data-idel]')) { l.splice(i, 1); st.inclusioni = l; save(); drawInc(); toast('Voce tolta'); } });
+    $('#inc-add').addEventListener('submit', e => { e.preventDefault(); const it = $('#inc-add-it').value.trim(), en = $('#inc-add-en').value.trim(); if (!it && !en) { $('#inc-add-it').focus(); return; }
+      const l = incList(); l.push({ id: S.uid('i'), it, en, on: true }); st.inclusioni = l; save(); drawInc(); $('#inc-add-it').value = ''; $('#inc-add-en').value = ''; toast('Voce aggiunta'); });
     const srvCustom = () => JSON.parse(JSON.stringify(st.servizi || (settings().servizi || [])));
     drawSrv();
     $('#srv-list').addEventListener('input', e => { const row = e.target.closest('[data-sk]'); if (!row || !e.target.matches('[data-sl]')) return; const v = e.target.value.trim(); if (!v) return;

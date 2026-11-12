@@ -177,5 +177,16 @@
   const CAMPI_NASCOSTI_DEFAULT = ['nomeReale', 'proprietario', 'realEstate', 'indirizzo', 'note', 'mediaProprietario', 'googleMaps', 'psw'];
   // campi nascosti a un profilo: elenco del profilo; per i profili creati prima, dalla vecchia scelta "scheda"
   const nascostiDi = pr => Array.isArray(pr && pr.nascosti) ? pr.nascosti : (pr && pr.scheda ? [] : CAMPI_NASCOSTI_DEFAULT.slice());
-  window.SDB = { CAMPI_SCHEDA, CAMPI_NASCOSTI_DEFAULT, nascostiDi, periodsFor, autoPeriods, autoPeriodsFor, cambioDi, STATUS_COLOR, PALETTE, inkFor, DAY, MESI, MESI_L, GG, parse, iso, addDays, diffDays, dm, dmy, TARIFFE, STATI, defaultSettings, defaultPeriods, salePrice, priceAt, emptyPricing, money, short, parseMoney, uid };
+  // voci "Le tariffe includono" delle offerte (Impostazioni → Servizi e inclusioni: settings.inclusioni)
+  const INCLUSIONI = [
+    ['pulizia', 'Pulizia giornaliera della casa', 'Daily Cleaning for the resetting of the house'],
+    ['giardino', 'Giardinaggio e pulizia della piscina regolari', 'Regular Gardening and pool cleaning'],
+    ['biancheria', 'Cambio biancheria e asciugamani due volte a settimana', 'Linen & towel change twice per week'],
+    ['bagno', 'Prodotti da bagno di lusso all\'arrivo', 'Luxury bath products on arrival'],
+    ['concierge', 'Servizio concierge per tutte le prenotazioni in Costa Smeralda', 'Concierge Services for all reservations in Costa Smeralda'],
+    ['finale', 'Pulizia finale e lavanderia finale standard', 'Standard Final Cleaning and Final Laundry'],
+    ['utenze', 'Tutte le utenze, escluso il riscaldamento della piscina se presente', 'All Utilities except the cost for the pool heating if present']
+  ].map(([id, it, en]) => ({ id, it, en, on: true }));
+  const inclusioniDi = st => (Array.isArray(st && st.inclusioni) ? st.inclusioni : INCLUSIONI).filter(x => x && x.id);
+  window.SDB = { INCLUSIONI, inclusioniDi, CAMPI_SCHEDA, CAMPI_NASCOSTI_DEFAULT, nascostiDi, periodsFor, autoPeriods, autoPeriodsFor, cambioDi, STATUS_COLOR, PALETTE, inkFor, DAY, MESI, MESI_L, GG, parse, iso, addDays, diffDays, dm, dmy, TARIFFE, STATI, defaultSettings, defaultPeriods, salePrice, priceAt, emptyPricing, money, short, parseMoney, uid };
 })();

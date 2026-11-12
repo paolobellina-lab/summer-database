@@ -922,3 +922,16 @@ table.prices.rp-tbl td { vertical-align: top; white-space: normal; padding-top: 
 .off-bro small strong { display: inline; }
 .flag.off-bro small { display: block; }
 .cc-ko { color: #b3261e; font-weight: 600; }
+.off-incl { display: grid; gap: 4px 18px; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); margin-bottom: 6px; }
+.off-inc { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; text-transform: none; letter-spacing: 0; color: var(--fg); cursor: pointer; padding: 3px 0; }
+.off-inc input { margin-top: 2px; flex: none; width: auto; }
+.off-inc span { text-transform: none; letter-spacing: 0; font-size: 13px; color: var(--fg); font-weight: 400; }
+table.prices.srv-tbl td { vertical-align: middle; padding-top: 6px; padding-bottom: 6px; }
+table.prices.srv-tbl td input { width: 110px; text-align: right; }
+table.prices.srv-tbl td input[data-sl] { width: 200px; text-align: left; }
+.inc-admin { display: grid; gap: 6px; margin-bottom: 10px; }
+.inc-row { display: grid; grid-template-columns: auto 1fr 1fr auto; gap: 8px; align-items: center; }
+.inc-on input { width: 18px; height: 18px; }
+.inc-act { display: flex; gap: 4px; }
+.inc-new { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; }
+@media (max-width: 700px) { .inc-row { grid-template-columns: auto 1fr; } .inc-row input[data-ien] { grid-column: 2; } .inc-act { grid-column: 2; } .inc-new { grid-template-columns: 1fr; } }

@@ -38,9 +38,10 @@ Lettura tramite `store.listenScontrini` (solo `scontrini`); `scontrini_foto` e `
 ## Periodi tariffari
 `S.periodsFor(settings, villa, tariffa)` in `core.js`. Settimanale: segue il giorno di cambio (`settings.cambio` o `villa.cambio`, sabato/domenica). Bisettimanale/mensile/bimensile: `villa.periodi[tariffa]` → `settings.periodiPredefiniti[tariffa]` → date automatiche dell'Excel spostate in base al giorno di cambio. Il numero dei periodi è fisso (i prezzi sono collegati per posizione).
 
-## Stati e servizi (Impostazioni → Aspetto predefiniti)
+## Stati e servizi (Impostazioni → Aspetto predefiniti / Servizi e inclusioni)
 - `meta/settings.stati`: `[{ key, label, color, blocks }]`. I 5 stati di base (`occupato`, `confermato`, `opzione`, `richiesta`, `owner`) hanno chiavi fisse: si cambiano nome, colore e "blocca", non la chiave. Gli stati aggiunti hanno una chiave ricavata dal nome, che non cambia più (va in `bookings.status`, letto dalle altre app).
 - Colore della prenotazione: `bookings.color` è salvato solo se scelto a mano (altrimenti `null`). Se è nullo o uguale al colore originale del suo stato (`S.STATUS_COLOR`), la prenotazione segue il colore predefinito dello stato.
+- Pagina **Servizi e inclusioni**: servizi con prezzi predefiniti — `meta/settings.prezziServizi = { chiave: { incluso, vendita } }` e acquisto in `meta/servizi_acquisto = { prezzi: { chiave: euro } }` (regola: lettura `completo() || puo('acquisto')`, scrittura `completo()`, escluso dalla regola generica di `meta`). Nella prenotazione, spuntando un servizio senza dettagli salvati si applicano "di norma incluso/a parte" e i prezzi predefiniti (solo nelle caselle vuote). Inclusioni delle offerte: `meta/settings.inclusioni = [{ id, it, en, on }]` (predefinite `S.INCLUSIONI` in `core.js`); nelle Offerte sono caselle (`ui.off.incSel`, `null` = quelle con `on`) + voci libere `ui.off.incExtra`.
 - `meta/settings.servizi`: `[{ key, label }]` in aggiunta ai 3 di base (campi `pulizia`, `cuoco`, `transfer`). Nella prenotazione i servizi aggiunti stanno in `servizi: [key]`.
 - Dettaglio dei servizi nella prenotazione: `serviziDett: { [key]: { incluso, acquisto, vendita, note } }`. `incluso: true` = compreso nel prezzo di vendita dell'affitto; altrimenti acquisto e vendita del servizio si sommano al totale (barra del calendario, guadagno).
 
@@ -50,6 +51,7 @@ Elenco condiviso in `meta/settings` → `localita` (maiuscolo). Nella scheda vil
 ## Foto e preferiti
 - Foto delle ville in `villas_foto/{id}` (`villaId`, `img`, `thumb`, `ordine`) e copertina in `villas_thumb/{villaId}` (`thumb`, `fotoId`). Mai dentro `villas`, che le altre app leggono per intero.
 - Brochure PDF (max 10 MB) caricate nella scheda villa: `villas_brochure/{id}` = `{ villaId, nome, lingua ('it'|'en'|''), size, parti, creatoDa, creatoIl }` e il file a pezzi da 900 KB in `villas_brochure_parti/{id}_{k}` = `{ villaId, brochureId, k, dati (bytes) }` (un documento Firestore tiene al massimo 1 MB; la scheda si scrive per ultima). Regole: lettura a chi vede la villa, scrittura con accesso completo. Nelle Offerte "Allega brochure" scarica i PDF delle ville scelte nella lingua dell'offerta (altrimenti un'altra), da trascinare nella mail: Gmail non accetta allegati da un link.
+- Campo `webBrochure` (link alla web brochure) nella scheda villa, gruppo Link e media; resta in `villas` (non è tra i campi riservati).
 - Elenchi preferiti condivisi in `meta/preferiti` (`liste: [{ id, nome, ville: [villaId] }]`).
 
 ## Account autorizzati

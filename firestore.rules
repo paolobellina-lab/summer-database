@@ -108,9 +108,11 @@ service cloud.firestore {
     // password di pulizia: la impostano e la reimpostano solo gli amministratori
     match /meta/sicurezza { allow read: if autorizzato(); allow write: if amministratore(); }
     match /meta/notes     { allow read, write: if pagina('appunti'); }
+    // prezzi di acquisto predefiniti dei servizi: solo chi vede gli acquisti
+    match /meta/servizi_acquisto { allow read: if completo() || puo('acquisto'); allow write: if completo(); }
     match /meta/{id} {
-      allow read: if autorizzato() && id != 'notes';
-      allow write: if autorizzato() && !(id in ['accessi', 'profili', 'settings', 'sicurezza', 'notes']);
+      allow read: if autorizzato() && !(id in ['notes', 'servizi_acquisto']);
+      allow write: if autorizzato() && !(id in ['accessi', 'profili', 'settings', 'sicurezza', 'notes', 'servizi_acquisto']);
     }
 
     // app Scontrini: invariato

@@ -36,7 +36,7 @@
   function mount(main, ctx) {
     const { ui, saveUI, esc, data, store, $, $$, toast, S, settings, blocks, hiddenField } = ctx;
     const X = window.SDBExport;
-    const o = ui.off = Object.assign({ tariff: 'settimanale', idx: 0, ville: [], prezzi: {}, cliente: '', email: '', lingua: 'it', nFoto: 3, soloLibere: true, q: '', intro: '', chiusa: '', introMod: false, chiusaMod: false, note: {}, inclusi: '', inclusiMod: false, firma: 'Esmeralda Luxury Villas' }, ui.off || {});
+    const o = ui.off = Object.assign({ tariff: 'settimanale', idx: 0, ville: [], prezzi: {}, cliente: '', email: '', lingua: 'it', nFoto: 3, soloLibere: true, q: '', intro: '', chiusa: '', introMod: false, chiusaMod: false, note: {}, incSel: null, incExtra: '', firma: 'Esmeralda Luxury Villas' }, ui.off || {});
     const L = () => T[o.lingua] || T.it;
     if (!o.note) o.note = {};
     const st = settings();
@@ -83,7 +83,9 @@
           <label class="field"><span>Foto per villa (Word)</span><select id="off-nf">${[1, 3, 5, 8].map(n => `<option value="${n}" ${Number(o.nFoto) === n ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
         </div>
         <label class="field"><span>Testo iniziale</span><textarea id="off-intro" rows="3"></textarea></label>
-        <label class="field"><span>Le tariffe includono (una voce per riga)</span><textarea id="off-incl" rows="7"></textarea></label>
+        <div class="field"><span>Le tariffe includono</span><div class="off-incl" id="off-incl"></div>
+          <textarea id="off-incx" rows="2" placeholder="Altre voci solo per questa offerta (una per riga)">${esc(o.incExtra || '')}</textarea>
+          <small class="note">L'elenco e le voci spuntate di norma si cambiano in Impostazioni → Servizi e inclusioni.</small></div>
         <label class="field"><span>Testo finale</span><textarea id="off-chiusa" rows="2"></textarea></label>
         <label class="field"><span>Firma</span><textarea id="off-firma" rows="2">${esc(o.firma || '')}</textarea></label>
         ${store.listBrochure ? `<label class="flag off-bro"><input type="checkbox" id="off-bro" ${o.brochure ? 'checked' : ''}><span><b>Allega brochure</b><small id="off-bro-info">Scarica i PDF delle ville scelte, nella lingua dell'offerta, da trascinare nella mail.</small></span></label>` : ''}
@@ -140,11 +142,16 @@
       $('#off-count').textContent = o.ville.length ? `· ${o.ville.length} ${o.ville.length === 1 ? 'scelta' : 'scelte'}` : '';
       updBro();
     };
+    // voci "Le tariffe includono": di norma quelle spuntate in Impostazioni; in questa offerta si spuntano e tolgono a mano
+    const incSel = () => Array.isArray(o.incSel) ? o.incSel : S.inclusioniDi(st).filter(x => x.on !== false).map(x => x.id);
+    const incTesti = () => { const sel = incSel(); return S.inclusioniDi(st).filter(x => sel.includes(x.id)).map(x => (o.lingua === 'en' ? x.en : x.it) || x.it || x.en)
+      .concat(String(o.incExtra || '').split('\n').map(t => t.trim()).filter(Boolean)); };
     const drawTexts = () => {
       if (!o.introMod) o.intro = L().intro(o.cliente.trim(), periodoTxt());
       if (!o.chiusaMod) o.chiusa = L().chiusaMail;
-      if (!o.inclusiMod) o.inclusi = L().inclusi;
-      $('#off-intro').value = o.intro; $('#off-chiusa').value = o.chiusa; $('#off-incl').value = o.inclusi;
+      $('#off-intro').value = o.intro; $('#off-chiusa').value = o.chiusa;
+      const sel = incSel();
+      $('#off-incl').innerHTML = S.inclusioniDi(st).map(x => `<label class="off-inc"><input type="checkbox" data-inc="${esc(x.id)}" ${sel.includes(x.id) ? 'checked' : ''}><span>${esc((o.lingua === 'en' ? x.en : x.it) || x.it || x.en)}</span></label>`).join('');
       updBro();
     };
     // brochure PDF delle ville scelte: quella nella lingua dell'offerta, altrimenti un'altra
@@ -186,11 +193,12 @@
       const cb = e.target.closest('[data-pick]'); if (cb) { const id = cb.dataset.pick; o.ville = o.ville.filter(x => x !== id); if (cb.checked) o.ville.push(id); drawList(); drawTexts(); save(); }
     });
     $('#off-list').addEventListener('input', e => { const i = e.target.closest('[data-price]'); if (i) { o.prezzi[i.dataset.price] = i.value; save(); } const n = e.target.closest('[data-nota]'); if (n) { o.note[n.dataset.nota] = n.value; save(); } });
-    $('#off-incl').addEventListener('input', e => { o.inclusi = e.target.value; o.inclusiMod = true; save(); });
+    $('#off-incl').addEventListener('change', e => { const c = e.target.closest('[data-inc]'); if (!c) return; const sel = incSel().filter(x => x !== c.dataset.inc); if (c.checked) sel.push(c.dataset.inc); o.incSel = sel; save(); });
+    $('#off-incx').addEventListener('input', e => { o.incExtra = e.target.value; save(); });
     $('#off-firma').addEventListener('input', e => { o.firma = e.target.value; save(); });
     $('#off-cli').addEventListener('input', e => { o.cliente = e.target.value; drawTexts(); save(); });
     $('#off-mail').addEventListener('input', e => { o.email = e.target.value.trim(); save(); });
-    $('#off-lang').addEventListener('click', e => { const b = e.target.closest('[data-l]'); if (!b) return; o.lingua = b.dataset.l; o.introMod = false; o.chiusaMod = false; o.inclusiMod = false; $$('#off-lang button').forEach(x => x.classList.toggle('on', x === b)); drawTexts(); save(); });
+    $('#off-lang').addEventListener('click', e => { const b = e.target.closest('[data-l]'); if (!b) return; o.lingua = b.dataset.l; o.introMod = false; o.chiusaMod = false; $$('#off-lang button').forEach(x => x.classList.toggle('on', x === b)); drawTexts(); save(); });
     $('#off-nf').addEventListener('change', e => { o.nFoto = Number(e.target.value); save(); });
     $('#off-intro').addEventListener('input', e => { o.intro = e.target.value; o.introMod = true; save(); });
     $('#off-chiusa').addEventListener('input', e => { o.chiusa = e.target.value; o.chiusaMod = true; save(); });
@@ -280,7 +288,7 @@
         const lab = (o.lingua === 'en' ? `${mese ? mese[0].toUpperCase() + mese.slice(1) + ' ' : ''}${tarEn} ${l.tariffa}` : `${l.tariffa} ${tar.toLowerCase()}${mese ? ' ' + mese : ''}`) + (diverso ? ' ' + rangeTxt(p, o.lingua) : '');
         h += P(`<b>${esc(lab)}:</b> ${pr === null ? esc(l.richiesta) : eur(pr)}${nota ? ' - ' + esc(nota) + ' -' : ''}`) + BR;
       }
-      const inc = o.inclusi.split('\n').map(t => t.trim()).filter(Boolean);
+      const inc = incTesti();
       if (inc.length) h += P(`<b><u>${esc(l.inclusiTit)}</u></b>`) + `<ul style="margin:6px 0 12px">${inc.map(t => `<li>${esc(t)}</li>`).join('')}</ul>`;
       h += o.chiusa.split('\n').filter(t => t.trim()).map(t => P(esc(t))).join('');
       h += P(`<b><i>${esc(l.soggetta)}</i></b>`);

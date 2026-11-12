@@ -61,6 +61,7 @@
       getBrochure(b) { return Promise.resolve(b._blob); },
       deleteBrochure(b) { const i = memBro.findIndex(x => x.id === b.id); if (i >= 0) memBro.splice(i, 1); return Promise.resolve(); },
       setSicurezza(x) { state.sicurezza = x; persist(); },
+      setServiziAcquisto(p) { state.serviziAcquisto = p; persist(); },
       // pulizia di fine stagione (protetta da password nell'interfaccia)
       wipeBookings() { const n = state.bookings.length; state.bookings = []; (state.assegnazioni || []).forEach(a => { a.prenotazioni = []; }); persist(); return Promise.resolve(n); },
       setAssegnazioni(l) { state.assegnazioni = l; persist(); },
@@ -382,6 +383,8 @@
         return b.commit();
       },
       setSicurezza(x) { state.sicurezza = x; return db.collection('meta').doc('sicurezza').set(strip(x)); },
+      // prezzi di acquisto predefiniti dei servizi: meta/servizi_acquisto = { prezzi: { chiave: euro } } (solo chi vede gli acquisti)
+      setServiziAcquisto(p) { state.serviziAcquisto = p; emit('local'); return db.collection('meta').doc('servizi_acquisto').set({ prezzi: strip(p) }); },
       /* Conferma dell'identità prima di reimpostare la password di pulizia: nuovo accesso con Google
          (stesso account già collegato). Se l'account scelto è diverso, Firebase rifiuta. */
       reauthGoogle() {
@@ -631,6 +634,7 @@
           onDoc('meta', 'preferiti', 'mp', d => { state.preferiti = d.exists ? (d.data() || {}).liste || [] : []; });
           onDoc('meta', 'assegnazioni', 'mg', d => { state.assegnazioni = d.exists ? (d.data() || {}).account || [] : []; });
           onDoc('meta', 'sicurezza', 'mz', d => { state.sicurezza = d.exists ? d.data() || null : null; });
+          if (prof.full || prof.acquisto) onDoc('meta', 'servizi_acquisto', 'msa', d => { state.serviziAcquisto = d.exists ? (d.data() || {}).prezzi || {} : {}; });
           // se cambia il mio profilo (ville condivise, permessi) o si attiva la protezione, ricarico l'app
           let accNow = state.accessi, pmNow = { profili: state.profili, protezione: state.protezione };
           const recheck = () => { if (!started) return; const p = profileFrom(accNow, pmNow); const keep = prof.admin && p.none; if (!keep && sigOf(p) !== mySig) location.reload(); };
