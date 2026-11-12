@@ -848,7 +848,7 @@ details.prof-item[open] > .prof-sum .chev { transform: translateY(1px) rotate(-1
 .off-pernav .btn { width: 40px; padding-left: 0; padding-right: 0; text-align: center; font-size: 1.2em; }
 .off-persel { flex: 1; display: flex; flex-wrap: wrap; align-items: baseline; justify-content: center; gap: 4px 12px; padding: 8px 12px; border: 1px solid var(--accent); background: var(--accent-soft); border-radius: 8px; text-align: center; }
 .off-persel span { color: var(--muted); }
-.off-cal { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 14px 18px; }
+.off-cal { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px 28px; }
 .off-mname { font-weight: 600; text-transform: uppercase; letter-spacing: .06em; font-size: .82em; margin-bottom: 4px; }
 .off-wd, .off-days { display: grid; grid-template-columns: repeat(7, 1fr); }
 .off-wd i { font-style: normal; text-align: center; font-size: .72em; color: var(--muted); padding: 2px 0; }
