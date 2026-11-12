@@ -1307,6 +1307,7 @@ window.SDBStore.ready.then(function () {
         <p class="note" id="ab-last">${lsGet(LASTKEY) ? 'Ultimo backup automatico su questo dispositivo: ' + esc(S.dmy(lsGet(LASTKEY))) + '.' : 'Nessun backup automatico ancora su questo dispositivo.'}</p>
       </section>` : ''}
       ${store.mode === 'online' && isFull() && window.SDBImportaSito ? '<section class="card" id="is-card"></section>' : ''}
+      ${isFull() && window.SDBCaricaCartella ? '<section class="card" id="cc-card"></section>' : ''}
       <section class="card"><h2>Backup e dati</h2>
         <p class="note">${store.mode === 'online' ? `Dati online, condivisi tra gli account autorizzati. Accesso come <b>${esc(store.user || '')}</b>. Esporta comunque un backup ogni tanto.` : 'I dati sono salvati solo in questo browser. Esporta un backup ogni tanto.'}</p>
         <div style="display:flex;flex-wrap:wrap;gap:8px">
@@ -1648,6 +1649,7 @@ window.SDBStore.ready.then(function () {
     $('#w-book').addEventListener('click', () => askWipe('book'));
     if ($('#w-sc')) $('#w-sc').addEventListener('click', () => askWipe('sc'));
     if ($('#rp-card') && cur === 'schede') window.SDBReport.mount($('#rp-card'), { data, esc, store, FIELDS, hiddenField, S, coverOf: id => (thumbs.map[id] || {}).fotoId || null });
+    if ($('#cc-card')) window.SDBCaricaCartella.mount($('#cc-card'), { data, store, esc, $, $$, toast, compressImage, coverOf: id => (thumbs.map[id] || {}).fotoId || null });
     if ($('#is-card')) window.SDBImportaSito.mount($('#is-card'), { data, store, esc, $, $$, toast, compressImage, coverOf: id => (thumbs.map[id] || {}).fotoId || null });
     if ($('#ab-on')) $('#ab-on').addEventListener('change', e => {
       lsSet(AUTOKEY, e.target.checked ? 'si' : 'no');

@@ -885,7 +885,7 @@ details.prof-item[open] > .prof-sum .chev { transform: translateY(1px) rotate(-1
 /* completa le schede dal sito */
 .is-opts { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
 .is-opts .flag small { display: block; }
-.is-opts select { padding: 1px 4px; }
+.is-opts select { padding: 1px 4px; width: auto; display: inline-block; }
 .is-tbl select { max-width: 220px; }
 .is-tbl small { display: block; }
 .is-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 10px 0; }
@@ -921,3 +921,4 @@ table.prices.rp-tbl td { vertical-align: top; white-space: normal; padding-top: 
 #bro-lang { width: auto; flex: 0 0 auto; }
 .off-bro small strong { display: inline; }
 .flag.off-bro small { display: block; }
+.cc-ko { color: #b3261e; font-weight: 600; }

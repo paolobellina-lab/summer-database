@@ -29,6 +29,9 @@ Lettura tramite `store.listenScontrini` (solo `scontrini`); `scontrini_foto` e `
 ## Completa le schede dal sito
 `importa-sito.js` (Impostazioni → Dati e backup, solo accesso completo): legge un JSON `{ ville: [{ nome, sito: {...} }] }` con i dati presi da esmeraldaluxuryvillas.com, abbina per nome (modificabile), compila di norma solo i campi vuoti (`campiDa`: seafront, guests, totalBedrooms, guestBedrooms, bathrooms, indoorSqm, outdoorSqm, pool, spa, gym, servizi, descrizione, linkSito) con `store.upsertVilla`, e prova a scaricare le foto (solo ville senza foto) con `fetch` CORS: se il sito non lo permette, lo segnala. CSP: `connect-src` e `img-src` includono esmeraldaluxuryvillas.com. Il campo `descrizione` (pubblico) è nella scheda villa e nelle Offerte.
 
+## Carica da una cartella
+`carica-cartella.js` (Impostazioni → Dati e backup, solo accesso completo): `<input webkitdirectory>`; i file si raggruppano per sottocartella (= villa) o, se sono tutti insieme, per nome del file (`chiaveFile` toglie lingua e sigle tipo `_n2_en`). Abbina per nome villa o per lo slug di `linkSito` (es. `villa-celvia-beach`), modificabile. Carica i PDF come brochure (`store.addBrochure`, lingua dal nome `_en`/`_it`, salta se la villa ne ha già una nella stessa lingua o se supera 10 MB) e le foto (`store.addFoto`, di norma solo nelle ville senza foto, fino a N per villa, in ordine di nome; la prima fa da copertina).
+
 ## Schede incomplete
 `report.js` (Impostazioni → Schede incomplete, solo accesso completo): per ogni villa i campi vuoti tra quelli scelti (scelta salvata in `localStorage` `sdb-report-campi`), più Foto (copertina in `villas_thumb`), Brochure (`listAllBrochure`) e Prezzi di acquisto; filtro per campo, ricerca, "Scarica Excel" (CSV).
 
