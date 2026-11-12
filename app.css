@@ -890,3 +890,5 @@ details.prof-item[open] > .prof-sum .chev { transform: translateY(1px) rotate(-1
 .is-tbl small { display: block; }
 .is-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 10px 0; }
 .off-nota input { width: min(420px, 100%); }
+.lbl-sub { display: block; font-size: .92em; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 400; margin-top: 4px; }
+.params { align-items: flex-start; } .params .formula { align-self: center; }
