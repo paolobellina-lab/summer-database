@@ -889,3 +889,4 @@ details.prof-item[open] > .prof-sum .chev { transform: translateY(1px) rotate(-1
 .is-tbl select { max-width: 220px; }
 .is-tbl small { display: block; }
 .is-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 10px 0; }
+.off-nota input { width: min(420px, 100%); }

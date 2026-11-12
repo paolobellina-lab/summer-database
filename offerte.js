@@ -10,17 +10,25 @@
       titolo: 'Proposta ville', per: 'Periodo', ospiti: 'Ospiti', camere: 'Camere', bagni: 'Bagni', interni: 'Interni', esterni: 'Esterni',
       piscina: 'Piscina', spa: 'Spa', palestra: 'Palestra', mare: 'Posizione', localita: 'Località', servizi: 'Servizi inclusi', sito: 'Scopri di più',
       prezzo: 'Prezzo per il periodo', richiesta: 'Su richiesta', dal: 'dal', al: 'al', saluti: 'Cordiali saluti',
-      intro: (c, p) => `${c ? 'Gentile ' + c + ',' : 'Gentile cliente,'}\ncome richiesto, le proponiamo la nostra selezione di ville per il periodo ${p}.`,
+      intro: (c, p) => `${c ? 'Gentile ' + c + ',' : 'Gentile cliente,'}\ncome richiesto, di seguito le nostre proposte per il periodo ${p}.`,
       chiusa: 'I prezzi si intendono per l\'intero periodo indicato. Restiamo a disposizione per qualsiasi informazione o per organizzare una visita.',
-      oggetto: p => `Proposta ville · ${p}`
+      oggetto: p => `La sua richiesta · ${p}`,
+      proposte: 'Ecco le nostre proposte:', video: 'Guarda il video', qui: 'qui', tariffa: 'Tariffa', inclusiTit: 'Le tariffe includono:',
+      inclusi: 'Pulizia giornaliera della casa\nGiardinaggio e pulizia della piscina regolari\nCambio biancheria e asciugamani due volte a settimana\nProdotti da bagno di lusso all\'arrivo\nServizio concierge per tutte le prenotazioni in Costa Smeralda\nPulizia finale e lavanderia finale standard\nTutte le utenze, escluso il riscaldamento della piscina se presente',
+      chiusaMail: 'Il nostro Concierge sarà a disposizione per qualsiasi servizio extra durante il soggiorno.',
+      soggetta: 'Offerta soggetta a disponibilità e ad approvazione finale del proprietario.'
     },
     en: {
       titolo: 'Villa proposal', per: 'Dates', ospiti: 'Guests', camere: 'Bedrooms', bagni: 'Bathrooms', interni: 'Indoor', esterni: 'Outdoor',
       piscina: 'Pool', spa: 'Spa', palestra: 'Gym', mare: 'Position', localita: 'Location', servizi: 'Included services', sito: 'Discover more',
       prezzo: 'Price for the period', richiesta: 'On request', dal: 'from', al: 'to', saluti: 'Kind regards',
-      intro: (c, p) => `${c ? 'Dear ' + c + ',' : 'Dear guest,'}\nas requested, please find below our selection of villas for the period ${p}.`,
+      intro: (c, p) => `${c ? 'Dear ' + c + ',' : 'Dear guest,'}\nplease find our suggested options below for the period ${p}.`,
       chiusa: 'Prices refer to the whole period indicated. We remain at your disposal for any further information.',
-      oggetto: p => `Villa proposal · ${p}`
+      oggetto: p => `Your Enquiry · ${p}`,
+      proposte: 'Herewith our suggestions:', video: 'Watch the video', qui: 'here', tariffa: 'Rate', inclusiTit: 'The rates do include:',
+      inclusi: 'Daily Cleaning for the resetting of the house\nRegular Gardening and pool cleaning\nLinen & towel change twice per week\nLuxury bath products on arrival\nConcierge Services for all reservations in Costa Smeralda\nStandard Final Cleaning and Final Laundry\nAll Utilities except the cost for the pool heating if present',
+      chiusaMail: 'Our Concierge will be ready to accommodate any requests for extra services needed during your stay.',
+      soggetta: 'Offer subject to availability and owner\'s final approval.'
     }
   };
   const FIRMA = 'Esmeralda Luxury Villas';
@@ -28,8 +36,9 @@
   function mount(main, ctx) {
     const { ui, saveUI, esc, data, store, $, $$, toast, S, settings, blocks, hiddenField } = ctx;
     const X = window.SDBExport;
-    const o = ui.off = Object.assign({ tariff: 'settimanale', idx: 0, ville: [], prezzi: {}, cliente: '', email: '', lingua: 'it', nFoto: 3, soloLibere: true, q: '', intro: '', chiusa: '', introMod: false, chiusaMod: false }, ui.off || {});
+    const o = ui.off = Object.assign({ tariff: 'settimanale', idx: 0, ville: [], prezzi: {}, cliente: '', email: '', lingua: 'it', nFoto: 3, soloLibere: true, q: '', intro: '', chiusa: '', introMod: false, chiusaMod: false, note: {}, inclusi: '', inclusiMod: false, firma: 'Esmeralda Luxury Villas' }, ui.off || {});
     const L = () => T[o.lingua] || T.it;
+    if (!o.note) o.note = {};
     const st = settings();
     const fmtD = (iso, lang) => new Date(S.parse(iso)).toLocaleDateString(lang === 'en' ? 'en-GB' : 'it-IT', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
     const rangeTxt = (p, lang) => lang === 'en' ? `${fmtD(p.from, lang)} – ${fmtD(p.to, lang)}` : `dal ${fmtD(p.from, lang)} al ${fmtD(p.to, lang)}`;
@@ -71,16 +80,18 @@
           <label class="field"><span>Cliente</span><input id="off-cli" value="${esc(o.cliente)}" placeholder="es. Mr Smith"></label>
           <label class="field"><span>Email del cliente</span><input id="off-mail" type="email" value="${esc(o.email)}" placeholder="facoltativa"></label>
           <div class="field"><span>Lingua</span><div class="seg" id="off-lang"><button type="button" data-l="it" class="${o.lingua === 'it' ? 'on' : ''}">Italiano</button><button type="button" data-l="en" class="${o.lingua === 'en' ? 'on' : ''}">English</button></div></div>
-          <label class="field"><span>Foto per villa</span><select id="off-nf">${[1, 3, 5, 8].map(n => `<option value="${n}" ${Number(o.nFoto) === n ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+          <label class="field"><span>Foto per villa (Word)</span><select id="off-nf">${[1, 3, 5, 8].map(n => `<option value="${n}" ${Number(o.nFoto) === n ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
         </div>
         <label class="field"><span>Testo iniziale</span><textarea id="off-intro" rows="3"></textarea></label>
+        <label class="field"><span>Le tariffe includono (una voce per riga)</span><textarea id="off-incl" rows="7"></textarea></label>
         <label class="field"><span>Testo finale</span><textarea id="off-chiusa" rows="2"></textarea></label>
+        <label class="field"><span>Firma</span><textarea id="off-firma" rows="2">${esc(o.firma || '')}</textarea></label>
         <div class="off-actions">
           <button type="button" class="btn primary" id="off-word">Scarica Word</button>
           <button type="button" class="btn" id="off-copy">Copia per email</button>
           <button type="button" class="btn" id="off-gmail">Apri Gmail</button>
         </div>
-        <p class="note">Per la mail: premi <b>Copia per email</b>, poi <b>Apri Gmail</b> e incolla nel testo del messaggio (Ctrl+V, o ⌘V sul Mac). Testo e foto entrano insieme.</p>
+        <p class="note">Per la mail: premi <b>Copia per email</b>, poi <b>Apri Gmail</b> e incolla nel testo del messaggio (Ctrl+V, o ⌘V sul Mac). La mail elenca le ville con link, codice, video e prezzo, senza foto: le brochure PDF si allegano in Gmail.</p>
         <div id="off-msg"></div>
       </section>
     </div></div>`;
@@ -121,14 +132,16 @@
             <span><b>${esc(v.name)}</b><small>${esc(v.location || '')}${p ? ' · ' + S.dm(p.from) + ' → ' + S.dm(p.to) : ''}</small></span></label>
           <span class="off-st st-${s}">${s === 'libera' ? 'Libera' : s === 'occupata' ? 'Occupata' : 'ND'}</span>
           <span class="off-list-pr">${typeof pr === 'number' ? S.money(pr) : pr === 'ND' ? 'ND' : 'Senza listino'}</span>
-          ${on ? `<label class="off-price"><span>Prezzo in offerta €</span><input data-price="${esc(v.id)}" inputmode="numeric" value="${esc(o.prezzi[v.id] !== undefined ? o.prezzi[v.id] : typeof pr === 'number' ? String(pr) : '')}" placeholder="su richiesta"></label>` : ''}
+          ${on ? `<label class="off-price"><span>Prezzo in offerta €</span><input data-price="${esc(v.id)}" inputmode="numeric" value="${esc(o.prezzi[v.id] !== undefined ? o.prezzi[v.id] : typeof pr === 'number' ? String(pr) : '')}" placeholder="su richiesta"></label>
+            <label class="off-price off-nota"><span>Nota</span><input data-nota="${esc(v.id)}" value="${esc(o.note[v.id] || '')}" placeholder="es. In trattativa di vendita"></label>` : ''}
         </div>`; }).join('') : '<p class="note">Nessuna villa per questi filtri.</p>';
       $('#off-count').textContent = o.ville.length ? `· ${o.ville.length} ${o.ville.length === 1 ? 'scelta' : 'scelte'}` : '';
     };
     const drawTexts = () => {
       if (!o.introMod) o.intro = L().intro(o.cliente.trim(), periodoTxt());
-      if (!o.chiusaMod) o.chiusa = L().chiusa;
-      $('#off-intro').value = o.intro; $('#off-chiusa').value = o.chiusa;
+      if (!o.chiusaMod) o.chiusa = L().chiusaMail;
+      if (!o.inclusiMod) o.inclusi = L().inclusi;
+      $('#off-intro').value = o.intro; $('#off-chiusa').value = o.chiusa; $('#off-incl').value = o.inclusi;
     };
     drawPer(); drawList(); drawTexts();
 
@@ -141,10 +154,12 @@
     $('#off-list').addEventListener('change', e => {
       const cb = e.target.closest('[data-pick]'); if (cb) { const id = cb.dataset.pick; o.ville = o.ville.filter(x => x !== id); if (cb.checked) o.ville.push(id); drawList(); drawTexts(); save(); }
     });
-    $('#off-list').addEventListener('input', e => { const i = e.target.closest('[data-price]'); if (i) { o.prezzi[i.dataset.price] = i.value; save(); } });
+    $('#off-list').addEventListener('input', e => { const i = e.target.closest('[data-price]'); if (i) { o.prezzi[i.dataset.price] = i.value; save(); } const n = e.target.closest('[data-nota]'); if (n) { o.note[n.dataset.nota] = n.value; save(); } });
+    $('#off-incl').addEventListener('input', e => { o.inclusi = e.target.value; o.inclusiMod = true; save(); });
+    $('#off-firma').addEventListener('input', e => { o.firma = e.target.value; save(); });
     $('#off-cli').addEventListener('input', e => { o.cliente = e.target.value; drawTexts(); save(); });
     $('#off-mail').addEventListener('input', e => { o.email = e.target.value.trim(); save(); });
-    $('#off-lang').addEventListener('click', e => { const b = e.target.closest('[data-l]'); if (!b) return; o.lingua = b.dataset.l; o.introMod = false; o.chiusaMod = false; $$('#off-lang button').forEach(x => x.classList.toggle('on', x === b)); drawTexts(); save(); });
+    $('#off-lang').addEventListener('click', e => { const b = e.target.closest('[data-l]'); if (!b) return; o.lingua = b.dataset.l; o.introMod = false; o.chiusaMod = false; o.inclusiMod = false; $$('#off-lang button').forEach(x => x.classList.toggle('on', x === b)); drawTexts(); save(); });
     $('#off-nf').addEventListener('change', e => { o.nFoto = Number(e.target.value); save(); });
     $('#off-intro').addEventListener('input', e => { o.intro = e.target.value; o.introMod = true; save(); });
     $('#off-chiusa').addEventListener('input', e => { o.chiusa = e.target.value; o.chiusaMod = true; save(); });
@@ -198,9 +213,10 @@
           if (vis(v, 'servizi')) B.push({ h2: l.servizi }, { p: String(v.servizi) });
           if (vis(v, 'linkSito')) B.push({ p: `${l.sito}: ${v.linkSito}`, small: true });
           const pr = prezzoDi(v); B.push({ price: [l.prezzo, pr === null ? l.richiesta : euro(pr)] });
+          if ((o.note[v.id] || '').trim()) B.push({ p: o.note[v.id].trim(), small: true });
         }
         B.push({ pageBreak: true }); o.chiusa.split('\n').forEach(t => B.push({ p: t }));
-        B.push({ p: l.saluti, after: 0 }, { p: FIRMA, bold: true });
+        B.push({ p: l.soggetta, bold: true }, { p: l.saluti, after: 0 }); (o.firma || FIRMA).split('\n').forEach((t, k) => B.push({ p: t, bold: k === 0, after: 0 }));
         X.scarica(nomeFile() + '.docx', new Blob([X.docx(B)], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }));
         msg(`<div class="warn ok">Documento Word scaricato: ${sel.length} ${sel.length === 1 ? 'villa' : 'ville'}.</div>`);
       } catch (x) { msg(`<div class="warn err">Non riuscito: ${esc(x.message || x)}</div>`); }
@@ -209,27 +225,36 @@
 
     // mail: HTML con stili in linea e foto incorporate, copiato negli appunti per incollarlo in Gmail
     async function htmlMail() {
-      const l = L(); const navy = '#142861', gold = '#b29362';
-      let h = `<div style="font-family:Arial,Helvetica,sans-serif;color:#1f2430;max-width:640px">`;
-      h += `<p style="margin:0 0 4px;color:${gold};letter-spacing:2px;font-size:12px;font-weight:bold">${esc(l.titolo.toUpperCase())}</p><p style="margin:0 0 16px;color:${navy};font-size:18px">${esc(periodoTxt())}</p>`;
-      h += o.intro.split('\n').map(t => `<p style="margin:0 0 8px">${esc(t)}</p>`).join('');
-      const sel = scelte();
-      for (let i = 0; i < sel.length; i++) {
-        const v = sel[i]; msg(`<p class="note">Preparo ${esc(v.name)} (${i + 1} di ${sel.length})…</p>`);
-        const fs = await fotoDi(v, 900, 0.72); const p = perOf(v); const pr = prezzoDi(v);
-        h += `<hr style="border:0;border-top:1px solid #e3d9c6;margin:22px 0">`;
-        h += `<h2 style="margin:0 0 2px;color:${navy};font-size:20px">${esc(v.name)}</h2>${p ? `<p style="margin:0 0 10px;color:#6b6b6b;font-size:13px">${esc(rangeTxt(p, o.lingua))}</p>` : ''}`;
-        if (fs[0]) h += `<img src="${fs[0].url}" alt="${esc(v.name)}" width="600" style="width:100%;max-width:600px;height:auto;display:block;margin:0 0 6px">`;
-        if (fs.length > 1) h += `<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%;max-width:600px"><tr>${fs.slice(1, 5).map(f => `<td style="padding:0 6px 6px 0;vertical-align:top"><img src="${f.url}" alt="" width="${Math.floor(600 / Math.min(4, fs.length - 1)) - 6}" style="width:100%;height:auto;display:block"></td>`).join('')}</tr></table>`;
-        const info = infoVilla(v);
-        if (info.length) h += `<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:8px 0;font-size:14px">${info.map(([k, x]) => `<tr><td style="padding:3px 18px 3px 0;color:#6b6b6b">${esc(k)}</td><td style="padding:3px 0">${esc(x)}</td></tr>`).join('')}</table>`;
-        if (vis(v, 'descrizione')) h += `<p style="margin:8px 0;font-size:14px;line-height:1.5">${esc(v.descrizione).replace(/\n/g, '<br>')}</p>`;
-        if (vis(v, 'servizi')) h += `<p style="margin:8px 0 4px;color:${gold};font-size:12px;font-weight:bold;letter-spacing:1px">${esc(l.servizi.toUpperCase())}</p><p style="margin:0 0 8px;font-size:14px">${esc(v.servizi).replace(/\n/g, '<br>')}</p>`;
-        h += `<p style="margin:10px 0 0;padding:10px 12px;background:#fbf8f2;border-top:2px solid ${gold};border-bottom:2px solid ${gold};color:${navy};font-size:15px"><b>${esc(l.prezzo)}: ${esc(pr === null ? l.richiesta : euro(pr))}</b></p>`;
-        if (vis(v, 'linkSito')) h += `<p style="margin:6px 0 0;font-size:13px"><a href="${esc(v.linkSito)}" style="color:${navy}">${esc(l.sito)}</a></p>`;
+      const l = L();
+      const P = (x, st) => `<p style="margin:0${st ? ';' + st : ''}">${x}</p>`, BR = '<p style="margin:0"><br></p>';
+      const eur = n => new Intl.NumberFormat('it-IT', { maximumFractionDigits: 0 }).format(n) + ' €';
+      const tar = (S.TARIFFE.find(t => t.key === o.tariff) || {}).label || '';
+      const tarEn = { settimanale: 'Weekly', bisettimanale: 'BiWeekly', mensile: 'Monthly', bimensile: 'Two-month' }[o.tariff] || tar;
+      const base = baseP()[o.idx];
+      const link = (u, t) => `<a href="${esc(u)}" target="_blank">${t}</a>`;
+      let h = `<div style="font-family:tahoma,sans-serif;color:#000000;font-size:14px">`;
+      h += o.intro.split('\n').map(t => P(esc(t) || '<br>')).join('') + BR;
+      h += P(`<b><u>${esc(l.proposte)}</u></b>`) + BR;
+      const mese = base ? new Date(S.parse(base.from)).toLocaleDateString(o.lingua === 'en' ? 'en-GB' : 'it-IT', { month: 'long', timeZone: 'UTC' }) : '';
+      // come nell'esempio: dalla villa più cara, quelle su richiesta in fondo
+      const ord = scelte().map(v => ({ v, pr: prezzoDi(v) })).sort((a, b) => (b.pr === null ? -1 : b.pr) - (a.pr === null ? -1 : a.pr));
+      for (const { v } of ord) {
+        const p = perOf(v); const pr = prezzoDi(v); const nota = (o.note[v.id] || '').trim();
+        const nome = esc(v.name.replace(/^villa\s+/i, '').replace(/\b\w+/g, w => w[0].toUpperCase() + w.slice(1).toLowerCase()));
+        const titolo = `Villa ${nome}`;
+        h += P(`<b>${vis(v, 'linkSito') ? link(v.linkSito, titolo) : titolo}${vis(v, 'codice') ? ' ' + esc(v.codice) : ''}</b>`);
+        const vid = vis(v, 'vimeo') ? v.vimeo : vis(v, 'youtube') ? v.youtube : '';
+        if (vid) h += P(`${esc(l.video)} ${link(vid, esc(l.qui))}${vis(v, 'psw') ? ' (psw: ' + esc(v.psw) + ')' : ''}`);
+        const diverso = p && base && (p.from !== base.from || p.to !== base.to);
+        const lab = (o.lingua === 'en' ? `${mese ? mese[0].toUpperCase() + mese.slice(1) + ' ' : ''}${tarEn} ${l.tariffa}` : `${l.tariffa} ${tar.toLowerCase()}${mese ? ' ' + mese : ''}`) + (diverso ? ' ' + rangeTxt(p, o.lingua) : '');
+        h += P(`<b>${esc(lab)}:</b> ${pr === null ? esc(l.richiesta) : eur(pr)}${nota ? ' - ' + esc(nota) + ' -' : ''}`) + BR;
       }
-      h += `<hr style="border:0;border-top:1px solid #e3d9c6;margin:22px 0">` + o.chiusa.split('\n').map(t => `<p style="margin:0 0 8px">${esc(t)}</p>`).join('') + `<p style="margin:12px 0 0">${esc(l.saluti)}<br><b>${FIRMA}</b></p></div>`;
-      return h;
+      const inc = o.inclusi.split('\n').map(t => t.trim()).filter(Boolean);
+      if (inc.length) h += P(`<b><u>${esc(l.inclusiTit)}</u></b>`) + `<ul style="margin:6px 0 12px">${inc.map(t => `<li>${esc(t)}</li>`).join('')}</ul>`;
+      h += o.chiusa.split('\n').filter(t => t.trim()).map(t => P(esc(t))).join('');
+      h += P(`<b><i>${esc(l.soggetta)}</i></b>`);
+      h += P(esc(l.saluti) + ',', 'margin-top:8px') + (o.firma || FIRMA).split('\n').map((t, k) => P(k === 0 ? `<b>${esc(t)}</b>` : esc(t))).join('');
+      return h + '</div>';
     }
     $('#off-copy').addEventListener('click', async () => {
       if (!pronto()) return; const btn = $('#off-copy'); btn.disabled = true;
