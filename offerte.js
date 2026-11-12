@@ -86,12 +86,14 @@
         <label class="field"><span>Le tariffe includono (una voce per riga)</span><textarea id="off-incl" rows="7"></textarea></label>
         <label class="field"><span>Testo finale</span><textarea id="off-chiusa" rows="2"></textarea></label>
         <label class="field"><span>Firma</span><textarea id="off-firma" rows="2">${esc(o.firma || '')}</textarea></label>
+        ${store.listBrochure ? `<label class="flag off-bro"><input type="checkbox" id="off-bro" ${o.brochure ? 'checked' : ''}><span><b>Allega brochure</b><small id="off-bro-info">Scarica i PDF delle ville scelte, nella lingua dell'offerta, da trascinare nella mail.</small></span></label>` : ''}
         <div class="off-actions">
           <button type="button" class="btn primary" id="off-word">Scarica Word</button>
           <button type="button" class="btn" id="off-copy">Copia per email</button>
           <button type="button" class="btn" id="off-gmail">Apri Gmail</button>
+          <button type="button" class="btn" id="off-bro-dl" ${o.brochure ? '' : 'hidden'}>Scarica brochure</button>
         </div>
-        <p class="note">Per la mail: premi <b>Copia per email</b>, poi <b>Apri Gmail</b> e incolla nel testo del messaggio (Ctrl+V, o ⌘V sul Mac). La mail elenca le ville con link, codice, video e prezzo, senza foto: le brochure PDF si allegano in Gmail.</p>
+        <p class="note">Per la mail: premi <b>Copia per email</b>, poi <b>Apri Gmail</b> e incolla nel testo del messaggio (Ctrl+V, o ⌘V sul Mac). La mail elenca le ville con link, codice, video e prezzo, senza foto. Con <b>Allega brochure</b> i PDF si scaricano insieme: trascinali dalla cartella Download nella mail di Gmail.</p>
         <div id="off-msg"></div>
       </section>
     </div></div>`;
@@ -136,13 +138,42 @@
             <label class="off-price off-nota"><span>Nota</span><input data-nota="${esc(v.id)}" value="${esc(o.note[v.id] || '')}" placeholder="es. In trattativa di vendita"></label>` : ''}
         </div>`; }).join('') : '<p class="note">Nessuna villa per questi filtri.</p>';
       $('#off-count').textContent = o.ville.length ? `· ${o.ville.length} ${o.ville.length === 1 ? 'scelta' : 'scelte'}` : '';
+      updBro();
     };
     const drawTexts = () => {
       if (!o.introMod) o.intro = L().intro(o.cliente.trim(), periodoTxt());
       if (!o.chiusaMod) o.chiusa = L().chiusaMail;
       if (!o.inclusiMod) o.inclusi = L().inclusi;
       $('#off-intro').value = o.intro; $('#off-chiusa').value = o.chiusa; $('#off-incl').value = o.inclusi;
+      updBro();
     };
+    // brochure PDF delle ville scelte: quella nella lingua dell'offerta, altrimenti un'altra
+    const broCache = {};
+    const broDi = id => (broCache[id] = broCache[id] || store.listBrochure(id).catch(() => []));
+    const broScelta = l => l.find(b => b.lingua === o.lingua) || l.find(b => !b.lingua) || l[0] || null;
+    let broTok = 0;
+    function updBro() { setTimeout(updBro0, 0); }
+    function updBro0() {
+      const info = document.getElementById('off-bro-info'); if (!info || !store.listBrochure) return;
+      if (!o.brochure) { info.textContent = "Scarica i PDF delle ville scelte, nella lingua dell'offerta, da trascinare nella mail."; return; }
+      if (!o.ville.length) { info.textContent = 'Scegli le ville.'; return; }
+      const tok = ++broTok; const vv = scelte();
+      Promise.all(vv.map(v => broDi(v.id))).then(ls => {
+        if (tok !== broTok) return;
+        const manca = vv.filter((v, i) => !broScelta(ls[i])).map(v => v.name);
+        const altra = vv.filter((v, i) => { const b = broScelta(ls[i]); return b && b.lingua && b.lingua !== o.lingua; }).map(v => v.name);
+        info.innerHTML = `Brochure trovate: <strong>${vv.length - manca.length} di ${vv.length}</strong>${manca.length ? ` · mancano: ${esc(manca.join(', '))}` : ''}${altra.length ? ` · in un'altra lingua: ${esc(altra.join(', '))}` : ''}`;
+      });
+    }
+    async function scaricaBro() {
+      const vv = scelte(); let n = 0;
+      for (const v of vv) {
+        const b = broScelta(await broDi(v.id)); if (!b) continue;
+        msg(`<p class="note">Scarico la brochure di ${esc(v.name)}…</p>`);
+        try { window.SDBExport.scarica(b.nome, await store.getBrochure(b)); n++; await new Promise(r => setTimeout(r, 600)); } catch (_) {}
+      }
+      return n;
+    }
     drawPer(); drawList(); drawTexts();
 
     $('#off-tar').addEventListener('click', e => { const b = e.target.closest('[data-t]'); if (!b) return; o.tariff = b.dataset.t; o.idx = 0; o.prezzi = {}; $$('#off-tar button').forEach(x => x.classList.toggle('on', x === b)); drawPer(); drawList(); drawTexts(); save(); });
@@ -268,8 +299,16 @@
           const box = document.createElement('div'); box.innerHTML = html; box.style.cssText = 'position:fixed;left:-9999px;top:0;width:640px'; box.contentEditable = 'true'; document.body.appendChild(box);
           const r = document.createRange(); r.selectNodeContents(box); const s = getSelection(); s.removeAllRanges(); s.addRange(r); ok = document.execCommand('copy'); s.removeAllRanges(); box.remove();
         }
-        msg(ok ? '<div class="warn ok">Offerta copiata. Ora premi <b>Apri Gmail</b> e incolla nel testo del messaggio.</div>' : '<div class="warn err">Il browser non ha permesso di copiare: usa Scarica Word e allega il documento.</div>');
+        const nb = ok && o.brochure && store.listBrochure ? await scaricaBro() : 0;
+        msg(ok ? `<div class="warn ok">Offerta copiata. Ora premi <b>Apri Gmail</b> e incolla nel testo del messaggio.${nb ? ` Poi trascina nella mail ${nb === 1 ? 'la brochure scaricata' : `le ${nb} brochure scaricate`} (cartella Download).` : ''}</div>` : '<div class="warn err">Il browser non ha permesso di copiare: usa Scarica Word e allega il documento.</div>');
       } catch (x) { msg(`<div class="warn err">Non riuscito: ${esc(x.message || x)}</div>`); }
+      btn.disabled = false;
+    });
+    if ($('#off-bro')) $('#off-bro').addEventListener('change', e => { o.brochure = e.target.checked; $('#off-bro-dl').hidden = !o.brochure; save(); updBro(); });
+    $('#off-bro-dl').addEventListener('click', async () => {
+      if (!pronto()) return; const btn = $('#off-bro-dl'); btn.disabled = true;
+      const n = await scaricaBro();
+      msg(n ? `<div class="warn ok">${n} ${n === 1 ? 'brochure scaricata' : 'brochure scaricate'}: trascinale dalla cartella Download nella mail.</div>` : '<div class="warn err">Nessuna brochure per le ville scelte: caricale nella scheda di ogni villa.</div>');
       btn.disabled = false;
     });
     $('#off-gmail').addEventListener('click', () => {

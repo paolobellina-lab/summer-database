@@ -87,6 +87,15 @@ service cloud.firestore {
       allow read: if villaVisibile(resource.data.villaId);
       allow write: if completo();
     }
+    // brochure PDF: scheda e file a pezzi, visibili a chi vede la villa
+    match /villas_brochure/{id} {
+      allow read: if villaVisibile(resource.data.villaId);
+      allow write: if completo();
+    }
+    match /villas_brochure_parti/{id} {
+      allow read: if villaVisibile(resource.data.villaId);
+      allow write: if completo();
+    }
     match /villas_thumb/{id} {
       allow read: if villaVisibile(id);
       allow write: if completo();

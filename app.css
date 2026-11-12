@@ -892,3 +892,32 @@ details.prof-item[open] > .prof-sum .chev { transform: translateY(1px) rotate(-1
 .off-nota input { width: min(420px, 100%); }
 .lbl-sub { display: block; font-size: .92em; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 400; margin-top: 4px; }
 .params { align-items: flex-start; } .params .formula { align-self: center; }
+.bro-list { display: grid; gap: 8px; margin-bottom: 10px; }
+.bro-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+.bro-ico { flex: none; font-size: 11px; font-weight: 700; letter-spacing: .06em; color: #fff; background: #b3261e; border-radius: 4px; padding: 4px 6px; }
+.bro-nm { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.bro-nm b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bro-nm small { color: var(--muted); }
+.rp-campi { margin: 10px 0 12px; border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; background: var(--surface); }
+.rp-campi summary { cursor: pointer; font-weight: 600; }
+.rp-gr { margin-top: 10px; }
+.rp-gr > b { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 4px; }
+.rp-gr > div { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.rp-ck { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; }
+.rp-tot { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.rp-chip { font: inherit; font-size: 12px; border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 4px 10px; cursor: pointer; color: var(--fg); }
+.rp-chip b { margin-left: 4px; }
+.rp-chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.rp-chip.on b { color: #fff; }
+.rp-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 10px; }
+.rp-bar input[type=search] { flex: 1 1 200px; max-width: 320px; }
+.rp-bar .btn { margin-left: auto; }
+table.prices.rp-tbl td { vertical-align: top; white-space: normal; padding-top: 6px; padding-bottom: 6px; }
+.rp-tbl a { color: inherit; text-decoration: none; }
+.rp-tbl a:hover { text-decoration: underline; }
+.rp-n { text-align: center; font-weight: 600; }
+.rp-m { display: inline-block; font-size: 12px; padding: 2px 8px; margin: 2px 4px 2px 0; border-radius: 999px; background: var(--surface-2); }
+.rp-m.on { background: var(--accent); color: #fff; }
+#bro-lang { width: auto; flex: 0 0 auto; }
+.off-bro small strong { display: inline; }
+.flag.off-bro small { display: block; }

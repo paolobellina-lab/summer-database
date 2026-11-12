@@ -25,7 +25,7 @@
 
   /* ------------------------------------------------------------------ LOCALE */
   function LocalStore() {
-    let state = null, canPersist = true;
+    let state = null, canPersist = true; const memBro = [];
     const subs = new Set();
     const read = () => { try { const raw = localStorage.getItem(KEY); if (raw) return JSON.parse(raw); } catch (e) { canPersist = false; } return null; };
     const persist = () => {
@@ -54,6 +54,12 @@
       setSettings(s) { state.settings = s; persist(); },
       setNotes(t) { state.notes = t; persist(); },
       setPreferiti(l) { state.preferiti = l; persist(); },
+      // brochure solo in memoria (in locale non c'è spazio per i PDF)
+      listBrochure(villaId) { return Promise.resolve(memBro.filter(b => b.villaId === villaId)); },
+      listAllBrochure() { return Promise.resolve(memBro.slice()); },
+      async addBrochure(villaId, file, lingua) { const id = 'b' + Date.now(); memBro.push({ id, villaId, nome: file.name, lingua: lingua || '', size: file.size, parti: 1, _blob: new Blob([await file.arrayBuffer()], { type: 'application/pdf' }) }); return id; },
+      getBrochure(b) { return Promise.resolve(b._blob); },
+      deleteBrochure(b) { const i = memBro.findIndex(x => x.id === b.id); if (i >= 0) memBro.splice(i, 1); return Promise.resolve(); },
       setSicurezza(x) { state.sicurezza = x; persist(); },
       // pulizia di fine stagione (protetta da password nell'interfaccia)
       wipeBookings() { const n = state.bookings.length; state.bookings = []; (state.assegnazioni || []).forEach(a => { a.prenotazioni = []; }); persist(); return Promise.resolve(n); },
@@ -437,6 +443,33 @@
         await ref.set({ villaId, img, thumb, ordine: ordine || Date.now(), creatoDa: api.user || '', creatoIl: firebase.firestore.FieldValue.serverTimestamp() });
         if (makeCover) await db.collection('villas_thumb').doc(villaId).set({ thumb, fotoId: ref.id });
         return ref.id;
+      },
+      /* ---- brochure PDF delle ville: villas_brochure/{id} = { villaId, nome, lingua, size, parti, creatoDa, creatoIl }
+         e il file a pezzi in villas_brochure_parti/{id}_{k} = { villaId, brochureId, k, dati (bytes) }: un documento Firestore tiene al massimo 1 MB. ---- */
+      listBrochure(villaId) {
+        return db.collection('villas_brochure').where('villaId', '==', villaId).get().then(q => q.docs.map(d => Object.assign({}, d.data(), { id: d.id })));
+      },
+      listAllBrochure() {
+        return db.collection('villas_brochure').get().then(q => q.docs.map(d => Object.assign({}, d.data(), { id: d.id })));
+      },
+      async addBrochure(villaId, file, lingua, onStep) {
+        const buf = new Uint8Array(await file.arrayBuffer()); const N = 900000; const parti = Math.max(1, Math.ceil(buf.length / N));
+        const ref = db.collection('villas_brochure').doc();
+        for (let k = 0; k < parti; k++) {
+          if (onStep) onStep(k + 1, parti);
+          await db.collection('villas_brochure_parti').doc(ref.id + '_' + k).set({ villaId, brochureId: ref.id, k, dati: firebase.firestore.Blob.fromUint8Array(buf.subarray(k * N, (k + 1) * N)) });
+        }
+        // la scheda della brochure si scrive per ultima: se il caricamento si interrompe non compare a metà
+        await ref.set({ villaId, nome: file.name, lingua: lingua || '', size: buf.length, parti, creatoDa: api.user || '', creatoIl: firebase.firestore.FieldValue.serverTimestamp() });
+        return ref.id;
+      },
+      async getBrochure(b) {
+        const parts = await Promise.all(Array.from({ length: b.parti }, (_, k) => db.collection('villas_brochure_parti').doc(b.id + '_' + k).get()));
+        return new Blob(parts.map(d => d.data().dati.toUint8Array()), { type: 'application/pdf' });
+      },
+      async deleteBrochure(b) {
+        await db.collection('villas_brochure').doc(b.id).delete();
+        for (let k = 0; k < (b.parti || 0); k++) await db.collection('villas_brochure_parti').doc(b.id + '_' + k).delete();
       },
       setCover(villaId, fotoId, thumb) { return db.collection('villas_thumb').doc(villaId).set({ thumb, fotoId }); },
       async deleteFoto(villaId, fotoId, next) {

@@ -970,6 +970,10 @@ window.SDBStore.ready.then(function () {
         <div class="ph-grid" id="ph-grid"></div>
         <div class="ph-tools">${store.mode === 'online' && !ro ? `<label class="btn" for="ph-add">+ Aggiungi foto</label><input type="file" id="ph-add" accept="image/*" multiple hidden>` : ''}<span class="note" id="ph-msg"></span></div>
       </section>
+      ${store.listBrochure ? `<section class="card" id="v-bro"><h2>Brochure</h2>
+        <div class="bro-list" id="bro-list"><p class="note">Caricamento…</p></div>
+        ${ro ? '' : `<div class="ph-tools"><select id="bro-lang" aria-label="Lingua della brochure"><option value="en">Inglese</option><option value="it">Italiano</option><option value="">Altra lingua</option></select><label class="btn" for="bro-add">+ Carica brochure PDF</label><input type="file" id="bro-add" accept="application/pdf,.pdf" hidden><span class="note" id="bro-msg"></span></div>`}
+      </section>` : ''}
       <section class="card"><h2>Link e media</h2><div class="grid wide">${FIELDS.link.filter(([k]) => !hiddenField(k)).map(([k, l]) => linkInp(k, l)).join('')}</div></section>
       ${hiddenField('listino') ? '' : '<section class="card" id="prices"></section>'}
       <section class="card"><h2>Disponibilità ${esc(st.seasonName)}</h2><div class="minitl" id="v-tl"></div><div class="blist" id="v-blist"></div></section>
@@ -1128,6 +1132,33 @@ window.SDBStore.ready.then(function () {
       store.listFoto(v.id).then(l => { foto = l; drawFoto(); }, err => { $('#ph-grid').innerHTML = ''; phMsg(rulesMsg(err)); });
     };
     loadFoto();
+    // brochure PDF della villa (si allegano alle offerte)
+    if ($('#v-bro')) {
+      const LING = { it: 'Italiano', en: 'Inglese', '': 'Altra lingua' };
+      let bro = [];
+      const broMsg = t => { const m = $('#bro-msg'); if (m) m.textContent = t || ''; };
+      const kb = n => n >= 1e6 ? (n / 1e6).toFixed(1).replace('.', ',') + ' MB' : Math.round(n / 1000) + ' KB';
+      const drawBro = () => { const el = $('#bro-list'); if (!el) return;
+        el.innerHTML = bro.length ? bro.map(b => `<div class="bro-item"><span class="bro-ico">PDF</span><span class="bro-nm"><b>${esc(b.nome)}</b><small>${esc(LING[b.lingua || ''] || b.lingua)} · ${kb(b.size || 0)}</small></span>
+            <button type="button" class="btn small" data-bro-dl="${esc(b.id)}">Scarica</button>${ro ? '' : `<button type="button" class="btn small danger" data-bro-del="${esc(b.id)}">Elimina</button>`}</div>`).join('')
+          : `<p class="note">${ro ? 'Nessuna brochure.' : 'Nessuna brochure. Carica il PDF (fino a 10 MB): nelle Offerte potrai allegarlo alla mail.'}</p>`; };
+      const loadBro = () => store.listBrochure(v.id).then(l => { bro = l.sort((a, b) => String(a.lingua).localeCompare(String(b.lingua))); drawBro(); }, err => { $('#bro-list').innerHTML = ''; broMsg(err && err.code === 'permission-denied' ? 'Per le brochure bisogna prima pubblicare le nuove regole di Firestore.' : 'Errore: ' + (err && err.message || err)); });
+      loadBro();
+      $('#bro-list').addEventListener('click', async e => {
+        const d = e.target.closest('[data-bro-dl]'), x = e.target.closest('[data-bro-del]');
+        const b = bro.find(y => y.id === (d || x || {}).dataset?.[d ? 'broDl' : 'broDel']); if (!b) return;
+        if (d) { broMsg('Scaricamento…'); try { window.SDBExport.scarica(b.nome, await store.getBrochure(b)); broMsg(''); } catch (err) { broMsg('Errore: ' + (err.message || err)); } }
+        if (x) { if (!confirm(`Eliminare la brochure "${b.nome}"?`)) return; try { await store.deleteBrochure(b); toast('Brochure eliminata'); loadBro(); } catch (err) { broMsg('Errore: ' + (err.message || err)); } }
+      });
+      const ba = $('#bro-add');
+      if (ba) ba.addEventListener('change', async () => {
+        const f = ba.files[0]; ba.value = ''; if (!f) return;
+        if (!/pdf$/i.test(f.type) && !/\.pdf$/i.test(f.name)) { broMsg('Serve un file PDF.'); return; }
+        if (f.size > 10e6) { broMsg(`Il file è ${kb(f.size)}: il massimo è 10 MB. Esportalo più leggero (es. "dimensione file ridotta").`); return; }
+        try { await store.addBrochure(v.id, f, $('#bro-lang').value, (k, n) => broMsg(n > 1 ? `Caricamento ${k} di ${n}…` : 'Caricamento…')); broMsg(''); toast('Brochure caricata'); loadBro(); }
+        catch (err) { broMsg(err && err.code === 'permission-denied' ? 'Per le brochure bisogna prima pubblicare le nuove regole di Firestore.' : 'Errore: ' + (err.message || err)); }
+      });
+    }
     const add = $('#ph-add');
     if (add) add.addEventListener('change', async () => {
       const files = Array.from(add.files || []); add.value = ''; if (!files.length) return;
@@ -1203,6 +1234,7 @@ window.SDBStore.ready.then(function () {
       ['listini', 'Listini e periodi', 'Giorno di cambio, periodi, valori per le nuove ville'],
       ['aspetto', 'Aspetto predefiniti', 'Stati e colori, servizi, ' + nLoc + ' località'],
       store.mode === 'online' && isFull() ? ['account', 'Account e accessi', nAcc ? nAcc + (nAcc === 1 ? ' account autorizzato' : ' account autorizzati') : 'Chi può entrare e in quali pagine'] : null,
+      window.SDBReport ? ['schede', 'Schede incomplete', 'Campi non compilati di ogni villa'] : null,
       ['dati', 'Dati e backup', 'Backup e pulizia di fine stagione']
     ].filter(Boolean).filter(p => isFull() || p[0] === 'generale');
   }
@@ -1268,6 +1300,7 @@ window.SDBStore.ready.then(function () {
       <section class="card"><h2>Valori iniziali per una nuova villa</h2><div class="tbl-wrap"><table class="prices ptable"><thead><tr><th>Tariffa</th><th>Spese servizi €<small class="lbl-sub">Netto vendita</small></th><th>Arrotonda a €</th><th>Margine %</th></tr></thead><tbody>
         ${S.TARIFFE.map(x => `<tr><td class="per">${x.label}</td><td><input data-d="${x.key}" data-k="spese" value="${esc(st.defaults[x.key].spese)}"></td><td><input data-d="${x.key}" data-k="arrotonda" value="${esc(st.defaults[x.key].arrotonda)}"></td><td><input data-d="${x.key}" data-k="margine" value="${esc(Math.round(st.defaults[x.key].margine * 1000) / 10)}"></td></tr>`).join('')}
       </tbody></table></div></section>`)}
+      ${window.SDBReport ? pg('schede', '<section class="card" id="rp-card"></section>') : ''}
       ${pg('dati', `${store.mode === 'online' && isFull() ? `<section class="card" id="ab-card"><h2>Backup automatico su questo dispositivo</h2>
         <p class="note">Ogni giorno, la prima volta che apri l'app, scarica da solo un backup completo nella cartella <b>Download</b>: ville con listini di acquisto e vendita, prenotazioni, impostazioni, profili e note spese (senza foto). Una volta a settimana copia i file su una chiavetta e staccala: una copia scollegata resta al sicuro anche se Firebase venisse cancellato.</p>
         <label class="flag ab-flag"><input type="checkbox" id="ab-on" ${lsGet(AUTOKEY) === 'si' ? 'checked' : ''}><span><b>Scarica un backup ogni giorno</b><small>Vale solo per questo computer o telefono. Consigliato sul computer.</small></span></label>
@@ -1614,6 +1647,7 @@ window.SDBStore.ready.then(function () {
     };
     $('#w-book').addEventListener('click', () => askWipe('book'));
     if ($('#w-sc')) $('#w-sc').addEventListener('click', () => askWipe('sc'));
+    if ($('#rp-card') && cur === 'schede') window.SDBReport.mount($('#rp-card'), { data, esc, store, FIELDS, hiddenField, S, coverOf: id => (thumbs.map[id] || {}).fotoId || null });
     if ($('#is-card')) window.SDBImportaSito.mount($('#is-card'), { data, store, esc, $, $$, toast, compressImage, coverOf: id => (thumbs.map[id] || {}).fotoId || null });
     if ($('#ab-on')) $('#ab-on').addEventListener('change', e => {
       lsSet(AUTOKEY, e.target.checked ? 'si' : 'no');
