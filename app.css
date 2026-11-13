@@ -935,3 +935,4 @@ table.prices.srv-tbl td input[data-sl] { width: 200px; text-align: left; }
 .inc-act { display: flex; gap: 4px; }
 .inc-new { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; }
 @media (max-width: 700px) { .inc-row { grid-template-columns: auto 1fr; } .inc-row input[data-ien] { grid-column: 2; } .inc-act { grid-column: 2; } .inc-new { grid-template-columns: 1fr; } }
+.off-all { margin: 0; }

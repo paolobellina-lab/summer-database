@@ -71,7 +71,7 @@
         <p class="note">Le ville con giorno di cambio o periodi diversi mostrano le loro date esatte.</p>
       </section>
       <section class="card"><h2>2 · Ville <span class="off-count" id="off-count"></span></h2>
-        <div class="off-tools"><input type="search" id="off-q" placeholder="Cerca villa o località" value="${esc(o.q)}">
+        <div class="off-tools"><label class="flag off-all" title="Seleziona o deseleziona tutte le ville dell'elenco"><input type="checkbox" id="off-all"><span><b>Tutte</b></span></label><input type="search" id="off-q" placeholder="Cerca villa o località" value="${esc(o.q)}">
           <label class="flag off-free"><input type="checkbox" id="off-free" ${o.soloLibere ? 'checked' : ''}><span><b>Solo ville libere</b></span></label></div>
         <div id="off-list" class="off-list"></div>
       </section>
@@ -125,10 +125,14 @@
       $('#off-cal').innerHTML = html;
     };
     const setIdx = i => { const ps = baseP(); if (i < 0 || i >= ps.length || i === o.idx) return; o.idx = i; o.prezzi = {}; drawPer(); drawList(); drawTexts(); save(); };
+    let visibili = [];
     const drawList = () => {
       const q = (o.q || '').trim().toLowerCase();
       const list = ville().filter(v => !q || `${v.name} ${v.location || ''}`.toLowerCase().includes(q)).map(v => ({ v, s: stato(v), p: perOf(v), pr: listinoOf(v) }))
         .filter(x => !o.soloLibere || x.s === 'libera' || o.ville.includes(x.v.id));
+      visibili = list.map(x => x.v.id);
+      const nSel = visibili.filter(id => o.ville.includes(id)).length, all = $('#off-all');
+      all.checked = !!visibili.length && nSel === visibili.length; all.indeterminate = nSel > 0 && nSel < visibili.length; all.disabled = !visibili.length;
       $('#off-list').innerHTML = list.length ? list.map(({ v, s, p, pr }) => {
         const on = o.ville.includes(v.id);
         return `<div class="off-item${on ? ' on' : ''}${s !== 'libera' ? ' busy' : ''}" data-v="${esc(v.id)}">
@@ -187,6 +191,12 @@
     $('#off-cal').addEventListener('click', e => { const b = e.target.closest('[data-i]'); if (b) setIdx(Number(b.dataset.i)); });
     $('#off-prev').addEventListener('click', () => setIdx(o.idx - 1));
     $('#off-next').addEventListener('click', () => setIdx(o.idx + 1));
+    // seleziona / deseleziona tutte le ville dell'elenco (con i filtri di ricerca e "solo libere")
+    $('#off-all').addEventListener('change', e => {
+      if (e.target.checked) visibili.forEach(id => { if (!o.ville.includes(id)) o.ville.push(id); });
+      else o.ville = o.ville.filter(id => !visibili.includes(id));
+      drawList(); drawTexts(); save();
+    });
     $('#off-q').addEventListener('input', e => { o.q = e.target.value; drawList(); save(); });
     $('#off-free').addEventListener('change', e => { o.soloLibere = e.target.checked; drawList(); save(); });
     $('#off-list').addEventListener('change', e => {
