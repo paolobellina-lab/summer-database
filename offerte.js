@@ -319,7 +319,7 @@
     $('#off-st-upd').addEventListener('click', () => { const x = Object.assign({}, o.stile); const l = stiliSalvati().filter(y => y.id !== x.id).concat([x]); salvaStili(l).then(() => { drawStile(); toast('Stile aggiornato'); }, errSt); });
     $('#off-st-def').addEventListener('click', () => { const go = () => { const cur = JSON.parse(JSON.stringify(settings())); cur.stileMailDi = o.stile.id; return Promise.resolve(store.setSettings(cur)); };
       (stili().some(x => x.id === o.stile.id) ? go() : Promise.reject(new Error('salva prima lo stile con un nome'))).then(() => { drawStile(); toast('Stile usato di norma'); }, errSt); });
-    $('#off-st-del').addEventListener('click', () => { if (!confirm(`Eliminare lo stile "${o.stile.nome}"?`)) return; salvaStili(stiliSalvati().filter(y => y.id !== o.stile.id)).then(() => { o.stile = Object.assign({}, stili().find(x => x.id === o.stile.id) || STILI_BASE[0]); drawStile(); save(); toast('Stile eliminato'); }, errSt); });
+    $('#off-st-del').addEventListener('click', async () => { if (!(await (window.SDBConferma ? window.SDBConferma : t => Promise.resolve(confirm(t)))(`Lo stile "${o.stile.nome}" verrà tolto per tutti gli account.`, { titolo: 'Eliminare lo stile?', ok: 'Elimina', danger: true }))) return; salvaStili(stiliSalvati().filter(y => y.id !== o.stile.id)).then(() => { o.stile = Object.assign({}, stili().find(x => x.id === o.stile.id) || STILI_BASE[0]); drawStile(); save(); toast('Stile eliminato'); }, errSt); });
     $('#off-pers-t').addEventListener('click', () => { o.persOpen = !o.persOpen; $('#off-pers').hidden = !o.persOpen; $('#off-pers-t').setAttribute('aria-expanded', o.persOpen ? 'true' : 'false'); saveUI(); });
     schedPrev();
     $('#off-ftog').addEventListener('click', () => { o.fOpen = !o.fOpen; $('#off-filters').hidden = !o.fOpen; $('#off-ftog').setAttribute('aria-expanded', o.fOpen ? 'true' : 'false'); save(); });
@@ -491,9 +491,9 @@
       if (b.dataset.act === 'vedi') { aperte['r' + id] = !aperte['r' + id]; drawStorico(); }
       if (b.dataset.act === 'copia') { const txt = (() => { const d = document.createElement('div'); d.innerHTML = x.html || ''; return d.innerText; })();
         try { await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([x.html || ''], { type: 'text/html' }), 'text/plain': new Blob([txt], { type: 'text/plain' }) })]); toast('Offerta copiata: incollala in Gmail'); } catch (_) { toast('Il browser non ha permesso di copiare'); } }
-      if (b.dataset.act === 'riapri') { if (!confirm("Riaprire questa offerta? L'offerta che stai preparando verrà sostituita.")) return;
+      if (b.dataset.act === 'riapri') { if (!(await (window.SDBConferma ? window.SDBConferma : t => Promise.resolve(confirm(t)))("L'offerta che stai preparando verrà sostituita da questa.", { titolo: "Riaprire l'offerta?", ok: 'Riapri' }))) return;
         Object.keys(o).forEach(k => { if (!['tab', 'q', 'f', 'fOpen', 'persOpen'].includes(k)) delete o[k]; }); Object.assign(o, JSON.parse(JSON.stringify(x.stato || {})), { tab: 'nuova', ultima: null }); saveUI(); mount(main, ctx); }
-      if (b.dataset.act === 'del') { if (!confirm(`Eliminare questa offerta dallo storico?`)) return; try { await store.deleteOfferta(id); toast('Offerta eliminata'); } catch (err) { toast('Errore: ' + (err && err.message || err)); } }
+      if (b.dataset.act === 'del') { if (!(await (window.SDBConferma ? window.SDBConferma : t => Promise.resolve(confirm(t)))('L\'offerta verrà tolta dallo storico.', { titolo: "Eliminare l'offerta?", ok: 'Elimina', danger: true }))) return; try { await store.deleteOfferta(id); toast('Offerta eliminata'); } catch (err) { toast('Errore: ' + (err && err.message || err)); } }
     });
     $('#off-tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (!b) return; o.tab = b.dataset.tab; $$('#off-tabs button').forEach(z => z.classList.toggle('on', z === b)); $('#off-storico').hidden = o.tab !== 'storico'; $('#off-editor').hidden = o.tab === 'storico'; saveUI(); window.scrollTo(0, 0); });
     if (store.listenOfferte) {

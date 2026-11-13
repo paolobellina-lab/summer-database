@@ -3,6 +3,20 @@ window.SDBStore.ready.then(function () {
   const S = window.SDB, store = window.SDBStore;
   const $ = (sel, root) => (root || document).querySelector(sel);
   const $$ = (sel, root) => Array.from((root || document).querySelectorAll(sel));
+  /* Finestra di conferma con l'aspetto dell'app (al posto di confirm() del browser), centrata nella pagina.
+     window.SDBConferma(testo, { titolo, ok, danger }) → Promise<boolean> */
+  window.SDBConferma = (testo, opt) => new Promise(res => {
+    opt = opt || {}; const e = x => String(x == null ? '' : x).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    let d = document.getElementById('dlg-conf'); if (!d) { d = document.createElement('dialog'); d.id = 'dlg-conf'; d.className = 'dlg-conf'; document.body.appendChild(d); }
+    d.innerHTML = `<form class="dlg" method="dialog"><h3>${e(opt.titolo || 'Conferma')}</h3><p class="conf-txt">${e(testo)}</p>
+      <div class="foot"><button type="button" class="btn" value="no" data-c="0">${e(opt.annulla || 'Annulla')}</button><button type="button" class="btn ${opt.danger ? 'danger-fill' : 'primary'}" data-c="1">${e(opt.ok || 'Conferma')}</button></div></form>`;
+    let fatto = false; const fine = v => { if (fatto) return; fatto = true; try { d.close(); } catch (_) { d.removeAttribute('open'); } res(v); };
+    d.querySelectorAll('[data-c]').forEach(b => b.onclick = () => fine(b.dataset.c === '1'));
+    d.oncancel = ev => { ev.preventDefault(); fine(false); };
+    d.onclick = ev => { if (ev.target === d) fine(false); };
+    if (d.showModal) d.showModal(); else d.setAttribute('open', '');
+    setTimeout(() => { const b = d.querySelector('[data-c="1"]'); if (b) b.focus(); }, 30);
+  });
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   /* Stati delle prenotazioni: quelli di base (chiavi fisse, lette anche dalle altre app) più quelli
      aggiunti in Impostazioni → Aspetto predefiniti. Nome, colore e "blocca il calendario" modificabili. */
@@ -1162,7 +1176,7 @@ window.SDBStore.ready.then(function () {
         const d = e.target.closest('[data-bro-dl]'), x = e.target.closest('[data-bro-del]');
         const b = bro.find(y => y.id === (d || x || {}).dataset?.[d ? 'broDl' : 'broDel']); if (!b) return;
         if (d) { broMsg('Scaricamento…'); try { window.SDBExport.scarica(b.nome, await store.getBrochure(b)); broMsg(''); } catch (err) { broMsg('Errore: ' + (err.message || err)); } }
-        if (x) { if (!confirm(`Eliminare la brochure "${b.nome}"?`)) return; try { await store.deleteBrochure(b); toast('Brochure eliminata'); loadBro(); } catch (err) { broMsg('Errore: ' + (err.message || err)); } }
+        if (x) { if (!(await window.SDBConferma(`La brochure "${b.nome}" verrà tolta dalla scheda della villa.`, { titolo: 'Eliminare la brochure?', ok: 'Elimina', danger: true }))) return; try { await store.deleteBrochure(b); toast('Brochure eliminata'); loadBro(); } catch (err) { broMsg('Errore: ' + (err.message || err)); } }
       });
       const ba = $('#bro-add');
       if (ba) ba.addEventListener('change', async () => {

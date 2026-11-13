@@ -985,3 +985,7 @@ table.prices.off-srv .off-inc input { width: auto; min-width: 0; flex: none; mar
 .v-media .v-sub h3 { font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; font-weight: 600; }
 #off-editor, #off-storico { display: flex; flex-direction: column; gap: 18px; }
 #off-editor[hidden], #off-storico[hidden] { display: none; }
+dialog.dlg-conf { width: min(420px, calc(100vw - 32px)); margin: auto; }
+.dlg-conf .conf-txt { margin: 0; color: var(--fg); line-height: 1.5; }
+.btn.danger-fill { background: #b3261e; border-color: #b3261e; color: #fff; }
+.btn.danger-fill:hover { background: #8f1e18; border-color: #8f1e18; }
