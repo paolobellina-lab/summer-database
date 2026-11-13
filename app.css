@@ -979,3 +979,5 @@ table.prices.off-srv .off-inc input { width: auto; min-width: 0; flex: none; mar
 .off-prevact { display: flex; align-items: center; gap: 8px; margin-left: auto; }
 .off-st-pick { display: inline-flex; align-items: center; gap: 6px; margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
 .off-st-pick select { width: auto; text-transform: none; letter-spacing: 0; }
+.off-riep-l { display: block; font-size: 12px; color: var(--muted); }
+.off-riep-l.off-agg { color: #9a5b1f; }

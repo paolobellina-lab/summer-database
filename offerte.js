@@ -247,8 +247,8 @@
     const drawRiep = () => {
       const vv = scelte();
       $('#off-riep').innerHTML = vv.length ? vv.map(v => { const pr = prezzoDi(v), ex = srvAparte(v).filter(x => typeof x.eur === 'number' && x.eur > 0), et = extraTot(v), inc = srvInclVilla(v);
-        const cli = incluseVilla(v);
-        return `<tr><td><b>${esc(v.name)}</b>${cli.length ? `<small class="note"> · al cliente come inclusi: ${esc(cli.map(x => x.label).join(', '))}</small>` : ''}</td><td>${pr === null ? '<span class="note">su richiesta</span>' : S.money(pr)}</td><td>${ex.length ? `${S.money(et)}<small class="note"> (${esc(ex.map(x => x.label).join(', '))})</small>` : '<span class="note">—</span>'}</td><td><b>${pr === null ? '—' : S.money(pr + et)}</b></td></tr>`; }).join('')
+        const ag = srvAparte(v);
+        return `<tr><td><b>${esc(v.name)}</b>${inc.length ? `<small class="off-riep-l">Inclusi: ${esc(inc.map(x => x.label).join(', '))}</small>` : ''}${ag.length ? `<small class="off-riep-l off-agg">In aggiunta: ${esc(ag.map(x => x.label + (typeof x.eur === 'number' && x.eur > 0 ? ' ' + S.money(x.eur) : ' (senza prezzo)')).join(', '))}</small>` : ''}</td><td>${pr === null ? '<span class="note">su richiesta</span>' : S.money(pr)}</td><td>${ex.length ? `${S.money(et)}<small class="note"> (${esc(ex.map(x => x.label).join(', '))})</small>` : '<span class="note">—</span>'}</td><td><b>${pr === null ? '—' : S.money(pr + et)}</b></td></tr>`; }).join('')
         : '<tr><td colspan="4" class="note">Scegli le ville al punto 2.</td></tr>';
     };
     const drawTexts = () => {
