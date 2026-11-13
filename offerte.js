@@ -48,7 +48,7 @@
       .concat(((st.servizi) || []).filter(x => x && x.key).map(x => ({ key: x.key, label: x.label })));
     const srvDi = k => { const d = (st.prezziServizi || {})[k] || {}; const x = o.srv[k] || {};
       const modo = ['pred', 'inc', 'parte'].includes(x.modo) ? x.modo : x.incluso === true ? 'inc' : x.incluso === false ? 'parte' : 'pred';
-      return { on: !!x.on, modo, prezzo: x.prezzo !== undefined ? x.prezzo : (typeof d.vendita === 'number' ? String(d.vendita) : '') }; };
+      return { on: !!x.on, modo, prezzo: x.prezzo !== undefined && String(x.prezzo).trim() !== '' ? x.prezzo : (typeof d.vendita === 'number' ? String(d.vendita) : '') }; };
     // stili della mail: due di base + quelli salvati da tutti in meta/settings.stiliMail
     const FONT = [['tahoma,sans-serif', 'Tahoma'], ['Arial,Helvetica,sans-serif', 'Arial'], ['Verdana,Geneva,sans-serif', 'Verdana'], ["'Trebuchet MS',Helvetica,sans-serif", 'Trebuchet'],
       ["Georgia,'Times New Roman',serif", 'Georgia'], ["'Palatino Linotype',Palatino,'Book Antiqua',serif", 'Palatino'], ["Garamond,'EB Garamond',Georgia,serif", 'Garamond'], ["'Times New Roman',Times,serif", 'Times']];
@@ -72,9 +72,12 @@
     // per il cliente: un servizio a parte con prezzo risulta incluso (il prezzo è già nel totale); a parte senza prezzo non compare
     const incluseVilla = v => srvAttivi().filter(x => inclusoPer(v, x.key) || (typeof x.eur === 'number' && x.eur > 0));
     const prezzoTot = v => { const pr = prezzoDi(v); return pr === null ? null : pr + extraTot(v); };
-    const inclTutte = () => { const vv = scelte(); return srvAttivi().filter(x => vv.length ? vv.every(v => incluseVilla(v).some(y => y.key === x.key)) : x.modo === 'inc').map(x => x.key); };
-    const testiSrv = k => { const l = S.inclusioniDi(st).filter(i => i.servizio === k).map(i => (o.lingua === 'en' ? i.en : i.it) || i.it || i.en); const x = srvList().find(z => z.key === k); return l.length ? l : [srvNome(x || { key: k, label: k })]; };
-    const srvInclusi = () => inclTutte().filter(k => !S.inclusioniDi(st).some(i => i.servizio === k)).map(k => srvNome(srvList().find(z => z.key === k) || { key: k, label: k }));
+    // elenco comune: "Includi tutti", oppure "A parte tutti" con un prezzo; con "Predefinito" il servizio va sempre sotto le singole ville
+    const prezzato = x => typeof x.eur === 'number' && x.eur > 0;
+    const inclTutte = () => srvAttivi().filter(x => x.modo === 'inc' || (x.modo === 'parte' && prezzato(x))).map(x => x.key);
+    const descrSel = k => { const sel = incSel(); return S.inclusioniDi(st).filter(i => i.servizio === k && sel.includes(i.id)); };
+    const testiSrv = k => { const l = descrSel(k).map(i => (o.lingua === 'en' ? i.en : i.it) || i.it || i.en); const x = srvList().find(z => z.key === k); return l.length ? l : [srvNome(x || { key: k, label: k })]; };
+    const srvInclusi = () => inclTutte().filter(k => !descrSel(k).length).map(k => srvNome(srvList().find(z => z.key === k) || { key: k, label: k }));
     const inclSoloVilla = v => { const tutti = inclTutte(); return incluseVilla(v).filter(x => !tutti.includes(x.key)); };
     const st = settings();
     const fmtD = (iso, lang) => new Date(S.parse(iso)).toLocaleDateString(lang === 'en' ? 'en-GB' : 'it-IT', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
@@ -124,6 +127,7 @@
         <div class="off-filters" id="off-filters" ${o.fOpen ? '' : 'hidden'}>
           <label class="field"><span>Location</span><select id="off-f-loc"><option value="">Tutte</option>${locations().map(l => `<option ${o.f.loc === l ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label>
           <label class="field"><span>Preferiti</span><select id="off-f-fav"><option value="">Tutte le ville</option>${favLists().map(l => `<option value="${esc(l.id)}" ${o.f.fav === l.id ? 'selected' : ''}>♥ ${esc(l.nome)} (${(l.ville || []).length})</option>`).join('')}</select></label>
+          <label class="field"><span>Seafront – Seaview</span><select id="off-f-mare"><option value="">Tutte</option>${S.MARE.filter(m => m[2] > 0).map(([, t, n]) => `<option value="${n}" ${String(o.f.mare || '') === String(n) ? 'selected' : ''}>${esc(t)}${n < 3 ? ' o superiore' : ''}</option>`).join('')}</select></label>
           <label class="field f-num"><span>Ospiti min</span><input id="off-f-osp" inputmode="numeric" value="${esc(o.f.osp || '')}"></label>
           <label class="field f-num"><span>Camere min</span><input id="off-f-cam" inputmode="numeric" value="${esc(o.f.cam || '')}"></label>
           <label class="field f-num"><span>Prezzo da</span><input id="off-f-da" inputmode="numeric" placeholder="es. 25k" value="${esc(o.f.da || '')}"></label>
@@ -214,9 +218,9 @@
       const f = o.f, nr = x => { const m = /\d+/.exec(String(x || '')); return m ? Number(m[0]) : 0; };
       const fav = f.fav ? (favLists().find(l => l.id === f.fav) || {}).ville || [] : null;
       const da = f.da ? S.parseMoney(f.da) : null, a = f.a ? S.parseMoney(f.a) : null;
-      const nF = ['loc', 'fav', 'osp', 'cam', 'da', 'a', 'pisc'].filter(k => f[k]).length; $('#off-fn').textContent = nF ? ' · ' + nF : ''; $('#off-ftog').classList.toggle('on', !!nF);
+      const nF = ['loc', 'mare', 'fav', 'osp', 'cam', 'da', 'a', 'pisc'].filter(k => f[k]).length; $('#off-fn').textContent = nF ? ' · ' + nF : ''; $('#off-ftog').classList.toggle('on', !!nF);
       const list = ville().filter(v => !q || `${v.name} ${v.location || ''}`.toLowerCase().includes(q))
-        .filter(v => (!f.loc || normLoc(v.location) === f.loc) && (!fav || fav.includes(v.id)) && (!f.osp || nr(v.guests) >= Number(f.osp)) && (!f.cam || nr(v.guestBedrooms || v.totalBedrooms) >= Number(f.cam))
+        .filter(v => (!f.loc || normLoc(v.location) === f.loc) && (!f.mare || (S.mareLivello(v.seafront) || 0) >= Number(f.mare)) && (!fav || fav.includes(v.id)) && (!f.osp || nr(v.guests) >= Number(f.osp)) && (!f.cam || nr(v.guestBedrooms || v.totalBedrooms) >= Number(f.cam))
           && (!f.pisc || String(v.pool || '').trim() && !/^(no|n\/?a|-)$/i.test(String(v.pool).trim())))
         .filter(v => { if (typeof da !== 'number' && typeof a !== 'number') return true; const pr = listinoOf(v); return typeof pr === 'number' && (typeof da !== 'number' || pr >= da) && (typeof a !== 'number' || pr <= a); }).map(v => ({ v, s: stato(v), p: perOf(v), pr: listinoOf(v) }))
         .filter(x => !o.soloLibere || x.s === 'libera' || o.ville.includes(x.v.id));
@@ -239,8 +243,8 @@
     // voci "Le tariffe includono": di norma quelle spuntate in Impostazioni; in questa offerta si spuntano e tolgono a mano
     const incSel = () => Array.isArray(o.incSel) ? o.incSel : S.inclusioniDi(st).filter(x => x.on !== false).map(x => x.id);
     // voci collegate a un servizio: attive solo se quel servizio è spuntato come incluso
-    const incAttiva = x => !x.servizio || inclTutte().includes(x.servizio);
-    const incTesti = () => { const sel = incSel(); return S.inclusioniDi(st).filter(x => sel.includes(x.id) && incAttiva(x)).map(x => (o.lingua === 'en' ? x.en : x.it) || x.it || x.en).concat(srvInclusi())
+    const incAttiva = x => { if (!x.servizio) return true; const z = srvAttivi().find(y => y.key === x.servizio); return !!z && (z.modo !== 'parte' || prezzato(z)); };
+    const incTesti = () => { const sel = incSel(); return S.inclusioniDi(st).filter(x => sel.includes(x.id) && (x.servizio ? inclTutte().includes(x.servizio) : true)).map(x => (o.lingua === 'en' ? x.en : x.it) || x.it || x.en).concat(srvInclusi())
       .concat(String(o.incExtra || '').split('\n').map(t => t.trim()).filter(Boolean)); };
     const chiInclude = k => { const vv = scelte(); if (!vv.length) return 'Secondo la scheda di ogni villa'; const si = vv.filter(v => (v.serviziInclusi || []).includes(k)).length;
       return si === vv.length ? 'Compreso in tutte le ville scelte' : si ? `Compreso in ${si} ${si === 1 ? 'villa' : 'ville'} su ${vv.length}, a parte ${vv.length - si === 1 ? "nell'altra" : 'nelle altre'}` : 'A parte in tutte le ville scelte'; };
@@ -265,7 +269,7 @@
       $('#off-intro').value = o.intro; $('#off-chiusa').value = o.chiusa;
       const sel = incSel();
       const nomeSrv = k => (srvList().find(z => z.key === k) || {}).label || k;
-      $('#off-incl').innerHTML = S.inclusioniDi(st).map(x => { const att = incAttiva(x); return `<label class="off-inc${att ? '' : ' off-dis'}"${x.servizio && !att ? ` title="Si attiva spuntando il servizio ${esc(nomeSrv(x.servizio))} come incluso"` : ''}><input type="checkbox" data-inc="${esc(x.id)}" ${sel.includes(x.id) && att ? 'checked' : ''} ${att ? '' : 'disabled'}><span>${esc((o.lingua === 'en' ? x.en : x.it) || x.it || x.en)}${x.servizio ? ` <em class="off-link">· ${esc(nomeSrv(x.servizio))}</em>` : ''}</span></label>`; }).join('');
+      $('#off-incl').innerHTML = S.inclusioniDi(st).map(x => { const att = incAttiva(x); return `<label class="off-inc${att ? '' : ' off-dis'}"${x.servizio && !att ? ` title="Si attiva spuntando il servizio ${esc(nomeSrv(x.servizio))}"` : ''}><input type="checkbox" data-inc="${esc(x.id)}" ${sel.includes(x.id) && att ? 'checked' : ''} ${att ? '' : 'disabled'}><span>${esc((o.lingua === 'en' ? x.en : x.it) || x.it || x.en)}${x.servizio ? ` <em class="off-link">· ${esc(nomeSrv(x.servizio))}</em>` : ''}</span></label>`; }).join('');
       updBro();
     };
     // brochure PDF delle ville scelte: quella nella lingua dell'offerta, altrimenti un'altra
@@ -329,9 +333,9 @@
     $('#off-pers-t').addEventListener('click', () => { o.persOpen = !o.persOpen; $('#off-pers').hidden = !o.persOpen; $('#off-pers-t').setAttribute('aria-expanded', o.persOpen ? 'true' : 'false'); saveUI(); });
     schedPrev();
     $('#off-ftog').addEventListener('click', () => { o.fOpen = !o.fOpen; $('#off-filters').hidden = !o.fOpen; $('#off-ftog').setAttribute('aria-expanded', o.fOpen ? 'true' : 'false'); save(); });
-    [['off-f-loc', 'loc'], ['off-f-fav', 'fav'], ['off-f-osp', 'osp'], ['off-f-cam', 'cam'], ['off-f-da', 'da'], ['off-f-a', 'a']].forEach(([id, k]) => $('#' + id).addEventListener('input', e => { o.f[k] = e.target.value.trim(); drawList(); save(); }));
+    [['off-f-loc', 'loc'], ['off-f-mare', 'mare'], ['off-f-fav', 'fav'], ['off-f-osp', 'osp'], ['off-f-cam', 'cam'], ['off-f-da', 'da'], ['off-f-a', 'a']].forEach(([id, k]) => $('#' + id).addEventListener('input', e => { o.f[k] = e.target.value.trim(); drawList(); save(); }));
     $('#off-f-pisc').addEventListener('change', e => { o.f.pisc = e.target.checked; drawList(); save(); });
-    $('#off-f-reset').addEventListener('click', () => { o.f = {}; ['off-f-loc', 'off-f-fav', 'off-f-osp', 'off-f-cam', 'off-f-da', 'off-f-a'].forEach(id => { $('#' + id).value = ''; }); $('#off-f-pisc').checked = false; drawList(); save(); });
+    $('#off-f-reset').addEventListener('click', () => { o.f = {}; ['off-f-loc', 'off-f-mare', 'off-f-fav', 'off-f-osp', 'off-f-cam', 'off-f-da', 'off-f-a'].forEach(id => { $('#' + id).value = ''; }); $('#off-f-pisc').checked = false; drawList(); save(); });
     $('#off-q').addEventListener('input', e => { o.q = e.target.value; drawList(); save(); });
     $('#off-free').addEventListener('change', e => { o.soloLibere = e.target.checked; drawList(); save(); });
     $('#off-list').addEventListener('change', e => {
@@ -339,9 +343,9 @@
     });
     $('#off-list').addEventListener('input', e => { const i = e.target.closest('[data-price]'); if (i) { o.prezzi[i.dataset.price] = i.value; save(); } const n = e.target.closest('[data-nota]'); if (n) { o.note[n.dataset.nota] = n.value; save(); } });
     drawSrv();
-    $('#off-srv').addEventListener('change', e => { const c = e.target.closest('[data-son]'); if (!c) return; const k = c.closest('[data-ok]').dataset.ok; o.srv[k] = Object.assign(srvDi(k), o.srv[k], { on: c.checked }); drawSrv(); drawTexts(); save(); });
-    $('#off-srv').addEventListener('click', e => { const bt = e.target.closest('[data-smode] button'); if (!bt || bt.disabled) return; const k = bt.closest('[data-ok]').dataset.ok; const cur = Object.assign(srvDi(k), o.srv[k]); delete cur.incluso; o.srv[k] = Object.assign(cur, { modo: bt.dataset.m }); drawSrv(); drawTexts(); save(); });
-    $('#off-srv').addEventListener('input', e => { if (!e.target.matches('[data-sprz]')) return; const k = e.target.closest('[data-ok]').dataset.ok; o.srv[k] = Object.assign(srvDi(k), o.srv[k], { prezzo: e.target.value }); drawRiep(); save(); });
+    $('#off-srv').addEventListener('change', e => { const c = e.target.closest('[data-son]'); if (!c) return; const k = c.closest('[data-ok]').dataset.ok; o.srv[k] = Object.assign({}, o.srv[k], { on: c.checked }); drawSrv(); drawTexts(); save(); });
+    $('#off-srv').addEventListener('click', e => { const bt = e.target.closest('[data-smode] button'); if (!bt || bt.disabled) return; const k = bt.closest('[data-ok]').dataset.ok; const cur = Object.assign({}, o.srv[k]); delete cur.incluso; o.srv[k] = Object.assign(cur, { modo: bt.dataset.m }); drawSrv(); drawTexts(); save(); });
+    $('#off-srv').addEventListener('input', e => { if (!e.target.matches('[data-sprz]')) return; const k = e.target.closest('[data-ok]').dataset.ok; o.srv[k] = Object.assign({}, o.srv[k], { prezzo: e.target.value }); drawRiep(); save(); });
     $('#off-incl').addEventListener('change', e => { const c = e.target.closest('[data-inc]'); if (!c) return; const sel = incSel().filter(x => x !== c.dataset.inc); if (c.checked) sel.push(c.dataset.inc); o.incSel = sel; save(); });
     $('#off-incx').addEventListener('input', e => { o.incExtra = e.target.value; save(); });
     $('#off-firma').addEventListener('input', e => { o.firma = e.target.value; save(); });
@@ -359,7 +363,7 @@
     function infoVilla(v) {
       const l = L(); const r = [];
       if (vis(v, 'location')) r.push([l.localita, v.location]);
-      if (vis(v, 'seafront')) r.push([l.mare, v.seafront]);
+      if (vis(v, 'seafront')) r.push([l.mare, S.mareLabel(v.seafront)]);
       const osp = vis(v, 'guests') ? v.guests : vis(v, 'pax') ? v.pax : null; if (osp) r.push([l.ospiti, osp]);
       const cam = vis(v, 'guestBedrooms') ? v.guestBedrooms : vis(v, 'totalBedrooms') ? v.totalBedrooms : null; if (cam) r.push([l.camere, cam]);
       if (vis(v, 'bathrooms')) r.push([l.bagni, v.bathrooms]);

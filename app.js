@@ -884,7 +884,7 @@ window.SDBStore.ready.then(function () {
           + s.bks.map(b => `<i style="background:${esc(bookingColor(b))};left:${(S.diffDays(st.seasonStart, b.from) + .5) / total * 100}%;width:${Math.max(S.diffDays(b.from, b.to), .5) / total * 100}%"></i>`).join('');
         const desc = String((!hiddenField('servizi') && v.servizi) || (!hiddenField('note') && v.note) || '').replace(/\s+/g, ' ').trim();
         const th = thumbs.map[v.id];
-        const badge = [v.location, v.seafront].filter(Boolean).map(x => String(x).trim()).join(', ');
+        const badge = [v.location, v.seafront && S.mareLabel(v.seafront)].filter(Boolean).map(x => String(x).trim()).join(', ');
         const fav = isFav(v.id);
         return `<article class="vcard" data-id="${esc(v.id)}" tabindex="0">
           <div class="vc-media">
@@ -963,7 +963,10 @@ window.SDBStore.ready.then(function () {
       ['acquisto', 'rettifica', 'fisso'].forEach(k => { p[k] = p[k] || []; while (p[k].length < n) p[k].push(k === 'rettifica' ? 0 : null); });
     });
     const locSelect = () => `<label class="field"><span>Location</span><div class="loc-pick"><select id="v-loc"><option value="">— scegli —</option>${locList().map(l => `<option ${normLoc(v.location) === l ? 'selected' : ''}>${esc(l)}</option>`).join('')}<option value="__new">+ Nuova località…</option></select></div><div class="loc-new" id="v-loc-new" hidden><input id="v-loc-in" placeholder="Nome della località, es. PORTO CERVO"><button type="button" class="btn small primary" id="v-loc-add">Aggiungi</button><button type="button" class="btn small" id="v-loc-x">Annulla</button></div></label>`;
-    const inp = (k, label, wide) => `<label class="field"${wide ? ' style="grid-column:1/-1"' : ''}><span>${label}</span><input data-k="${k}" value="${esc(v[k])}"></label>`;
+    const inp = (k, label, wide) => k === 'seafront' ? mareSel(label) : `<label class="field"${wide ? ' style="grid-column:1/-1"' : ''}><span>${label}</span><input data-k="${k}" value="${esc(v[k])}"></label>`;
+    // Seafront – Seaview: solo le 4 voci; un valore scritto a mano si mostra già convertito (si salva così alla prossima modifica)
+    const mareSel = label => { const cur = String(v.seafront || '').trim(), n = S.mareLivello(cur);
+      return `<label class="field"><span>${label}</span><select data-k="seafront"><option value="" ${!cur ? 'selected' : ''}>—</option>${S.MARE.map(([, t, l]) => `<option value="${esc(t)}" ${n === l ? 'selected' : ''}>${esc(t)}</option>`).join('')}${cur && n === null ? `<option value="${esc(cur)}" selected>${esc(cur)} (da scegliere)</option>` : ''}</select></label>`; };
     const linkInp = (k, label) => {
       const val = String(v[k] || ''); const isUrl = /^https?:\/\//i.test(val.trim());
       return `<label class="field"><span>${label}</span><div class="linkrow"><input data-k="${k}" value="${esc(val)}">${isUrl ? `<a href="${esc(val.trim().split(/\s+/)[0])}" target="_blank" rel="noopener">Apri ↗</a>` : ''}</div></label>`;
@@ -971,7 +974,7 @@ window.SDBStore.ready.then(function () {
     main.innerHTML = `<div class="page"><div class="wrap">
       <a class="crumb" href="#disponibilita">← Disponibilità</a>
       <div class="head">
-        <div><h1 id="v-title">${esc(v.name)}</h1><div class="sub">${esc([v.location, !hiddenField('seafront') && v.seafront, !hiddenField('proprietario') && v.proprietario && 'Prop. ' + v.proprietario].filter(Boolean).join(' · '))}</div><div id="v-spese"></div></div>
+        <div><h1 id="v-title">${esc(v.name)}</h1><div class="sub">${esc([v.location, !hiddenField('seafront') && S.mareLabel(v.seafront), !hiddenField('proprietario') && v.proprietario && 'Prop. ' + v.proprietario].filter(Boolean).join(' · '))}</div><div id="v-spese"></div></div>
         <div class="actions"><span class="saved" id="saved" aria-live="polite"></span>
           ${isAdmin() && store.mode === 'online' ? '<button class="btn" id="v-share" title="Profili che vedono questa villa"></button>' : ''}
           <button class="btn vfav${isFav(v.id) ? ' on' : ''}" id="v-fav" title="Preferiti">${HEART(isFav(v.id))} Preferiti</button>

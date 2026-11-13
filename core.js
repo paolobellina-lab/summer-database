@@ -187,6 +187,15 @@
     ['finale', 'Pulizia finale e lavanderia finale standard', 'Standard Final Cleaning and Final Laundry'],
     ['utenze', 'Tutte le utenze, escluso il riscaldamento della piscina se presente', 'All Utilities except the cost for the pool heating if present']
   ].map(([id, it, en]) => ({ id, it, en, on: true }));
+  // posizione sul mare, dalla migliore: si sceglie da un menu; i valori scritti a mano (sito, Excel) si riconoscono
+  const MARE = [['pieds', "Pieds dans l'eau", 3], ['seafront', 'Seafront', 2], ['seaview', 'Seaview', 1], ['none', 'None', 0]];
+  function mareLivello(s) { const t = String(s || '').trim().toLowerCase(); if (!t) return null;
+    if (/pied|dans l.?eau|feet in the water|on the water|direct (sea|beach) access/.test(t)) return 3;
+    if (/beach ?front|sea ?fri?ont|fronte ?mare|waterfront/.test(t)) return 2;
+    if (/sea ?view|vista ?mare|panoram/.test(t)) return 1;
+    if (/^(none|no|nessun[ao]?|-)$/.test(t)) return 0;
+    return null; }
+  const mareLabel = s => { const n = mareLivello(s); return n === null ? String(s || '') : MARE.find(m => m[2] === n)[1]; };
   const inclusioniDi = st => (Array.isArray(st && st.inclusioni) ? st.inclusioni : INCLUSIONI).filter(x => x && x.id);
-  window.SDB = { INCLUSIONI, inclusioniDi, CAMPI_SCHEDA, CAMPI_NASCOSTI_DEFAULT, nascostiDi, periodsFor, autoPeriods, autoPeriodsFor, cambioDi, STATUS_COLOR, PALETTE, inkFor, DAY, MESI, MESI_L, GG, parse, iso, addDays, diffDays, dm, dmy, TARIFFE, STATI, defaultSettings, defaultPeriods, salePrice, priceAt, emptyPricing, money, short, parseMoney, uid };
+  window.SDB = { MARE, mareLivello, mareLabel, INCLUSIONI, inclusioniDi, CAMPI_SCHEDA, CAMPI_NASCOSTI_DEFAULT, nascostiDi, periodsFor, autoPeriods, autoPeriodsFor, cambioDi, STATUS_COLOR, PALETTE, inkFor, DAY, MESI, MESI_L, GG, parse, iso, addDays, diffDays, dm, dmy, TARIFFE, STATI, defaultSettings, defaultPeriods, salePrice, priceAt, emptyPricing, money, short, parseMoney, uid };
 })();

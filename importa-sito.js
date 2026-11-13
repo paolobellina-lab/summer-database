@@ -12,7 +12,7 @@
   function campiDa(s) {
     const c = {};
     const set = (k, v) => { v = num(v); if (v !== null) c[k] = String(v).trim(); };
-    set('seafront', s.position);
+    { const n = window.SDB && window.SDB.mareLivello ? window.SDB.mareLivello(s.position) : null; set('seafront', n === null ? s.position : window.SDB.MARE.find(m => m[2] === n)[1]); }
     set('guests', s.guests);
     set('totalBedrooms', s.bedrooms);
     const g = /^\s*(\d+)/.exec(String(s.bedrooms || '')); if (g) c.guestBedrooms = g[1];
