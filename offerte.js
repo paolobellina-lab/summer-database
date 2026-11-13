@@ -76,9 +76,10 @@
     // anteprima della mail, aggiornata a ogni modifica
     let tPrev = null;
     const schedPrev = () => { clearTimeout(tPrev); tPrev = setTimeout(async () => { const el = document.getElementById('off-anteprima'); if (!el) return;
-      const og = document.getElementById('off-ogg'); if (og) og.innerHTML = `<b>Oggetto:</b> ${esc(L().oggetto(periodoTxt()))}${o.email ? ` · <b>A:</b> ${esc(o.email)}` : ''}`;
+      const og = document.getElementById('off-ogg'); if (og) og.innerHTML = `<b>Oggetto:</b> ${esc(oggettoMail())}${o.email ? ` · <b>A:</b> ${esc(o.email)}` : ''}`;
       if (!o.ville.length) { el.innerHTML = '<p class="note">Scegli almeno una villa per vedere l\'anteprima.</p>'; return; }
       try { el.innerHTML = await htmlMail(); } catch (err) { console.warn('anteprima', err); } }, 150); };
+    const oggettoMail = () => (o.oggettoMod && String(o.oggetto || '').trim()) ? o.oggetto.trim() : L().oggetto(periodoTxt());
     const save = () => { saveUI(); schedPrev(); };
 
     main.innerHTML = `<div class="page"><div class="wrap off-page">
@@ -122,6 +123,7 @@
           <div class="field"><span>Lingua</span><div class="seg" id="off-lang"><button type="button" data-l="it" class="${o.lingua === 'it' ? 'on' : ''}">Italiano</button><button type="button" data-l="en" class="${o.lingua === 'en' ? 'on' : ''}">English</button></div></div>
           <label class="field"><span>Foto per villa (Word)</span><select id="off-nf">${[1, 3, 5, 8].map(n => `<option value="${n}" ${Number(o.nFoto) === n ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
         </div>
+        <label class="field"><span>Oggetto della mail</span><input id="off-ogg-in"></label>
         <label class="field"><span>Testo iniziale</span><textarea id="off-intro" rows="3"></textarea></label>
         <label class="field"><span>Testo finale</span><textarea id="off-chiusa" rows="2"></textarea></label>
         <label class="field"><span>Firma</span><textarea id="off-firma" rows="2">${esc(o.firma || '')}</textarea></label>
@@ -210,6 +212,8 @@
     const drawTexts = () => {
       if (!o.introMod) o.intro = L().intro(o.cliente.trim(), periodoTxt());
       if (!o.chiusaMod) o.chiusa = L().chiusaMail;
+      if (!o.oggettoMod) o.oggetto = L().oggetto(periodoTxt());
+      $('#off-ogg-in').value = o.oggetto;
       $('#off-intro').value = o.intro; $('#off-chiusa').value = o.chiusa;
       const sel = incSel();
       $('#off-incl').innerHTML = S.inclusioniDi(st).map(x => `<label class="off-inc"><input type="checkbox" data-inc="${esc(x.id)}" ${sel.includes(x.id) ? 'checked' : ''}><span>${esc((o.lingua === 'en' ? x.en : x.it) || x.it || x.en)}</span></label>`).join('');
@@ -275,8 +279,9 @@
     $('#off-firma').addEventListener('input', e => { o.firma = e.target.value; save(); });
     $('#off-cli').addEventListener('input', e => { o.cliente = e.target.value; drawTexts(); save(); });
     $('#off-mail').addEventListener('input', e => { o.email = e.target.value.trim(); save(); });
-    $('#off-lang').addEventListener('click', e => { const b = e.target.closest('[data-l]'); if (!b) return; o.lingua = b.dataset.l; o.introMod = false; o.chiusaMod = false; $$('#off-lang button').forEach(x => x.classList.toggle('on', x === b)); drawTexts(); save(); });
+    $('#off-lang').addEventListener('click', e => { const b = e.target.closest('[data-l]'); if (!b) return; o.lingua = b.dataset.l; o.introMod = false; o.chiusaMod = false; o.oggettoMod = false; $$('#off-lang button').forEach(x => x.classList.toggle('on', x === b)); drawTexts(); save(); });
     $('#off-nf').addEventListener('change', e => { o.nFoto = Number(e.target.value); save(); });
+    $('#off-ogg-in').addEventListener('input', e => { o.oggetto = e.target.value; o.oggettoMod = !!e.target.value.trim(); save(); });
     $('#off-intro').addEventListener('input', e => { o.intro = e.target.value; o.introMod = true; save(); });
     $('#off-chiusa').addEventListener('input', e => { o.chiusa = e.target.value; o.chiusaMod = true; save(); });
 
@@ -401,7 +406,7 @@
       btn.disabled = false;
     });
     $('#off-gmail').addEventListener('click', () => {
-      const u = `https://mail.google.com/mail/?view=cm&fs=1${o.email ? '&to=' + encodeURIComponent(o.email) : ''}&su=${encodeURIComponent(L().oggetto(periodoTxt()))}`;
+      const u = `https://mail.google.com/mail/?view=cm&fs=1${o.email ? '&to=' + encodeURIComponent(o.email) : ''}&su=${encodeURIComponent(oggettoMail())}`;
       window.open(u, '_blank', 'noopener');
     });
   }
