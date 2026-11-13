@@ -936,3 +936,10 @@ table.prices.srv-tbl td input[data-sl] { width: 200px; text-align: left; }
 .inc-new { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; }
 @media (max-width: 700px) { .inc-row { grid-template-columns: auto 1fr; } .inc-row input[data-ien] { grid-column: 2; } .inc-act { grid-column: 2; } .inc-new { grid-template-columns: 1fr; } }
 .off-all { margin: 0; }
+.off-ftog { display: inline-flex; align-items: center; gap: 6px; }
+.off-ftog.on { border-color: var(--accent); background: var(--accent-soft); }
+.off-ftog[aria-expanded="true"] { border-color: var(--accent); }
+.off-filters { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: flex-end; padding: 10px 12px; margin-bottom: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+.off-filters .field { margin: 0; min-width: 150px; }
+.off-filters .f-num { min-width: 0; width: 110px; }
+.off-filters .flag { margin: 0; }

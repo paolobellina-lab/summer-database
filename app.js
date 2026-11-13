@@ -300,7 +300,7 @@ window.SDBStore.ready.then(function () {
     if (h === 'ville') return viewVillas();
     if (h === 'spese' && window.SDBSpese) { spesePage = window.SDBSpese.mount(main, { ui, saveUI, esc, data, spese, store, $, $$, toast, schedaPren, compressImage, canAcq }); return; }
     if (h === 'appunti') return viewNotes();
-    if (h === 'offerte' && window.SDBOfferte) { return window.SDBOfferte.mount(main, { ui, saveUI, esc, data, store, $, $$, toast, S, settings, blocks, hiddenField, coverOf: id => (thumbs.map[id] || {}).fotoId || null }); }
+    if (h === 'offerte' && window.SDBOfferte) { return window.SDBOfferte.mount(main, { ui, saveUI, esc, data, store, $, $$, toast, S, settings, blocks, hiddenField, favLists, locations, normLoc, coverOf: id => (thumbs.map[id] || {}).fotoId || null }); }
     if (h === 'impostazioni') return viewSettings();
     return viewAvail();
   }

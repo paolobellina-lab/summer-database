@@ -35,10 +35,12 @@
 
   function mount(main, ctx) {
     const { ui, saveUI, esc, data, store, $, $$, toast, S, settings, blocks, hiddenField } = ctx;
+    const favLists = ctx.favLists || (() => []), locations = ctx.locations || (() => []), normLoc = ctx.normLoc || (x => String(x || '').trim().toUpperCase());
     const X = window.SDBExport;
     const o = ui.off = Object.assign({ tariff: 'settimanale', idx: 0, ville: [], prezzi: {}, cliente: '', email: '', lingua: 'it', nFoto: 3, soloLibere: true, q: '', intro: '', chiusa: '', introMod: false, chiusaMod: false, note: {}, incSel: null, incExtra: '', firma: 'Esmeralda Luxury Villas' }, ui.off || {});
     const L = () => T[o.lingua] || T.it;
     if (!o.note) o.note = {};
+    if (!o.f || typeof o.f !== 'object') o.f = {};
     const st = settings();
     const fmtD = (iso, lang) => new Date(S.parse(iso)).toLocaleDateString(lang === 'en' ? 'en-GB' : 'it-IT', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
     const rangeTxt = (p, lang) => lang === 'en' ? `${fmtD(p.from, lang)} – ${fmtD(p.to, lang)}` : `dal ${fmtD(p.from, lang)} al ${fmtD(p.to, lang)}`;
@@ -72,7 +74,18 @@
       </section>
       <section class="card"><h2>2 · Ville <span class="off-count" id="off-count"></span></h2>
         <div class="off-tools"><label class="flag off-all" title="Seleziona o deseleziona tutte le ville dell'elenco"><input type="checkbox" id="off-all"><span><b>Tutte</b></span></label><input type="search" id="off-q" placeholder="Cerca villa o località" value="${esc(o.q)}">
-          <label class="flag off-free"><input type="checkbox" id="off-free" ${o.soloLibere ? 'checked' : ''}><span><b>Solo ville libere</b></span></label></div>
+          <label class="flag off-free"><input type="checkbox" id="off-free" ${o.soloLibere ? 'checked' : ''}><span><b>Solo ville libere</b></span></label>
+          <button type="button" class="btn off-ftog" id="off-ftog" aria-expanded="${o.fOpen ? 'true' : 'false'}"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4-2v-4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>Filtri<span class="off-fn" id="off-fn"></span></button></div>
+        <div class="off-filters" id="off-filters" ${o.fOpen ? '' : 'hidden'}>
+          <label class="field"><span>Location</span><select id="off-f-loc"><option value="">Tutte</option>${locations().map(l => `<option ${o.f.loc === l ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label>
+          <label class="field"><span>Preferiti</span><select id="off-f-fav"><option value="">Tutte le ville</option>${favLists().map(l => `<option value="${esc(l.id)}" ${o.f.fav === l.id ? 'selected' : ''}>♥ ${esc(l.nome)} (${(l.ville || []).length})</option>`).join('')}</select></label>
+          <label class="field f-num"><span>Ospiti min</span><input id="off-f-osp" inputmode="numeric" value="${esc(o.f.osp || '')}"></label>
+          <label class="field f-num"><span>Camere min</span><input id="off-f-cam" inputmode="numeric" value="${esc(o.f.cam || '')}"></label>
+          <label class="field f-num"><span>Prezzo da</span><input id="off-f-da" inputmode="numeric" placeholder="es. 25k" value="${esc(o.f.da || '')}"></label>
+          <label class="field f-num"><span>Prezzo a</span><input id="off-f-a" inputmode="numeric" placeholder="es. 75k" value="${esc(o.f.a || '')}"></label>
+          <label class="flag"><input type="checkbox" id="off-f-pisc" ${o.f.pisc ? 'checked' : ''}><span><b>Con piscina</b></span></label>
+          <button type="button" class="btn ghost" id="off-f-reset">Azzera filtri</button>
+        </div>
         <div id="off-list" class="off-list"></div>
       </section>
       <section class="card"><h2>3 · Offerta</h2>
@@ -128,7 +141,14 @@
     let visibili = [];
     const drawList = () => {
       const q = (o.q || '').trim().toLowerCase();
-      const list = ville().filter(v => !q || `${v.name} ${v.location || ''}`.toLowerCase().includes(q)).map(v => ({ v, s: stato(v), p: perOf(v), pr: listinoOf(v) }))
+      const f = o.f, nr = x => { const m = /\d+/.exec(String(x || '')); return m ? Number(m[0]) : 0; };
+      const fav = f.fav ? (favLists().find(l => l.id === f.fav) || {}).ville || [] : null;
+      const da = f.da ? S.parseMoney(f.da) : null, a = f.a ? S.parseMoney(f.a) : null;
+      const nF = ['loc', 'fav', 'osp', 'cam', 'da', 'a', 'pisc'].filter(k => f[k]).length; $('#off-fn').textContent = nF ? ' · ' + nF : ''; $('#off-ftog').classList.toggle('on', !!nF);
+      const list = ville().filter(v => !q || `${v.name} ${v.location || ''}`.toLowerCase().includes(q))
+        .filter(v => (!f.loc || normLoc(v.location) === f.loc) && (!fav || fav.includes(v.id)) && (!f.osp || nr(v.guests) >= Number(f.osp)) && (!f.cam || nr(v.guestBedrooms || v.totalBedrooms) >= Number(f.cam))
+          && (!f.pisc || String(v.pool || '').trim() && !/^(no|n\/?a|-)$/i.test(String(v.pool).trim())))
+        .filter(v => { if (typeof da !== 'number' && typeof a !== 'number') return true; const pr = listinoOf(v); return typeof pr === 'number' && (typeof da !== 'number' || pr >= da) && (typeof a !== 'number' || pr <= a); }).map(v => ({ v, s: stato(v), p: perOf(v), pr: listinoOf(v) }))
         .filter(x => !o.soloLibere || x.s === 'libera' || o.ville.includes(x.v.id));
       visibili = list.map(x => x.v.id);
       const nSel = visibili.filter(id => o.ville.includes(id)).length, all = $('#off-all');
@@ -197,6 +217,10 @@
       else o.ville = o.ville.filter(id => !visibili.includes(id));
       drawList(); drawTexts(); save();
     });
+    $('#off-ftog').addEventListener('click', () => { o.fOpen = !o.fOpen; $('#off-filters').hidden = !o.fOpen; $('#off-ftog').setAttribute('aria-expanded', o.fOpen ? 'true' : 'false'); save(); });
+    [['off-f-loc', 'loc'], ['off-f-fav', 'fav'], ['off-f-osp', 'osp'], ['off-f-cam', 'cam'], ['off-f-da', 'da'], ['off-f-a', 'a']].forEach(([id, k]) => $('#' + id).addEventListener('input', e => { o.f[k] = e.target.value.trim(); drawList(); save(); }));
+    $('#off-f-pisc').addEventListener('change', e => { o.f.pisc = e.target.checked; drawList(); save(); });
+    $('#off-f-reset').addEventListener('click', () => { o.f = {}; ['off-f-loc', 'off-f-fav', 'off-f-osp', 'off-f-cam', 'off-f-da', 'off-f-a'].forEach(id => { $('#' + id).value = ''; }); $('#off-f-pisc').checked = false; drawList(); save(); });
     $('#off-q').addEventListener('input', e => { o.q = e.target.value; drawList(); save(); });
     $('#off-free').addEventListener('change', e => { o.soloLibere = e.target.checked; drawList(); save(); });
     $('#off-list').addEventListener('change', e => {
