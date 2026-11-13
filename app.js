@@ -1296,7 +1296,7 @@ window.SDBStore.ready.then(function () {
         <form class="loc-new" id="srv-add" autocomplete="off"><input id="srv-add-n" placeholder="Nuovo servizio (es. Baby sitter)"><button class="btn small">Aggiungi servizio</button></form>
       </section>
       <section class="card"><h2>Inclusioni delle offerte</h2>
-        <p class="note">Sono le voci "Le tariffe includono" della mail di offerta, in italiano e in inglese. Quelle con la spunta sono già selezionate in ogni nuova offerta; nell'offerta le puoi togliere o aggiungere una alla volta.</p>
+        <p class="note">Sono le voci "Le tariffe includono" della mail di offerta, in italiano e in inglese. Quelle con la spunta sono già selezionate in ogni nuova offerta; nell'offerta le puoi togliere o aggiungere una alla volta. Puoi <b>collegare una voce a un servizio</b>: nell'offerta quella voce si attiva solo quando spunti il servizio come incluso (es. "Pulizia finale e lavanderia finale standard" con il servizio Pulizia finale).</p>
         <div id="inc-list" class="inc-admin"></div>
         <form class="inc-new" id="inc-add" autocomplete="off"><input id="inc-add-it" placeholder="Nuova voce in italiano"><input id="inc-add-en" placeholder="In inglese"><button class="btn small">Aggiungi</button></form>
       </section>`)}
@@ -1558,12 +1558,14 @@ window.SDBStore.ready.then(function () {
       $('#inc-list').innerHTML = S.inclusioniDi(st).map((x, i, l) => `<div class="inc-row" data-ii="${esc(x.id)}">
         <label class="inc-on" title="Spuntata di norma nelle nuove offerte"><input type="checkbox" data-ion ${x.on !== false ? 'checked' : ''}></label>
         <input data-iit value="${esc(x.it || '')}" placeholder="Italiano" aria-label="Voce in italiano"><input data-ien value="${esc(x.en || '')}" placeholder="English" aria-label="Voce in inglese">
+        <select data-isrv aria-label="Servizio collegato" title="Se la colleghi a un servizio, nell'offerta la voce si attiva solo quando quel servizio è spuntato come incluso"><option value="">Sempre disponibile</option>${servizi(st.servizi).map(z => `<option value="${esc(z.key)}" ${x.servizio === z.key ? 'selected' : ''}>Servizio: ${esc(z.label)}</option>`).join('')}</select>
         <span class="inc-act"><button type="button" class="btn small" data-imv="-1" ${i ? '' : 'disabled'} aria-label="Sposta su">↑</button><button type="button" class="btn small" data-imv="1" ${i < l.length - 1 ? '' : 'disabled'} aria-label="Sposta giù">↓</button><button type="button" class="btn small danger" data-idel>Togli</button></span></div>`).join('') || '<p class="note">Nessuna voce.</p>';
     };
     drawInc();
     $('#inc-list').addEventListener('input', e => { const row = e.target.closest('[data-ii]'); if (!row) return; const l = incList(); const x = l.find(y => y.id === row.dataset.ii); if (!x) return;
       if (e.target.matches('[data-iit]')) x.it = e.target.value; else if (e.target.matches('[data-ien]')) x.en = e.target.value; else if (e.target.matches('[data-ion]')) x.on = e.target.checked; else return; st.inclusioni = l; save(); });
-    $('#inc-list').addEventListener('change', e => { if (!e.target.matches('[data-ion]')) return; const row = e.target.closest('[data-ii]'); const l = incList(); const x = l.find(y => y.id === row.dataset.ii); if (x) { x.on = e.target.checked; st.inclusioni = l; save(); } });
+    $('#inc-list').addEventListener('change', e => { if (e.target.matches('[data-isrv]')) { const l = incList(); const x = l.find(y => y.id === e.target.closest('[data-ii]').dataset.ii); if (x) { x.servizio = e.target.value || ''; st.inclusioni = l; save(); } return; }
+      if (!e.target.matches('[data-ion]')) return; const row = e.target.closest('[data-ii]'); const l = incList(); const x = l.find(y => y.id === row.dataset.ii); if (x) { x.on = e.target.checked; st.inclusioni = l; save(); } });
     $('#inc-list').addEventListener('click', e => { const row = e.target.closest('[data-ii]'); if (!row) return; const l = incList(); const i = l.findIndex(y => y.id === row.dataset.ii); if (i < 0) return;
       const mv = e.target.closest('[data-imv]'); if (mv) { const j = i + Number(mv.dataset.imv); if (j < 0 || j >= l.length) return; [l[i], l[j]] = [l[j], l[i]]; st.inclusioni = l; save(); drawInc(); return; }
       if (e.target.closest('[data-idel]')) { l.splice(i, 1); st.inclusioni = l; save(); drawInc(); toast('Voce tolta'); } });

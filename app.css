@@ -930,11 +930,11 @@ table.prices.srv-tbl td { vertical-align: middle; padding-top: 6px; padding-bott
 table.prices.srv-tbl td input { width: 110px; text-align: right; }
 table.prices.srv-tbl td input[data-sl] { width: 200px; text-align: left; }
 .inc-admin { display: grid; gap: 6px; margin-bottom: 10px; }
-.inc-row { display: grid; grid-template-columns: auto 1fr 1fr auto; gap: 8px; align-items: center; }
+.inc-row { display: grid; grid-template-columns: auto 1fr 1fr 190px auto; gap: 8px; align-items: center; }
 .inc-on input { width: 18px; height: 18px; }
 .inc-act { display: flex; gap: 4px; }
 .inc-new { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; }
-@media (max-width: 700px) { .inc-row { grid-template-columns: auto 1fr; } .inc-row input[data-ien] { grid-column: 2; } .inc-act { grid-column: 2; } .inc-new { grid-template-columns: 1fr; } }
+@media (max-width: 700px) { .inc-row { grid-template-columns: auto 1fr; } .inc-row input[data-ien], .inc-row select { grid-column: 2; } .inc-act { grid-column: 2; } .inc-new { grid-template-columns: 1fr; } }
 .off-all { margin: 0; }
 .off-ftog { display: inline-flex; align-items: center; gap: 6px; }
 .off-ftog.on { border-color: var(--accent); background: var(--accent-soft); }
@@ -956,3 +956,6 @@ table.prices.off-riep td:nth-child(n+2), table.prices.off-riep th:nth-child(n+2)
 table.prices.off-srv td:first-child, table.prices.off-srv th:first-child { text-align: left; }
 table.prices.off-srv .off-inc { display: inline-flex; }
 table.prices.off-srv .off-inc input { width: auto; min-width: 0; flex: none; margin: 0; }
+.inc-row select { width: 100%; font-size: 12px; }
+.off-inc.off-dis span { color: var(--muted); opacity: .6; }
+.off-inc .off-link { font-style: normal; font-size: 11px; color: var(--muted); }

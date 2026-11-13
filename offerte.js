@@ -50,7 +50,7 @@
       return { on: !!x.on, incluso: x.incluso !== undefined ? !!x.incluso : d.incluso !== false, prezzo: x.prezzo !== undefined ? x.prezzo : (typeof d.vendita === 'number' ? String(d.vendita) : '') }; };
     const srvNome = x => o.lingua === 'en' ? (SRV_EN[x.key] || x.label) : x.label;
     const srvAparte = () => srvList().map(x => Object.assign({}, x, srvDi(x.key))).filter(x => x.on && !x.incluso).map(x => Object.assign(x, { eur: S.parseMoney(x.prezzo) }));
-    const srvInclusi = () => srvList().filter(x => { const d = srvDi(x.key); return d.on && d.incluso; }).map(srvNome);
+    const srvInclusi = () => srvList().filter(x => { const d = srvDi(x.key); return d.on && d.incluso && !S.inclusioniDi(st).some(i => i.servizio === x.key); }).map(srvNome);
     const extraTot = () => srvAparte().reduce((t, x) => t + (typeof x.eur === 'number' ? x.eur : 0), 0);
     const st = settings();
     const fmtD = (iso, lang) => new Date(S.parse(iso)).toLocaleDateString(lang === 'en' ? 'en-GB' : 'it-IT', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
@@ -196,7 +196,9 @@
     };
     // voci "Le tariffe includono": di norma quelle spuntate in Impostazioni; in questa offerta si spuntano e tolgono a mano
     const incSel = () => Array.isArray(o.incSel) ? o.incSel : S.inclusioniDi(st).filter(x => x.on !== false).map(x => x.id);
-    const incTesti = () => { const sel = incSel(); return S.inclusioniDi(st).filter(x => sel.includes(x.id)).map(x => (o.lingua === 'en' ? x.en : x.it) || x.it || x.en).concat(srvInclusi())
+    // voci collegate a un servizio: attive solo se quel servizio è spuntato come incluso
+    const incAttiva = x => !x.servizio || (() => { const d = srvDi(x.servizio); return d.on && d.incluso; })();
+    const incTesti = () => { const sel = incSel(); return S.inclusioniDi(st).filter(x => sel.includes(x.id) && incAttiva(x)).map(x => (o.lingua === 'en' ? x.en : x.it) || x.it || x.en).concat(srvInclusi())
       .concat(String(o.incExtra || '').split('\n').map(t => t.trim()).filter(Boolean)); };
     const drawSrv = () => {
       $('#off-srv').innerHTML = srvList().map(x => { const d = srvDi(x.key); return `<tr data-ok="${esc(x.key)}" class="${d.on ? 'on' : ''}">
@@ -216,7 +218,8 @@
       $('#off-ogg-in').value = o.oggetto;
       $('#off-intro').value = o.intro; $('#off-chiusa').value = o.chiusa;
       const sel = incSel();
-      $('#off-incl').innerHTML = S.inclusioniDi(st).map(x => `<label class="off-inc"><input type="checkbox" data-inc="${esc(x.id)}" ${sel.includes(x.id) ? 'checked' : ''}><span>${esc((o.lingua === 'en' ? x.en : x.it) || x.it || x.en)}</span></label>`).join('');
+      const nomeSrv = k => (srvList().find(z => z.key === k) || {}).label || k;
+      $('#off-incl').innerHTML = S.inclusioniDi(st).map(x => { const att = incAttiva(x); return `<label class="off-inc${att ? '' : ' off-dis'}"${x.servizio && !att ? ` title="Si attiva spuntando il servizio ${esc(nomeSrv(x.servizio))} come incluso"` : ''}><input type="checkbox" data-inc="${esc(x.id)}" ${sel.includes(x.id) && att ? 'checked' : ''} ${att ? '' : 'disabled'}><span>${esc((o.lingua === 'en' ? x.en : x.it) || x.it || x.en)}${x.servizio ? ` <em class="off-link">· ${esc(nomeSrv(x.servizio))}</em>` : ''}</span></label>`; }).join('');
       updBro();
     };
     // brochure PDF delle ville scelte: quella nella lingua dell'offerta, altrimenti un'altra
