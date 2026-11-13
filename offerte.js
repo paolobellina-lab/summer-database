@@ -162,9 +162,9 @@
         <label class="field"><span>Testo iniziale</span><textarea id="off-intro" rows="3"></textarea></label>
         <label class="field"><span>Testo finale</span><textarea id="off-chiusa" rows="2"></textarea></label>
         <label class="field"><span>Firma</span><textarea id="off-firma" rows="2">${esc(o.firma || '')}</textarea></label>
-        ${store.listBrochure ? `<label class="flag off-bro"><input type="checkbox" id="off-bro" ${o.brochure ? 'checked' : ''}><span><b>Allega brochure</b><small id="off-bro-info">Scarica i PDF delle ville scelte, nella lingua dell'offerta, da trascinare nella mail.</small></span></label>` : ''}
         </div>
         <div class="off-prev" id="off-anteprima"><p class="note">Scegli almeno una villa per vedere l'anteprima.</p></div>
+        ${store.listBrochure ? `<label class="flag off-bro"><input type="checkbox" id="off-bro" ${o.brochure ? 'checked' : ''}><span><b>Allega brochure</b><small id="off-bro-info">Scarica i PDF delle ville scelte, nella lingua dell'offerta, da trascinare nella mail.</small></span></label>` : ''}
         <div class="off-actions">
           <button type="button" class="btn primary" id="off-word">Scarica Word</button>
           <button type="button" class="btn" id="off-copy">Copia per email</button>
