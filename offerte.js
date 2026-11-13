@@ -67,10 +67,13 @@
     const srvInclVilla = v => srvAttivi().filter(x => inclusoPer(v, x.key));
     const extraTot = v => srvAparte(v).reduce((t, x) => t + (typeof x.eur === 'number' ? x.eur : 0), 0);
     // inclusi per tutte le ville scelte: vanno nell'elenco comune "Le tariffe includono"; gli altri inclusi si scrivono sotto la singola villa
-    const inclTutte = () => { const vv = scelte(); return srvAttivi().filter(x => vv.length ? vv.every(v => inclusoPer(v, x.key)) : x.modo === 'inc').map(x => x.key); };
+    // per il cliente: un servizio a parte con prezzo risulta incluso (il prezzo è già nel totale); a parte senza prezzo non compare
+    const incluseVilla = v => srvAttivi().filter(x => inclusoPer(v, x.key) || (typeof x.eur === 'number' && x.eur > 0));
+    const prezzoTot = v => { const pr = prezzoDi(v); return pr === null ? null : pr + extraTot(v); };
+    const inclTutte = () => { const vv = scelte(); return srvAttivi().filter(x => vv.length ? vv.every(v => incluseVilla(v).some(y => y.key === x.key)) : x.modo === 'inc').map(x => x.key); };
     const testiSrv = k => { const l = S.inclusioniDi(st).filter(i => i.servizio === k).map(i => (o.lingua === 'en' ? i.en : i.it) || i.it || i.en); const x = srvList().find(z => z.key === k); return l.length ? l : [srvNome(x || { key: k, label: k })]; };
     const srvInclusi = () => inclTutte().filter(k => !S.inclusioniDi(st).some(i => i.servizio === k)).map(k => srvNome(srvList().find(z => z.key === k) || { key: k, label: k }));
-    const inclSoloVilla = v => { const tutti = inclTutte(); return srvInclVilla(v).filter(x => !tutti.includes(x.key)); };
+    const inclSoloVilla = v => { const tutti = inclTutte(); return incluseVilla(v).filter(x => !tutti.includes(x.key)); };
     const st = settings();
     const fmtD = (iso, lang) => new Date(S.parse(iso)).toLocaleDateString(lang === 'en' ? 'en-GB' : 'it-IT', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
     const rangeTxt = (p, lang) => lang === 'en' ? `${fmtD(p.from, lang)} – ${fmtD(p.to, lang)}` : `dal ${fmtD(p.from, lang)} al ${fmtD(p.to, lang)}`;
@@ -127,7 +130,7 @@
       </section>
       <section class="card"><h2>3 · Servizi e prezzi</h2>
         <div class="field"><span>Servizi</span><div class="tbl-wrap"><table class="prices off-srv"><thead><tr><th>Servizio</th><th>Nell'offerta</th><th>Prezzo €</th></tr></thead><tbody id="off-srv"></tbody></table></div>
-          <small class="note">Spunta i servizi da proporre. <b>Predefinito</b>: incluso nelle ville che lo hanno tra i "Servizi compresi nel prezzo" della scheda, a parte (con il prezzo sommato) nelle altre. <b>Includi tutti</b>: incluso per tutte le ville. <b>A parte tutti</b>: si somma al prezzo di ogni villa. I prezzi partono da quelli di Impostazioni → Servizi e inclusioni e qui li puoi cambiare per questa offerta.</small></div>
+          <small class="note">Spunta i servizi da proporre. <b>Predefinito</b>: incluso nelle ville che lo hanno tra i "Servizi compresi nel prezzo" della scheda, a parte (con il prezzo sommato) nelle altre. <b>Includi tutti</b>: incluso per tutte le ville. <b>A parte tutti</b>: si somma al prezzo di ogni villa. Nella mail il cliente vede i servizi sempre come <b>compresi</b> e un solo prezzo, già con i servizi a parte sommati; un servizio a parte senza prezzo non compare. I prezzi partono da quelli di Impostazioni → Servizi e inclusioni e qui li puoi cambiare per questa offerta.</small></div>
         <div class="field"><span>Le tariffe includono</span><div class="off-incl" id="off-incl"></div>
           <textarea id="off-incx" rows="2" placeholder="Altre voci solo per questa offerta (una per riga)">${esc(o.incExtra || '')}</textarea>
           <small class="note">L'elenco e le voci spuntate di norma si cambiano in Impostazioni → Servizi e inclusioni.</small></div>
@@ -239,8 +242,9 @@
     };
     const drawRiep = () => {
       const vv = scelte();
-      $('#off-riep').innerHTML = vv.length ? vv.map(v => { const pr = prezzoDi(v), ex = srvAparte(v), et = extraTot(v), inc = srvInclVilla(v);
-        return `<tr><td><b>${esc(v.name)}</b>${inc.length ? `<small class="note"> · inclusi: ${esc(inc.map(x => x.label).join(', '))}</small>` : ''}</td><td>${pr === null ? '<span class="note">su richiesta</span>' : S.money(pr)}</td><td>${ex.length ? `${S.money(et)}<small class="note"> (${esc(ex.map(x => x.label).join(', '))})</small>` : '<span class="note">—</span>'}</td><td><b>${pr === null ? '—' : S.money(pr + et)}</b></td></tr>`; }).join('')
+      $('#off-riep').innerHTML = vv.length ? vv.map(v => { const pr = prezzoDi(v), ex = srvAparte(v).filter(x => typeof x.eur === 'number' && x.eur > 0), et = extraTot(v), inc = srvInclVilla(v);
+        const cli = incluseVilla(v);
+        return `<tr><td><b>${esc(v.name)}</b>${cli.length ? `<small class="note"> · al cliente come inclusi: ${esc(cli.map(x => x.label).join(', '))}</small>` : ''}</td><td>${pr === null ? '<span class="note">su richiesta</span>' : S.money(pr)}</td><td>${ex.length ? `${S.money(et)}<small class="note"> (${esc(ex.map(x => x.label).join(', '))})</small>` : '<span class="note">—</span>'}</td><td><b>${pr === null ? '—' : S.money(pr + et)}</b></td></tr>`; }).join('')
         : '<tr><td colspan="4" class="note">Scegli le ville al punto 2.</td></tr>';
     };
     const drawTexts = () => {
@@ -387,9 +391,8 @@
           if (vis(v, 'descrizione')) B.push({ p: String(v.descrizione) });
           if (vis(v, 'servizi')) B.push({ h2: l.servizi }, { p: String(v.servizi) });
           if (vis(v, 'linkSito')) B.push({ p: `${l.sito}: ${v.linkSito}`, small: true });
-          const pr = prezzoDi(v); B.push({ price: [l.prezzo, pr === null ? l.richiesta : euro(pr)] });
+          const pr = prezzoTot(v); B.push({ price: [l.prezzo, pr === null ? l.richiesta : euro(pr)] });
           const iv = inclSoloVilla(v); if (iv.length) B.push({ p: `${l.inclVilla}: ${iv.map(x => testiSrv(x.key).join(', ')).join('; ')}`, small: true });
-          const ex = srvAparte(v); if (ex.length) { B.push({ p: `${l.extra}: ${ex.map(x => srvNome(x) + (typeof x.eur === 'number' ? ' ' + euro(x.eur) : '')).join(', ')}`, small: true }); if (pr !== null) B.push({ p: `${l.totale}: ${euro(pr + extraTot(v))}`, bold: true }); }
           if ((o.note[v.id] || '').trim()) B.push({ p: o.note[v.id].trim(), small: true });
         }
         B.push({ pageBreak: true }); o.chiusa.split('\n').forEach(t => B.push({ p: t }));
@@ -417,9 +420,9 @@
       h += TIT(l.proposte) + (sep ? HR : BR);
       const mese = base ? new Date(S.parse(base.from)).toLocaleDateString(o.lingua === 'en' ? 'en-GB' : 'it-IT', { month: 'long', timeZone: 'UTC' }) : '';
       // come nell'esempio: dalla villa più cara, quelle su richiesta in fondo
-      const ord = scelte().map(v => ({ v, pr: prezzoDi(v) })).sort((a, b) => (b.pr === null ? -1 : b.pr) - (a.pr === null ? -1 : a.pr));
+      const ord = scelte().map(v => ({ v, pr: prezzoTot(v) })).sort((a, b) => (b.pr === null ? -1 : b.pr) - (a.pr === null ? -1 : a.pr));
       for (const { v } of ord) {
-        const p = perOf(v); const pr = prezzoDi(v); const nota = (o.note[v.id] || '').trim();
+        const p = perOf(v); const pr = prezzoTot(v); const nota = (o.note[v.id] || '').trim();
         const nome = esc(v.name.replace(/^villa\s+/i, '').replace(/\b\w+/g, w => w[0].toUpperCase() + w.slice(1).toLowerCase()));
         const titolo = `Villa ${nome}`;
         h += P(`<b${acc !== '#000000' ? ` style="color:${acc};font-size:${z.size + 2}px"` : ''}>${vis(v, 'linkSito') ? link(v.linkSito, titolo) : titolo}</b>${vis(v, 'codice') ? ` <b style="${acc !== '#000000' ? 'font-weight:normal;font-size:' + (z.size - 2) + 'px;letter-spacing:1px;color:' + z.testo : ''}">${esc(v.codice)}</b>` : ''}`);
@@ -429,8 +432,6 @@
         const lab = (o.lingua === 'en' ? `${mese ? mese[0].toUpperCase() + mese.slice(1) + ' ' : ''}${tarEn} ${l.tariffa}` : `${l.tariffa} ${tar.toLowerCase()}${mese ? ' ' + mese : ''}`) + (diverso ? ' ' + rangeTxt(p, o.lingua) : '');
         h += P(`<b>${esc(lab)}:</b> ${pr === null ? esc(l.richiesta) : eur(pr)}${nota ? ' - ' + esc(nota) + ' -' : ''}`);
         const iv = inclSoloVilla(v); if (iv.length) h += P(`${esc(l.inclVilla)}: ${esc(iv.map(x => testiSrv(x.key).join(', ')).join('; '))}`);
-        const ex = srvAparte(v);
-        if (ex.length) h += P(`${esc(l.extra)}: ${ex.map(x => esc(srvNome(x)) + (typeof x.eur === 'number' ? ' ' + eur(x.eur) : '')).join(', ')}`) + (pr === null ? '' : P(`<b>${esc(l.totale)}:</b> ${eur(pr + extraTot(v))}`));
         h += sep ? HR : BR;
       }
       const inc = incTesti();
