@@ -140,14 +140,15 @@
         <div class="field"><span>Riepilogo prezzi per villa</span><div class="tbl-wrap"><table class="prices off-riep"><thead><tr><th>Villa</th><th>Affitto</th><th>Servizi a parte</th><th>Totale</th></tr></thead><tbody id="off-riep"></tbody></table></div></div>
       </section>
       <section class="card"><h2>4 · Offerta</h2>
-        <div class="off-prevbar"><span class="note" id="off-ogg"></span><div class="off-prevact"><label class="off-st-pick"><span>Stile</span><select id="off-st-sel" aria-label="Stile della mail"></select></label><button type="button" class="btn off-ftog" id="off-pers-t" aria-expanded="${o.persOpen ? 'true' : 'false'}"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z M13 7l4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>Personalizza</button></div></div>
-        <div class="off-pers" id="off-pers" ${o.persOpen ? '' : 'hidden'}>
         <div class="row off-row">
           <label class="field"><span>Cliente</span><input id="off-cli" value="${esc(o.cliente)}" placeholder="es. Mr Smith"></label>
-          <label class="field"><span>Email del cliente</span><input id="off-mail" type="email" value="${esc(o.email)}" placeholder="facoltativa"></label>
+          <label class="field"><span>Email del cliente</span><input id="off-mail" type="text" inputmode="email" autocomplete="off" value="${esc(o.email)}" placeholder="facoltativa"></label>
           <div class="field"><span>Lingua</span><div class="seg" id="off-lang"><button type="button" data-l="it" class="${o.lingua === 'it' ? 'on' : ''}">Italiano</button><button type="button" data-l="en" class="${o.lingua === 'en' ? 'on' : ''}">English</button></div></div>
           <label class="field"><span>Foto per villa (Word)</span><select id="off-nf">${[1, 3, 5, 8].map(n => `<option value="${n}" ${Number(o.nFoto) === n ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
         </div>
+        <label class="field off-ogg-f"><span>Oggetto della mail</span><input id="off-ogg-in"></label>
+        <div class="off-prevbar"><span class="note" id="off-ogg" hidden></span><div class="off-prevact"><label class="off-st-pick"><span>Stile</span><select id="off-st-sel" aria-label="Stile della mail"></select></label><button type="button" class="btn off-ftog" id="off-pers-t" aria-expanded="${o.persOpen ? 'true' : 'false'}"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z M13 7l4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>Personalizza</button></div></div>
+        <div class="off-pers" id="off-pers" ${o.persOpen ? '' : 'hidden'}>
         <div class="field off-stile"><span>Stile della mail</span>
           <div class="off-st-row">
             <select id="off-st-font" aria-label="Carattere">${FONT.map(([v, t]) => `<option value="${esc(v)}">${t}</option>`).join('')}</select>
@@ -158,7 +159,6 @@
             <label class="off-col"><input type="checkbox" id="off-st-sep"> Linee tra le ville</label></div>
           <div class="off-st-row"><input id="off-st-nome" placeholder="Nome per salvare questo stile"><button type="button" class="btn small" id="off-st-new">Salva come nuovo</button><button type="button" class="btn small" id="off-st-upd">Aggiorna lo stile scelto</button><button type="button" class="btn small" id="off-st-def">Usa di norma</button><button type="button" class="btn small danger" id="off-st-del">Elimina</button></div>
         </div>
-        <label class="field"><span>Oggetto della mail</span><input id="off-ogg-in"></label>
         <label class="field"><span>Testo iniziale</span><textarea id="off-intro" rows="3"></textarea></label>
         <label class="field"><span>Testo finale</span><textarea id="off-chiusa" rows="2"></textarea></label>
         <label class="field"><span>Firma</span><textarea id="off-firma" rows="2">${esc(o.firma || '')}</textarea></label>
