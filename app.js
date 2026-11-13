@@ -972,6 +972,10 @@ window.SDBStore.ready.then(function () {
           ${hiddenField('note') ? '' : `<label class="field"><span>Note</span><textarea data-k="note" rows="4">${esc(v.note)}</textarea></label>`}${hiddenField('servizi') && hiddenField('note') ? '<p class="note">Riservati.</p>' : ''}</section>
       </div>
       <section class="card"><h2>Caratteristiche</h2><div class="grid">${FIELDS.caratteristiche.map(([k, l]) => inp(k, l)).join('')}</div></section>
+      <section class="card"><h2>Servizi compresi nel prezzo</h2>
+        <p class="note">Spunta i servizi che questa villa ha già compresi nel prezzo d'affitto: nelle Offerte, con "Predefinito", per questa villa risultano inclusi e non si sommano al prezzo.</p>
+        <div class="v-srv" id="v-srv">${servizi(settings().servizi).map(x => `<label class="flag"><input type="checkbox" data-vsrv="${esc(x.key)}" ${(v.serviziInclusi || []).includes(x.key) ? 'checked' : ''} ${ro ? 'disabled' : ''}><span><b>${esc(x.label)}</b></span></label>`).join('')}</div>
+      </section>
       <section class="card" id="v-photos"><h2>Foto</h2>
         <div class="ph-grid" id="ph-grid"></div>
         <div class="ph-tools">${store.mode === 'online' && !ro ? `<label class="btn" for="ph-add">+ Aggiungi foto</label><input type="file" id="ph-add" accept="image/*" multiple hidden>` : ''}<span class="note" id="ph-msg"></span></div>
@@ -1001,6 +1005,9 @@ window.SDBStore.ready.then(function () {
       clearTimeout(saveT); $('#saved').textContent = 'Modifiche in corso…';
       saveT = setTimeout(() => { store.upsertVilla(JSON.parse(JSON.stringify(v))); $('#saved').textContent = 'Salvato'; }, 350);
     };
+    $$('[data-vsrv]').forEach(el => el.addEventListener('change', () => {
+      v.serviziInclusi = $$('[data-vsrv]').filter(x => x.checked).map(x => x.dataset.vsrv); save();
+    }));
     $$('[data-k]').forEach(el => el.addEventListener('input', () => {
       v[el.dataset.k] = el.value;
       if (el.dataset.k === 'name') $('#v-title').textContent = el.value || 'Senza nome';
