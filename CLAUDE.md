@@ -54,7 +54,7 @@ Elenco condiviso in `meta/settings` → `localita` (maiuscolo). Nella scheda vil
 ## Foto e preferiti
 - Foto delle ville in `villas_foto/{id}` (`villaId`, `img`, `thumb`, `ordine`) e copertina in `villas_thumb/{villaId}` (`thumb`, `fotoId`). Mai dentro `villas`, che le altre app leggono per intero.
 - Brochure PDF (max 10 MB) caricate nella scheda villa: `villas_brochure/{id}` = `{ villaId, nome, lingua ('it'|'en'|''), size, parti, creatoDa, creatoIl }` e il file a pezzi da 900 KB in `villas_brochure_parti/{id}_{k}` = `{ villaId, brochureId, k, dati (bytes) }` (un documento Firestore tiene al massimo 1 MB; la scheda si scrive per ultima). Regole: lettura a chi vede la villa, scrittura con accesso completo. Nelle Offerte "Allega brochure" scarica i PDF delle ville scelte nella lingua dell'offerta (altrimenti un'altra), da trascinare nella mail: Gmail non accetta allegati da un link.
-- Campo `webBrochure` (link alla web brochure) nella scheda villa, gruppo Link e media; resta in `villas` (non è tra i campi riservati).
+- Campi `webBrochure` e `webBrochureAnonima` (link alla web brochure con logo e senza) nella scheda villa, gruppo Link e media; restano in `villas` (non sono tra i campi riservati). Nelle Offerte, accanto ad "Allega brochure", le caselle "Link Web Brochure" / "Link Web Brochure anonima" (`ui.off.linkWB`, `ui.off.linkWBA`) aggiungono sotto il prezzo di ogni villa la riga "Web brochure: qui" (al cliente l'etichetta è la stessa per le due versioni).
 - Elenchi preferiti condivisi in `meta/preferiti` (`liste: [{ id, nome, ville: [villaId] }]`).
 
 ## Account autorizzati

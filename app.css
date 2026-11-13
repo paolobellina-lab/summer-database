@@ -989,3 +989,5 @@ dialog.dlg-conf { width: min(420px, calc(100vw - 32px)); margin: auto; }
 .dlg-conf .conf-txt { margin: 0; color: var(--fg); line-height: 1.5; }
 .btn.danger-fill { background: #b3261e; border-color: #b3261e; color: #fff; }
 .btn.danger-fill:hover { background: #8f1e18; border-color: #8f1e18; }
+.off-allega { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+.off-allega .flag { margin: 0; }

@@ -13,7 +13,7 @@
       intro: (c, p) => `${c ? 'Gentile ' + c + ',' : 'Gentile cliente,'}\ncome richiesto, di seguito le nostre proposte per il periodo ${p}.`,
       chiusa: 'I prezzi si intendono per l\'intero periodo indicato. Restiamo a disposizione per qualsiasi informazione o per organizzare una visita.',
       oggetto: p => `La sua richiesta · ${p}`,
-      proposte: 'Ecco le nostre proposte:', extra: 'Servizi a parte', totale: 'Totale con i servizi', inclVilla: 'Compreso per questa villa', video: 'Guarda il video', qui: 'qui', tariffa: 'Tariffa', inclusiTit: 'Le tariffe includono:',
+      proposte: 'Ecco le nostre proposte:', extra: 'Servizi a parte', totale: 'Totale con i servizi', inclVilla: 'Compreso per questa villa', webBro: 'Web brochure', video: 'Guarda il video', qui: 'qui', tariffa: 'Tariffa', inclusiTit: 'Le tariffe includono:',
       inclusi: 'Pulizia giornaliera della casa\nGiardinaggio e pulizia della piscina regolari\nCambio biancheria e asciugamani due volte a settimana\nProdotti da bagno di lusso all\'arrivo\nServizio concierge per tutte le prenotazioni in Costa Smeralda\nPulizia finale e lavanderia finale standard\nTutte le utenze, escluso il riscaldamento della piscina se presente',
       chiusaMail: 'Il nostro Concierge sarà a disposizione per qualsiasi servizio extra durante il soggiorno.',
       soggetta: 'Offerta soggetta a disponibilità e ad approvazione finale del proprietario.'
@@ -25,7 +25,7 @@
       intro: (c, p) => `${c ? 'Dear ' + c + ',' : 'Dear guest,'}\nplease find our suggested options below for the period ${p}.`,
       chiusa: 'Prices refer to the whole period indicated. We remain at your disposal for any further information.',
       oggetto: p => `Your Enquiry · ${p}`,
-      proposte: 'Herewith our suggestions:', extra: 'Extra services', totale: 'Total including services', inclVilla: 'Included for this villa', video: 'Watch the video', qui: 'here', tariffa: 'Rate', inclusiTit: 'The rates do include:',
+      proposte: 'Herewith our suggestions:', extra: 'Extra services', totale: 'Total including services', inclVilla: 'Included for this villa', webBro: 'Web brochure', video: 'Watch the video', qui: 'here', tariffa: 'Rate', inclusiTit: 'The rates do include:',
       inclusi: 'Daily Cleaning for the resetting of the house\nRegular Gardening and pool cleaning\nLinen & towel change twice per week\nLuxury bath products on arrival\nConcierge Services for all reservations in Costa Smeralda\nStandard Final Cleaning and Final Laundry\nAll Utilities except the cost for the pool heating if present',
       chiusaMail: 'Our Concierge will be ready to accommodate any requests for extra services needed during your stay.',
       soggetta: 'Offer subject to availability and owner\'s final approval.'
@@ -59,6 +59,8 @@
     const stili = () => { const sv = stiliSalvati(); return STILI_BASE.map(b => sv.find(x => x.id === b.id) || b).concat(sv.filter(x => !STILI_BASE.some(b => b.id === x.id)).sort((a, b) => String(a.nome).localeCompare(String(b.nome), 'it'))); };
     if (!o.stile || typeof o.stile !== 'object') o.stile = Object.assign({}, stili().find(x => x.id === settings().stileMailDi) || STILI_BASE[0]);
     const salvaStili = l => { const cur = JSON.parse(JSON.stringify(settings())); cur.stiliMail = l; return Promise.resolve(store.setSettings(cur)); };
+    // link alle web brochure (normale e/o anonima) sotto il prezzo di ogni villa
+    const linkWb = v => [o.linkWB && vis(v, 'webBrochure') && String(v.webBrochure || '').trim(), o.linkWBA && vis(v, 'webBrochureAnonima') && String(v.webBrochureAnonima || '').trim()].filter(u => u && /^https?:\/\//i.test(u));
     const srvNome = x => o.lingua === 'en' ? (SRV_EN[x.key] || x.label) : x.label;
     // un servizio è incluso per una villa se "Includi tutti", oppure con "Predefinito" se la scheda villa lo ha tra i servizi compresi nel prezzo
     const inclusoPer = (v, k) => { const d = srvDi(k); return d.modo === 'inc' || (d.modo === 'pred' && (v.serviziInclusi || []).includes(k)); };
@@ -164,7 +166,11 @@
         <label class="field"><span>Firma</span><textarea id="off-firma" rows="2">${esc(o.firma || '')}</textarea></label>
         </div>
         <div class="off-prev" id="off-anteprima"><p class="note">Scegli almeno una villa per vedere l'anteprima.</p></div>
+        <div class="off-allega">
         ${store.listBrochure ? `<label class="flag off-bro"><input type="checkbox" id="off-bro" ${o.brochure ? 'checked' : ''}><span><b>Allega brochure</b><small id="off-bro-info">Scarica i PDF delle ville scelte, nella lingua dell'offerta, da trascinare nella mail.</small></span></label>` : ''}
+          <label class="flag off-wb"><input type="checkbox" id="off-wb" ${o.linkWB ? 'checked' : ''}><span><b>Link Web Brochure</b><small>Sotto il prezzo di ogni villa che ce l'ha.</small></span></label>
+          <label class="flag off-wb"><input type="checkbox" id="off-wba" ${o.linkWBA ? 'checked' : ''}><span><b>Link Web Brochure anonima</b><small>La versione senza logo, sotto il prezzo di ogni villa che ce l'ha.</small></span></label>
+        </div>
         <div class="off-actions">
           <button type="button" class="btn primary" id="off-word">Scarica Word</button>
           <button type="button" class="btn" id="off-copy">Copia per email</button>
@@ -396,6 +402,7 @@
           if (vis(v, 'servizi')) B.push({ h2: l.servizi }, { p: String(v.servizi) });
           if (vis(v, 'linkSito')) B.push({ p: `${l.sito}: ${v.linkSito}`, small: true });
           const pr = prezzoTot(v); B.push({ price: [l.prezzo, pr === null ? l.richiesta : euro(pr)] });
+          linkWb(v).forEach(u => B.push({ p: `${l.webBro}: ${u}`, small: true }));
           const iv = inclSoloVilla(v); if (iv.length) B.push({ p: `${l.inclVilla}: ${iv.map(x => testiSrv(x.key).join(', ')).join('; ')}`, small: true });
           if ((o.note[v.id] || '').trim()) B.push({ p: o.note[v.id].trim(), small: true });
         }
@@ -436,6 +443,7 @@
         const diverso = p && base && (p.from !== base.from || p.to !== base.to);
         const lab = (o.lingua === 'en' ? `${mese ? mese[0].toUpperCase() + mese.slice(1) + ' ' : ''}${tarEn} ${l.tariffa}` : `${l.tariffa} ${tar.toLowerCase()}${mese ? ' ' + mese : ''}`) + (diverso ? ' ' + rangeTxt(p, o.lingua) : '');
         h += P(`<b>${esc(lab)}:</b> ${pr === null ? esc(l.richiesta) : eur(pr)}${nota ? ' - ' + esc(nota) + ' -' : ''}`);
+        const wb = linkWb(v); wb.forEach(u => { h += P(`${esc(l.webBro)}: ${link(u, esc(l.qui))}`); });
         const iv = inclSoloVilla(v); if (iv.length) h += P(`${esc(l.inclVilla)}: ${esc(iv.map(x => testiSrv(x.key).join(', ')).join('; '))}`);
         h += sep ? HR : BR;
       }
@@ -518,6 +526,8 @@
       } catch (x) { msg(`<div class="warn err">Non riuscito: ${esc(x.message || x)}</div>`); }
       btn.disabled = false;
     });
+    $('#off-wb').addEventListener('change', e => { o.linkWB = e.target.checked; save(); });
+    $('#off-wba').addEventListener('change', e => { o.linkWBA = e.target.checked; save(); });
     if ($('#off-bro')) $('#off-bro').addEventListener('change', e => { o.brochure = e.target.checked; save(); updBro(); });
     if ($('#off-bro-dl')) $('#off-bro-dl').addEventListener('click', async () => {
       if (!pronto()) return; const btn = $('#off-bro-dl'); btn.disabled = true;

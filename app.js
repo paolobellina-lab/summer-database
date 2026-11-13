@@ -930,7 +930,7 @@ window.SDBStore.ready.then(function () {
   function newVilla() {
     const st = settings();
     const order = Math.max(-1, ...data().villas.map(v => v.order ?? 0)) + 1;
-    const v = { id: S.uid('v'), order, name: 'NUOVA VILLA', codice: '', realEstate: '', nomeReale: '', proprietario: '', indirizzo: '', servizi: '', note: '', location: '', seafront: '', indoorSqm: '', outdoorSqm: '', pax: '', guests: '', staff: '', totalBedrooms: '', guestBedrooms: '', staffBedrooms: '', doubleBedrooms: '', twinBedrooms: '', singleBedrooms: '', bathrooms: '', pool: '', gym: '', spa: '', parking: '', kitchens: '', linkSito: '', webBrochure: '', mediaProprietario: '', googleMaps: '', youtube: '', vimeo: '', psw: '', pricing: S.emptyPricing(st) };
+    const v = { id: S.uid('v'), order, name: 'NUOVA VILLA', codice: '', realEstate: '', nomeReale: '', proprietario: '', indirizzo: '', servizi: '', note: '', location: '', seafront: '', indoorSqm: '', outdoorSqm: '', pax: '', guests: '', staff: '', totalBedrooms: '', guestBedrooms: '', staffBedrooms: '', doubleBedrooms: '', twinBedrooms: '', singleBedrooms: '', bathrooms: '', pool: '', gym: '', spa: '', parking: '', kitchens: '', linkSito: '', webBrochure: '', webBrochureAnonima: '', mediaProprietario: '', googleMaps: '', youtube: '', vimeo: '', psw: '', pricing: S.emptyPricing(st) };
     store.upsertVilla(v);
     location.hash = 'villa-' + v.id;
     setTimeout(() => { const n = $('[data-k="name"]'); if (n) { n.focus(); n.select(); } }, 50);
@@ -942,7 +942,7 @@ window.SDBStore.ready.then(function () {
   const FIELDS = {
     anagrafica: [['name', 'Nome'], ['codice', 'Codice (es. MRN-PRT)'], ['nomeReale', 'Nome reale'], ['proprietario', 'Proprietario'], ['realEstate', 'Real estate'], ['indirizzo', 'Indirizzo'], ['location', 'Location'], ['seafront', 'Seafront – Seaview']],
     caratteristiche: [['indoorSqm', 'Indoor mq'], ['outdoorSqm', 'Outdoor mq'], ['pax', 'Pax'], ['guests', 'N° ospiti'], ['staff', 'N° staff'], ['totalBedrooms', 'Camere totali'], ['guestBedrooms', 'Camere ospiti'], ['staffBedrooms', 'Camere staff'], ['doubleBedrooms', 'Matrimoniali'], ['twinBedrooms', 'Twin'], ['singleBedrooms', 'Singole'], ['bathrooms', 'Bagni'], ['pool', 'Piscina'], ['gym', 'Palestra'], ['spa', 'Spa'], ['parking', 'Parcheggio'], ['kitchens', 'Cucine']],
-    link: [['linkSito', 'Link sito'], ['webBrochure', 'Web brochure'], ['mediaProprietario', 'Media proprietario'], ['googleMaps', 'Google Maps'], ['youtube', 'Video YouTube'], ['vimeo', 'Video Vimeo'], ['psw', 'Password']]
+    link: [['linkSito', 'Link sito'], ['webBrochure', 'Web brochure'], ['webBrochureAnonima', 'Web brochure anonima'], ['mediaProprietario', 'Media proprietario'], ['googleMaps', 'Google Maps'], ['youtube', 'Video YouTube'], ['vimeo', 'Video Vimeo'], ['psw', 'Password']]
   };
   let villaTab = 'settimanale';
   const RIS_FIELDS = S.CAMPI_SCHEDA;
