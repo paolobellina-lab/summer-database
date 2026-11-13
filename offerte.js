@@ -13,7 +13,7 @@
       intro: (c, p) => `${c ? 'Gentile ' + c + ',' : 'Gentile cliente,'}\ncome richiesto, di seguito le nostre proposte per il periodo ${p}.`,
       chiusa: 'I prezzi si intendono per l\'intero periodo indicato. Restiamo a disposizione per qualsiasi informazione o per organizzare una visita.',
       oggetto: p => `La sua richiesta · ${p}`,
-      proposte: 'Ecco le nostre proposte:', video: 'Guarda il video', qui: 'qui', tariffa: 'Tariffa', inclusiTit: 'Le tariffe includono:',
+      proposte: 'Ecco le nostre proposte:', extra: 'Servizi a parte', totale: 'Totale con i servizi', video: 'Guarda il video', qui: 'qui', tariffa: 'Tariffa', inclusiTit: 'Le tariffe includono:',
       inclusi: 'Pulizia giornaliera della casa\nGiardinaggio e pulizia della piscina regolari\nCambio biancheria e asciugamani due volte a settimana\nProdotti da bagno di lusso all\'arrivo\nServizio concierge per tutte le prenotazioni in Costa Smeralda\nPulizia finale e lavanderia finale standard\nTutte le utenze, escluso il riscaldamento della piscina se presente',
       chiusaMail: 'Il nostro Concierge sarà a disposizione per qualsiasi servizio extra durante il soggiorno.',
       soggetta: 'Offerta soggetta a disponibilità e ad approvazione finale del proprietario.'
@@ -25,7 +25,7 @@
       intro: (c, p) => `${c ? 'Dear ' + c + ',' : 'Dear guest,'}\nplease find our suggested options below for the period ${p}.`,
       chiusa: 'Prices refer to the whole period indicated. We remain at your disposal for any further information.',
       oggetto: p => `Your Enquiry · ${p}`,
-      proposte: 'Herewith our suggestions:', video: 'Watch the video', qui: 'here', tariffa: 'Rate', inclusiTit: 'The rates do include:',
+      proposte: 'Herewith our suggestions:', extra: 'Extra services', totale: 'Total including services', video: 'Watch the video', qui: 'here', tariffa: 'Rate', inclusiTit: 'The rates do include:',
       inclusi: 'Daily Cleaning for the resetting of the house\nRegular Gardening and pool cleaning\nLinen & towel change twice per week\nLuxury bath products on arrival\nConcierge Services for all reservations in Costa Smeralda\nStandard Final Cleaning and Final Laundry\nAll Utilities except the cost for the pool heating if present',
       chiusaMail: 'Our Concierge will be ready to accommodate any requests for extra services needed during your stay.',
       soggetta: 'Offer subject to availability and owner\'s final approval.'
@@ -41,6 +41,17 @@
     const L = () => T[o.lingua] || T.it;
     if (!o.note) o.note = {};
     if (!o.f || typeof o.f !== 'object') o.f = {};
+    if (!o.srv || typeof o.srv !== 'object') o.srv = {};
+    // servizi dell'offerta: quelli delle prenotazioni (Impostazioni → Servizi e inclusioni), con prezzo di vendita modificabile qui
+    const SRV_EN = { pulizia: 'Final cleaning', cuoco: 'Private chef', transfer: 'Transfer' };
+    const srvList = () => [['pulizia', 'Pulizia finale'], ['cuoco', 'Cuoco'], ['transfer', 'Transfer']].map(([key, label]) => ({ key, label }))
+      .concat(((st.servizi) || []).filter(x => x && x.key).map(x => ({ key: x.key, label: x.label })));
+    const srvDi = k => { const d = (st.prezziServizi || {})[k] || {}; const x = o.srv[k] || {};
+      return { on: !!x.on, incluso: x.incluso !== undefined ? !!x.incluso : d.incluso !== false, prezzo: x.prezzo !== undefined ? x.prezzo : (typeof d.vendita === 'number' ? String(d.vendita) : '') }; };
+    const srvNome = x => o.lingua === 'en' ? (SRV_EN[x.key] || x.label) : x.label;
+    const srvAparte = () => srvList().map(x => Object.assign({}, x, srvDi(x.key))).filter(x => x.on && !x.incluso).map(x => Object.assign(x, { eur: S.parseMoney(x.prezzo) }));
+    const srvInclusi = () => srvList().filter(x => { const d = srvDi(x.key); return d.on && d.incluso; }).map(srvNome);
+    const extraTot = () => srvAparte().reduce((t, x) => t + (typeof x.eur === 'number' ? x.eur : 0), 0);
     const st = settings();
     const fmtD = (iso, lang) => new Date(S.parse(iso)).toLocaleDateString(lang === 'en' ? 'en-GB' : 'it-IT', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
     const rangeTxt = (p, lang) => lang === 'en' ? `${fmtD(p.from, lang)} – ${fmtD(p.to, lang)}` : `dal ${fmtD(p.from, lang)} al ${fmtD(p.to, lang)}`;
@@ -62,7 +73,13 @@
       const p = same ? ps[0] : baseP()[o.idx]; if (!p) return '';
       return same || o.tariff === 'settimanale' ? rangeTxt(p, o.lingua) : (p.label + ' ' + String(p.from).slice(0, 4));
     };
-    const save = () => saveUI();
+    // anteprima della mail, aggiornata a ogni modifica
+    let tPrev = null;
+    const schedPrev = () => { clearTimeout(tPrev); tPrev = setTimeout(async () => { const el = document.getElementById('off-anteprima'); if (!el) return;
+      const og = document.getElementById('off-ogg'); if (og) og.innerHTML = `<b>Oggetto:</b> ${esc(L().oggetto(periodoTxt()))}${o.email ? ` · <b>A:</b> ${esc(o.email)}` : ''}`;
+      if (!o.ville.length) { el.innerHTML = '<p class="note">Scegli almeno una villa per vedere l\'anteprima.</p>'; return; }
+      try { el.innerHTML = await htmlMail(); } catch (err) { console.warn('anteprima', err); } }, 150); };
+    const save = () => { saveUI(); schedPrev(); };
 
     main.innerHTML = `<div class="page"><div class="wrap off-page">
       <div class="head"><div><h1>Offerte</h1><div class="sub">Scegli il periodo e le ville: prepari un documento Word o una mail per il cliente, con foto, informazioni e prezzo</div></div></div>
@@ -88,7 +105,17 @@
         </div>
         <div id="off-list" class="off-list"></div>
       </section>
-      <section class="card"><h2>3 · Offerta</h2>
+      <section class="card"><h2>3 · Servizi e prezzi</h2>
+        <div class="field"><span>Servizi</span><div class="tbl-wrap"><table class="prices off-srv"><thead><tr><th>Servizio</th><th>Nell'offerta</th><th>Prezzo €</th></tr></thead><tbody id="off-srv"></tbody></table></div>
+          <small class="note">Spunta i servizi da proporre: <b>Incluso</b> va nell'elenco "Le tariffe includono", <b>A parte</b> si somma al prezzo di ogni villa. I prezzi partono da quelli di Impostazioni → Servizi e inclusioni e qui li puoi cambiare per questa offerta.</small></div>
+        <div class="field"><span>Le tariffe includono</span><div class="off-incl" id="off-incl"></div>
+          <textarea id="off-incx" rows="2" placeholder="Altre voci solo per questa offerta (una per riga)">${esc(o.incExtra || '')}</textarea>
+          <small class="note">L'elenco e le voci spuntate di norma si cambiano in Impostazioni → Servizi e inclusioni.</small></div>
+        <div class="field"><span>Riepilogo prezzi per villa</span><div class="tbl-wrap"><table class="prices off-riep"><thead><tr><th>Villa</th><th>Affitto</th><th>Servizi a parte</th><th>Totale</th></tr></thead><tbody id="off-riep"></tbody></table></div></div>
+      </section>
+      <section class="card"><h2>4 · Offerta</h2>
+        <div class="off-prevbar"><span class="note" id="off-ogg"></span><button type="button" class="btn off-ftog" id="off-pers-t" aria-expanded="${o.persOpen ? 'true' : 'false'}"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z M13 7l4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>Personalizza</button></div>
+        <div class="off-pers" id="off-pers" ${o.persOpen ? '' : 'hidden'}>
         <div class="row off-row">
           <label class="field"><span>Cliente</span><input id="off-cli" value="${esc(o.cliente)}" placeholder="es. Mr Smith"></label>
           <label class="field"><span>Email del cliente</span><input id="off-mail" type="email" value="${esc(o.email)}" placeholder="facoltativa"></label>
@@ -96,19 +123,18 @@
           <label class="field"><span>Foto per villa (Word)</span><select id="off-nf">${[1, 3, 5, 8].map(n => `<option value="${n}" ${Number(o.nFoto) === n ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
         </div>
         <label class="field"><span>Testo iniziale</span><textarea id="off-intro" rows="3"></textarea></label>
-        <div class="field"><span>Le tariffe includono</span><div class="off-incl" id="off-incl"></div>
-          <textarea id="off-incx" rows="2" placeholder="Altre voci solo per questa offerta (una per riga)">${esc(o.incExtra || '')}</textarea>
-          <small class="note">L'elenco e le voci spuntate di norma si cambiano in Impostazioni → Servizi e inclusioni.</small></div>
         <label class="field"><span>Testo finale</span><textarea id="off-chiusa" rows="2"></textarea></label>
         <label class="field"><span>Firma</span><textarea id="off-firma" rows="2">${esc(o.firma || '')}</textarea></label>
         ${store.listBrochure ? `<label class="flag off-bro"><input type="checkbox" id="off-bro" ${o.brochure ? 'checked' : ''}><span><b>Allega brochure</b><small id="off-bro-info">Scarica i PDF delle ville scelte, nella lingua dell'offerta, da trascinare nella mail.</small></span></label>` : ''}
+        </div>
+        <div class="off-prev" id="off-anteprima"><p class="note">Scegli almeno una villa per vedere l'anteprima.</p></div>
         <div class="off-actions">
           <button type="button" class="btn primary" id="off-word">Scarica Word</button>
           <button type="button" class="btn" id="off-copy">Copia per email</button>
           <button type="button" class="btn" id="off-gmail">Apri Gmail</button>
-          <button type="button" class="btn" id="off-bro-dl" ${o.brochure ? '' : 'hidden'}>Scarica brochure</button>
+          ${store.listBrochure ? '<button type="button" class="btn" id="off-bro-dl">Scarica brochure</button>' : ''}
         </div>
-        <p class="note">Per la mail: premi <b>Copia per email</b>, poi <b>Apri Gmail</b> e incolla nel testo del messaggio (Ctrl+V, o ⌘V sul Mac). La mail elenca le ville con link, codice, video e prezzo, senza foto. Con <b>Allega brochure</b> i PDF si scaricano insieme: trascinali dalla cartella Download nella mail di Gmail.</p>
+        <p class="note">Qui sopra vedi la mail come arriverà al cliente. Premi <b>Copia per email</b>, poi <b>Apri Gmail</b> e incolla nel messaggio (Ctrl+V, o ⌘V sul Mac); le brochure scaricate si trascinano dalla cartella Download. Cliente, lingua, testi e voci incluse si cambiano con <b>Personalizza</b>.</p>
         <div id="off-msg"></div>
       </section>
     </div></div>`;
@@ -168,8 +194,19 @@
     };
     // voci "Le tariffe includono": di norma quelle spuntate in Impostazioni; in questa offerta si spuntano e tolgono a mano
     const incSel = () => Array.isArray(o.incSel) ? o.incSel : S.inclusioniDi(st).filter(x => x.on !== false).map(x => x.id);
-    const incTesti = () => { const sel = incSel(); return S.inclusioniDi(st).filter(x => sel.includes(x.id)).map(x => (o.lingua === 'en' ? x.en : x.it) || x.it || x.en)
+    const incTesti = () => { const sel = incSel(); return S.inclusioniDi(st).filter(x => sel.includes(x.id)).map(x => (o.lingua === 'en' ? x.en : x.it) || x.it || x.en).concat(srvInclusi())
       .concat(String(o.incExtra || '').split('\n').map(t => t.trim()).filter(Boolean)); };
+    const drawSrv = () => {
+      $('#off-srv').innerHTML = srvList().map(x => { const d = srvDi(x.key); return `<tr data-ok="${esc(x.key)}" class="${d.on ? 'on' : ''}">
+        <td><label class="off-inc"><input type="checkbox" data-son ${d.on ? 'checked' : ''}><span>${esc(x.label)}</span></label></td>
+        <td><div class="seg small" data-smode><button type="button" data-i="1" class="${d.incluso ? 'on' : ''}" ${d.on ? '' : 'disabled'}>Incluso</button><button type="button" data-i="0" class="${d.incluso ? '' : 'on'}" ${d.on ? '' : 'disabled'}>A parte</button></div></td>
+        <td><input data-sprz inputmode="numeric" value="${esc(d.prezzo)}" placeholder="—" ${d.on && !d.incluso ? '' : 'disabled'} aria-label="Prezzo di ${esc(x.label)}"></td></tr>`; }).join('');
+    };
+    const drawRiep = () => {
+      const ex = srvAparte(), et = extraTot(), vv = scelte();
+      $('#off-riep').innerHTML = vv.length ? vv.map(v => { const pr = prezzoDi(v); return `<tr><td><b>${esc(v.name)}</b></td><td>${pr === null ? '<span class="note">su richiesta</span>' : S.money(pr)}</td><td>${ex.length ? S.money(et) : '<span class="note">—</span>'}</td><td><b>${pr === null ? '—' : S.money(pr + et)}</b></td></tr>`; }).join('')
+        : '<tr><td colspan="4" class="note">Scegli le ville al punto 2.</td></tr>';
+    };
     const drawTexts = () => {
       if (!o.introMod) o.intro = L().intro(o.cliente.trim(), periodoTxt());
       if (!o.chiusaMod) o.chiusa = L().chiusaMail;
@@ -183,7 +220,7 @@
     const broDi = id => (broCache[id] = broCache[id] || store.listBrochure(id).catch(() => []));
     const broScelta = l => l.find(b => b.lingua === o.lingua) || l.find(b => !b.lingua) || l[0] || null;
     let broTok = 0;
-    function updBro() { setTimeout(updBro0, 0); }
+    function updBro() { setTimeout(() => { drawRiep(); updBro0(); }, 0); }
     function updBro0() {
       const info = document.getElementById('off-bro-info'); if (!info || !store.listBrochure) return;
       if (!o.brochure) { info.textContent = "Scarica i PDF delle ville scelte, nella lingua dell'offerta, da trascinare nella mail."; return; }
@@ -217,6 +254,8 @@
       else o.ville = o.ville.filter(id => !visibili.includes(id));
       drawList(); drawTexts(); save();
     });
+    $('#off-pers-t').addEventListener('click', () => { o.persOpen = !o.persOpen; $('#off-pers').hidden = !o.persOpen; $('#off-pers-t').setAttribute('aria-expanded', o.persOpen ? 'true' : 'false'); saveUI(); });
+    schedPrev();
     $('#off-ftog').addEventListener('click', () => { o.fOpen = !o.fOpen; $('#off-filters').hidden = !o.fOpen; $('#off-ftog').setAttribute('aria-expanded', o.fOpen ? 'true' : 'false'); save(); });
     [['off-f-loc', 'loc'], ['off-f-fav', 'fav'], ['off-f-osp', 'osp'], ['off-f-cam', 'cam'], ['off-f-da', 'da'], ['off-f-a', 'a']].forEach(([id, k]) => $('#' + id).addEventListener('input', e => { o.f[k] = e.target.value.trim(); drawList(); save(); }));
     $('#off-f-pisc').addEventListener('change', e => { o.f.pisc = e.target.checked; drawList(); save(); });
@@ -227,6 +266,10 @@
       const cb = e.target.closest('[data-pick]'); if (cb) { const id = cb.dataset.pick; o.ville = o.ville.filter(x => x !== id); if (cb.checked) o.ville.push(id); drawList(); drawTexts(); save(); }
     });
     $('#off-list').addEventListener('input', e => { const i = e.target.closest('[data-price]'); if (i) { o.prezzi[i.dataset.price] = i.value; save(); } const n = e.target.closest('[data-nota]'); if (n) { o.note[n.dataset.nota] = n.value; save(); } });
+    drawSrv();
+    $('#off-srv').addEventListener('change', e => { const c = e.target.closest('[data-son]'); if (!c) return; const k = c.closest('[data-ok]').dataset.ok; o.srv[k] = Object.assign(srvDi(k), o.srv[k], { on: c.checked }); drawSrv(); drawTexts(); save(); });
+    $('#off-srv').addEventListener('click', e => { const bt = e.target.closest('[data-smode] button'); if (!bt || bt.disabled) return; const k = bt.closest('[data-ok]').dataset.ok; o.srv[k] = Object.assign(srvDi(k), o.srv[k], { incluso: bt.dataset.i === '1' }); drawSrv(); drawTexts(); save(); });
+    $('#off-srv').addEventListener('input', e => { if (!e.target.matches('[data-sprz]')) return; const k = e.target.closest('[data-ok]').dataset.ok; o.srv[k] = Object.assign(srvDi(k), o.srv[k], { prezzo: e.target.value }); drawRiep(); save(); });
     $('#off-incl').addEventListener('change', e => { const c = e.target.closest('[data-inc]'); if (!c) return; const sel = incSel().filter(x => x !== c.dataset.inc); if (c.checked) sel.push(c.dataset.inc); o.incSel = sel; save(); });
     $('#off-incx').addEventListener('input', e => { o.incExtra = e.target.value; save(); });
     $('#off-firma').addEventListener('input', e => { o.firma = e.target.value; save(); });
@@ -286,6 +329,7 @@
           if (vis(v, 'servizi')) B.push({ h2: l.servizi }, { p: String(v.servizi) });
           if (vis(v, 'linkSito')) B.push({ p: `${l.sito}: ${v.linkSito}`, small: true });
           const pr = prezzoDi(v); B.push({ price: [l.prezzo, pr === null ? l.richiesta : euro(pr)] });
+          const ex = srvAparte(); if (ex.length) { B.push({ p: `${l.extra}: ${ex.map(x => srvNome(x) + (typeof x.eur === 'number' ? ' ' + euro(x.eur) : '')).join(', ')}`, small: true }); if (pr !== null) B.push({ p: `${l.totale}: ${euro(pr + extraTot())}`, bold: true }); }
           if ((o.note[v.id] || '').trim()) B.push({ p: o.note[v.id].trim(), small: true });
         }
         B.push({ pageBreak: true }); o.chiusa.split('\n').forEach(t => B.push({ p: t }));
@@ -320,7 +364,10 @@
         if (vid) h += P(`${esc(l.video)} ${link(vid, esc(l.qui))}${vis(v, 'psw') ? ' (psw: ' + esc(v.psw) + ')' : ''}`);
         const diverso = p && base && (p.from !== base.from || p.to !== base.to);
         const lab = (o.lingua === 'en' ? `${mese ? mese[0].toUpperCase() + mese.slice(1) + ' ' : ''}${tarEn} ${l.tariffa}` : `${l.tariffa} ${tar.toLowerCase()}${mese ? ' ' + mese : ''}`) + (diverso ? ' ' + rangeTxt(p, o.lingua) : '');
-        h += P(`<b>${esc(lab)}:</b> ${pr === null ? esc(l.richiesta) : eur(pr)}${nota ? ' - ' + esc(nota) + ' -' : ''}`) + BR;
+        h += P(`<b>${esc(lab)}:</b> ${pr === null ? esc(l.richiesta) : eur(pr)}${nota ? ' - ' + esc(nota) + ' -' : ''}`);
+        const ex = srvAparte();
+        if (ex.length) h += P(`${esc(l.extra)}: ${ex.map(x => esc(srvNome(x)) + (typeof x.eur === 'number' ? ' ' + eur(x.eur) : '')).join(', ')}`) + (pr === null ? '' : P(`<b>${esc(l.totale)}:</b> ${eur(pr + extraTot())}`));
+        h += BR;
       }
       const inc = incTesti();
       if (inc.length) h += P(`<b><u>${esc(l.inclusiTit)}</u></b>`) + `<ul style="margin:6px 0 12px">${inc.map(t => `<li>${esc(t)}</li>`).join('')}</ul>`;
@@ -346,8 +393,8 @@
       } catch (x) { msg(`<div class="warn err">Non riuscito: ${esc(x.message || x)}</div>`); }
       btn.disabled = false;
     });
-    if ($('#off-bro')) $('#off-bro').addEventListener('change', e => { o.brochure = e.target.checked; $('#off-bro-dl').hidden = !o.brochure; save(); updBro(); });
-    $('#off-bro-dl').addEventListener('click', async () => {
+    if ($('#off-bro')) $('#off-bro').addEventListener('change', e => { o.brochure = e.target.checked; save(); updBro(); });
+    if ($('#off-bro-dl')) $('#off-bro-dl').addEventListener('click', async () => {
       if (!pronto()) return; const btn = $('#off-bro-dl'); btn.disabled = true;
       const n = await scaricaBro();
       msg(n ? `<div class="warn ok">${n} ${n === 1 ? 'brochure scaricata' : 'brochure scaricate'}: trascinale dalla cartella Download nella mail.</div>` : '<div class="warn err">Nessuna brochure per le ville scelte: caricale nella scheda di ogni villa.</div>');

@@ -943,3 +943,16 @@ table.prices.srv-tbl td input[data-sl] { width: 200px; text-align: left; }
 .off-filters .field { margin: 0; min-width: 150px; }
 .off-filters .f-num { min-width: 0; width: 110px; }
 .off-filters .flag { margin: 0; }
+.off-prevbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; margin-bottom: 10px; }
+.off-pers { padding: 12px; margin-bottom: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+.off-prev { background: #fff; color: #000; border: 1px solid var(--line); border-radius: 8px; padding: 18px 22px; margin-bottom: 12px; max-height: 70vh; overflow: auto; }
+.off-prev a { color: #1155cc; }
+@media (max-width: 600px) { .off-prev { padding: 12px; } }
+table.prices.off-srv td, table.prices.off-riep td { vertical-align: middle; white-space: normal; }
+table.prices.off-srv tr:not(.on) td { color: var(--muted); }
+table.prices.off-srv input[data-sprz] { width: 120px; text-align: right; }
+table.prices.off-riep td:nth-child(n+2), table.prices.off-riep th:nth-child(n+2) { text-align: right; }
+.seg.small button[disabled] { opacity: .45; cursor: default; }
+table.prices.off-srv td:first-child, table.prices.off-srv th:first-child { text-align: left; }
+table.prices.off-srv .off-inc { display: inline-flex; }
+table.prices.off-srv .off-inc input { width: auto; min-width: 0; flex: none; margin: 0; }
