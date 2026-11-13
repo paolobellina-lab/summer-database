@@ -961,3 +961,9 @@ table.prices.off-srv .off-inc input { width: auto; min-width: 0; flex: none; mar
 .off-inc .off-link { font-style: normal; font-size: 11px; color: var(--muted); }
 .v-srv { display: flex; flex-wrap: wrap; gap: 8px; }
 .v-srv .flag { margin: 0; }
+.off-stile .off-st-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 6px; }
+.off-stile .off-st-row select, .off-stile .off-st-row input:not([type]) { width: auto; }
+.off-stile #off-st-nome { flex: 1 1 200px; }
+.off-col { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; text-transform: none; letter-spacing: 0; color: var(--fg); }
+.off-col input[type=color] { width: 34px; height: 28px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: none; }
+.off-col input[type=checkbox] { width: auto; }

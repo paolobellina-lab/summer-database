@@ -49,6 +49,16 @@
     const srvDi = k => { const d = (st.prezziServizi || {})[k] || {}; const x = o.srv[k] || {};
       const modo = ['pred', 'inc', 'parte'].includes(x.modo) ? x.modo : x.incluso === true ? 'inc' : x.incluso === false ? 'parte' : 'pred';
       return { on: !!x.on, modo, prezzo: x.prezzo !== undefined ? x.prezzo : (typeof d.vendita === 'number' ? String(d.vendita) : '') }; };
+    // stili della mail: due di base + quelli salvati da tutti in meta/settings.stiliMail
+    const FONT = [['tahoma,sans-serif', 'Tahoma'], ['Arial,Helvetica,sans-serif', 'Arial'], ['Verdana,Geneva,sans-serif', 'Verdana'], ["'Trebuchet MS',Helvetica,sans-serif", 'Trebuchet'],
+      ["Georgia,'Times New Roman',serif", 'Georgia'], ["'Palatino Linotype',Palatino,'Book Antiqua',serif", 'Palatino'], ["Garamond,'EB Garamond',Georgia,serif", 'Garamond'], ["'Times New Roman',Times,serif", 'Times']];
+    const STILI_BASE = [
+      { id: 'classico', nome: 'Classico', font: 'tahoma,sans-serif', size: 14, testo: '#000000', accento: '#000000', titoli: 'sottolineato', separatori: false },
+      { id: 'elegante', nome: 'Elegante', font: "Georgia,'Times New Roman',serif", size: 15, testo: '#2b2b2b', accento: '#9a7b4f', titoli: 'maiuscoletto', separatori: true }];
+    const stiliSalvati = () => (Array.isArray(settings().stiliMail) ? settings().stiliMail : []).filter(x => x && x.id);
+    const stili = () => { const sv = stiliSalvati(); return STILI_BASE.map(b => sv.find(x => x.id === b.id) || b).concat(sv.filter(x => !STILI_BASE.some(b => b.id === x.id)).sort((a, b) => String(a.nome).localeCompare(String(b.nome), 'it'))); };
+    if (!o.stile || typeof o.stile !== 'object') o.stile = Object.assign({}, stili().find(x => x.id === settings().stileMailDi) || STILI_BASE[0]);
+    const salvaStili = l => { const cur = JSON.parse(JSON.stringify(settings())); cur.stiliMail = l; return Promise.resolve(store.setSettings(cur)); };
     const srvNome = x => o.lingua === 'en' ? (SRV_EN[x.key] || x.label) : x.label;
     // un servizio è incluso per una villa se "Includi tutti", oppure con "Predefinito" se la scheda villa lo ha tra i servizi compresi nel prezzo
     const inclusoPer = (v, k) => { const d = srvDi(k); return d.modo === 'inc' || (d.modo === 'pred' && (v.serviziInclusi || []).includes(k)); };
@@ -131,6 +141,16 @@
           <label class="field"><span>Email del cliente</span><input id="off-mail" type="email" value="${esc(o.email)}" placeholder="facoltativa"></label>
           <div class="field"><span>Lingua</span><div class="seg" id="off-lang"><button type="button" data-l="it" class="${o.lingua === 'it' ? 'on' : ''}">Italiano</button><button type="button" data-l="en" class="${o.lingua === 'en' ? 'on' : ''}">English</button></div></div>
           <label class="field"><span>Foto per villa (Word)</span><select id="off-nf">${[1, 3, 5, 8].map(n => `<option value="${n}" ${Number(o.nFoto) === n ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+        </div>
+        <div class="field off-stile"><span>Stile della mail</span>
+          <div class="off-st-row"><select id="off-st-sel" aria-label="Stile salvato"></select>
+            <select id="off-st-font" aria-label="Carattere">${FONT.map(([v, t]) => `<option value="${esc(v)}">${t}</option>`).join('')}</select>
+            <select id="off-st-size" aria-label="Dimensione">${[13, 14, 15, 16, 17].map(n => `<option value="${n}">${n} px</option>`).join('')}</select>
+            <label class="off-col" title="Colore del testo"><input type="color" id="off-st-testo"> Testo</label>
+            <label class="off-col" title="Colore di titoli, nomi delle ville e link"><input type="color" id="off-st-acc"> Accento</label>
+            <select id="off-st-tit" aria-label="Titoli"><option value="sottolineato">Titoli sottolineati</option><option value="maiuscoletto">Titoli in maiuscoletto</option></select>
+            <label class="off-col"><input type="checkbox" id="off-st-sep"> Linee tra le ville</label></div>
+          <div class="off-st-row"><input id="off-st-nome" placeholder="Nome per salvare questo stile"><button type="button" class="btn small" id="off-st-new">Salva come nuovo</button><button type="button" class="btn small" id="off-st-upd">Aggiorna lo stile scelto</button><button type="button" class="btn small" id="off-st-def">Usa di norma</button><button type="button" class="btn small danger" id="off-st-del">Elimina</button></div>
         </div>
         <label class="field"><span>Oggetto della mail</span><input id="off-ogg-in"></label>
         <label class="field"><span>Testo iniziale</span><textarea id="off-intro" rows="3"></textarea></label>
@@ -273,6 +293,25 @@
       else o.ville = o.ville.filter(id => !visibili.includes(id));
       drawList(); drawTexts(); save();
     });
+    const drawStile = () => {
+      const l = stili(); const cur = l.find(x => x.id === o.stile.id);
+      $('#off-st-sel').innerHTML = (cur ? '' : `<option value="">${esc(o.stile.nome || 'Personalizzato')} (non salvato)</option>`) + l.map(x => `<option value="${esc(x.id)}" ${cur && x.id === cur.id ? 'selected' : ''}>${esc(x.nome)}${x.id === settings().stileMailDi ? ' · di norma' : ''}</option>`).join('');
+      $('#off-st-font').value = o.stile.font; if ($('#off-st-font').value !== o.stile.font) $('#off-st-font').selectedIndex = 0;
+      $('#off-st-size').value = String(o.stile.size || 14); $('#off-st-testo').value = o.stile.testo || '#000000'; $('#off-st-acc').value = o.stile.accento || '#000000';
+      $('#off-st-tit').value = o.stile.titoli || 'sottolineato'; $('#off-st-sep').checked = !!o.stile.separatori;
+      $('#off-st-del').disabled = !stiliSalvati().some(x => x.id === o.stile.id) ; $('#off-st-upd').disabled = !cur;
+    };
+    drawStile();
+    $('#off-st-sel').addEventListener('change', e => { const x = stili().find(y => y.id === e.target.value); if (x) { o.stile = Object.assign({}, x); drawStile(); save(); } });
+    [['off-st-font', 'font'], ['off-st-size', 'size'], ['off-st-testo', 'testo'], ['off-st-acc', 'accento'], ['off-st-tit', 'titoli']].forEach(([id, k]) => $('#' + id).addEventListener('input', e => { o.stile[k] = k === 'size' ? Number(e.target.value) : e.target.value; save(); }));
+    $('#off-st-sep').addEventListener('change', e => { o.stile.separatori = e.target.checked; save(); });
+    const errSt = err => toast(err && err.code === 'permission-denied' ? 'Solo chi ha accesso completo può salvare gli stili' : 'Errore: ' + (err && err.message || err));
+    $('#off-st-new').addEventListener('click', () => { const nome = $('#off-st-nome').value.trim(); if (!nome) { $('#off-st-nome').focus(); toast('Scrivi un nome per lo stile'); return; }
+      const x = Object.assign({}, o.stile, { id: S.uid('st'), nome }); salvaStili(stiliSalvati().concat([x])).then(() => { o.stile = x; $('#off-st-nome').value = ''; drawStile(); save(); toast('Stile salvato'); }, errSt); });
+    $('#off-st-upd').addEventListener('click', () => { const x = Object.assign({}, o.stile); const l = stiliSalvati().filter(y => y.id !== x.id).concat([x]); salvaStili(l).then(() => { drawStile(); toast('Stile aggiornato'); }, errSt); });
+    $('#off-st-def').addEventListener('click', () => { const go = () => { const cur = JSON.parse(JSON.stringify(settings())); cur.stileMailDi = o.stile.id; return Promise.resolve(store.setSettings(cur)); };
+      (stili().some(x => x.id === o.stile.id) ? go() : Promise.reject(new Error('salva prima lo stile con un nome'))).then(() => { drawStile(); toast('Stile usato di norma'); }, errSt); });
+    $('#off-st-del').addEventListener('click', () => { if (!confirm(`Eliminare lo stile "${o.stile.nome}"?`)) return; salvaStili(stiliSalvati().filter(y => y.id !== o.stile.id)).then(() => { o.stile = Object.assign({}, stili().find(x => x.id === o.stile.id) || STILI_BASE[0]); drawStile(); save(); toast('Stile eliminato'); }, errSt); });
     $('#off-pers-t').addEventListener('click', () => { o.persOpen = !o.persOpen; $('#off-pers').hidden = !o.persOpen; $('#off-pers-t').setAttribute('aria-expanded', o.persOpen ? 'true' : 'false'); saveUI(); });
     schedPrev();
     $('#off-ftog').addEventListener('click', () => { o.fOpen = !o.fOpen; $('#off-filters').hidden = !o.fOpen; $('#off-ftog').setAttribute('aria-expanded', o.fOpen ? 'true' : 'false'); save(); });
@@ -369,10 +408,13 @@
       const tar = (S.TARIFFE.find(t => t.key === o.tariff) || {}).label || '';
       const tarEn = { settimanale: 'Weekly', bisettimanale: 'BiWeekly', mensile: 'Monthly', bimensile: 'Two-month' }[o.tariff] || tar;
       const base = baseP()[o.idx];
-      const link = (u, t) => `<a href="${esc(u)}" target="_blank">${t}</a>`;
-      let h = `<div style="font-family:tahoma,sans-serif;color:#000000;font-size:14px">`;
+      const z = Object.assign({}, STILI_BASE[0], o.stile || {}); const acc = z.accento || '#000000', sep = !!z.separatori;
+      const link = (u, t) => `<a href="${esc(u)}" target="_blank" style="color:${acc === '#000000' ? '#1155cc' : acc}${acc === '#000000' ? '' : ';text-decoration:none;border-bottom:1px solid ' + acc + '66'}">${t}</a>`;
+      const TIT = t => z.titoli === 'maiuscoletto' ? P(`<span style="font-size:${Math.max(11, z.size - 3)}px;letter-spacing:2px;text-transform:uppercase;font-weight:bold;color:${acc}">${esc(t)}</span>`) : P(`<b><u>${esc(t)}</u></b>`);
+      const HR = `<div style="border-top:1px solid ${acc === '#000000' ? '#cccccc' : acc + '55'};margin:14px 0;height:0;line-height:0;font-size:0">&nbsp;</div>`;
+      let h = `<div style="font-family:${z.font};color:${z.testo};font-size:${z.size}px;line-height:1.55">`;
       h += o.intro.split('\n').map(t => P(esc(t) || '<br>')).join('') + BR;
-      h += P(`<b><u>${esc(l.proposte)}</u></b>`) + BR;
+      h += TIT(l.proposte) + (sep ? HR : BR);
       const mese = base ? new Date(S.parse(base.from)).toLocaleDateString(o.lingua === 'en' ? 'en-GB' : 'it-IT', { month: 'long', timeZone: 'UTC' }) : '';
       // come nell'esempio: dalla villa più cara, quelle su richiesta in fondo
       const ord = scelte().map(v => ({ v, pr: prezzoDi(v) })).sort((a, b) => (b.pr === null ? -1 : b.pr) - (a.pr === null ? -1 : a.pr));
@@ -380,7 +422,7 @@
         const p = perOf(v); const pr = prezzoDi(v); const nota = (o.note[v.id] || '').trim();
         const nome = esc(v.name.replace(/^villa\s+/i, '').replace(/\b\w+/g, w => w[0].toUpperCase() + w.slice(1).toLowerCase()));
         const titolo = `Villa ${nome}`;
-        h += P(`<b>${vis(v, 'linkSito') ? link(v.linkSito, titolo) : titolo}${vis(v, 'codice') ? ' ' + esc(v.codice) : ''}</b>`);
+        h += P(`<b${acc !== '#000000' ? ` style="color:${acc};font-size:${z.size + 2}px"` : ''}>${vis(v, 'linkSito') ? link(v.linkSito, titolo) : titolo}</b>${vis(v, 'codice') ? ` <b style="${acc !== '#000000' ? 'font-weight:normal;font-size:' + (z.size - 2) + 'px;letter-spacing:1px;color:' + z.testo : ''}">${esc(v.codice)}</b>` : ''}`);
         const vid = vis(v, 'vimeo') ? v.vimeo : vis(v, 'youtube') ? v.youtube : '';
         if (vid) h += P(`${esc(l.video)} ${link(vid, esc(l.qui))}${vis(v, 'psw') ? ' (psw: ' + esc(v.psw) + ')' : ''}`);
         const diverso = p && base && (p.from !== base.from || p.to !== base.to);
@@ -389,12 +431,12 @@
         const iv = inclSoloVilla(v); if (iv.length) h += P(`${esc(l.inclVilla)}: ${esc(iv.map(x => testiSrv(x.key).join(', ')).join('; '))}`);
         const ex = srvAparte(v);
         if (ex.length) h += P(`${esc(l.extra)}: ${ex.map(x => esc(srvNome(x)) + (typeof x.eur === 'number' ? ' ' + eur(x.eur) : '')).join(', ')}`) + (pr === null ? '' : P(`<b>${esc(l.totale)}:</b> ${eur(pr + extraTot(v))}`));
-        h += BR;
+        h += sep ? HR : BR;
       }
       const inc = incTesti();
-      if (inc.length) h += P(`<b><u>${esc(l.inclusiTit)}</u></b>`) + `<ul style="margin:6px 0 12px">${inc.map(t => `<li>${esc(t)}</li>`).join('')}</ul>`;
+      if (inc.length) h += TIT(l.inclusiTit) + `<ul style="margin:6px 0 12px;padding-left:22px">${inc.map(t => `<li>${esc(t)}</li>`).join('')}</ul>`;
       h += o.chiusa.split('\n').filter(t => t.trim()).map(t => P(esc(t))).join('');
-      h += P(`<b><i>${esc(l.soggetta)}</i></b>`);
+      h += P(`<b><i>${esc(l.soggetta)}</i></b>`, acc !== '#000000' ? 'color:' + acc : '');
       h += P(esc(l.saluti) + ',', 'margin-top:8px') + (o.firma || FIRMA).split('\n').map((t, k) => P(k === 0 ? `<b>${esc(t)}</b>` : esc(t))).join('');
       return h + '</div>';
     }
