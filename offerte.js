@@ -140,7 +140,7 @@
         <div class="field"><span>Riepilogo prezzi per villa</span><div class="tbl-wrap"><table class="prices off-riep"><thead><tr><th>Villa</th><th>Affitto</th><th>Servizi a parte</th><th>Totale</th></tr></thead><tbody id="off-riep"></tbody></table></div></div>
       </section>
       <section class="card"><h2>4 · Offerta</h2>
-        <div class="off-prevbar"><span class="note" id="off-ogg"></span><button type="button" class="btn off-ftog" id="off-pers-t" aria-expanded="${o.persOpen ? 'true' : 'false'}"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z M13 7l4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>Personalizza</button></div>
+        <div class="off-prevbar"><span class="note" id="off-ogg"></span><div class="off-prevact"><label class="off-st-pick"><span>Stile</span><select id="off-st-sel" aria-label="Stile della mail"></select></label><button type="button" class="btn off-ftog" id="off-pers-t" aria-expanded="${o.persOpen ? 'true' : 'false'}"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z M13 7l4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>Personalizza</button></div></div>
         <div class="off-pers" id="off-pers" ${o.persOpen ? '' : 'hidden'}>
         <div class="row off-row">
           <label class="field"><span>Cliente</span><input id="off-cli" value="${esc(o.cliente)}" placeholder="es. Mr Smith"></label>
@@ -149,7 +149,7 @@
           <label class="field"><span>Foto per villa (Word)</span><select id="off-nf">${[1, 3, 5, 8].map(n => `<option value="${n}" ${Number(o.nFoto) === n ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
         </div>
         <div class="field off-stile"><span>Stile della mail</span>
-          <div class="off-st-row"><select id="off-st-sel" aria-label="Stile salvato"></select>
+          <div class="off-st-row">
             <select id="off-st-font" aria-label="Carattere">${FONT.map(([v, t]) => `<option value="${esc(v)}">${t}</option>`).join('')}</select>
             <select id="off-st-size" aria-label="Dimensione">${[13, 14, 15, 16, 17].map(n => `<option value="${n}">${n} px</option>`).join('')}</select>
             <label class="off-col" title="Colore del testo"><input type="color" id="off-st-testo"> Testo</label>

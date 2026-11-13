@@ -976,3 +976,6 @@ table.prices.off-srv .off-inc input { width: auto; min-width: 0; flex: none; mar
 .off-rec-h > div:first-child { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 320px; }
 .off-rec-b { display: flex; flex-wrap: wrap; gap: 6px; }
 .off-rec-prev { margin: 10px 0 0; max-height: 60vh; }
+.off-prevact { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.off-st-pick { display: inline-flex; align-items: center; gap: 6px; margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.off-st-pick select { width: auto; text-transform: none; letter-spacing: 0; }
