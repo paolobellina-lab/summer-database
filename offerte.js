@@ -105,7 +105,10 @@
     const save = () => { saveUI(); schedPrev(); };
 
     main.innerHTML = `<div class="page"><div class="wrap off-page">
-      <div class="head"><div><h1>Offerte</h1><div class="sub">Scegli il periodo e le ville: prepari un documento Word o una mail per il cliente, con foto, informazioni e prezzo</div></div></div>
+      <div class="head"><div><h1>Offerte</h1><div class="sub">Scegli il periodo e le ville: prepari un documento Word o una mail per il cliente, con foto, informazioni e prezzo</div></div>
+        <div class="seg off-tabs" id="off-tabs"><button type="button" data-tab="nuova" class="${o.tab !== 'storico' ? 'on' : ''}">Nuova offerta</button><button type="button" data-tab="storico" class="${o.tab === 'storico' ? 'on' : ''}">Storico<span id="off-st-n"></span></button></div></div>
+      <div id="off-storico" ${o.tab === 'storico' ? '' : 'hidden'}></div>
+      <div id="off-editor" ${o.tab === 'storico' ? 'hidden' : ''}>
       <section class="card"><h2>1 · Periodo</h2>
         <div class="seg off-tar" id="off-tar">${S.TARIFFE.map(t => `<button type="button" data-t="${t.key}" class="${o.tariff === t.key ? 'on' : ''}">${t.label}</button>`).join('')}</div>
         <div class="off-pernav"><button type="button" class="btn" id="off-prev" aria-label="Periodo precedente">‹</button><div class="off-persel" id="off-persel"></div><button type="button" class="btn" id="off-next" aria-label="Periodo successivo">›</button></div>
@@ -171,6 +174,7 @@
         <p class="note">Qui sopra vedi la mail come arriverà al cliente. Premi <b>Copia per email</b>, poi <b>Apri Gmail</b> e incolla nel messaggio (Ctrl+V, o ⌘V sul Mac); le brochure scaricate si trascinano dalla cartella Download. Cliente, lingua, testi e voci incluse si cambiano con <b>Personalizza</b>.</p>
         <div id="off-msg"></div>
       </section>
+      </div>
     </div></div>`;
 
     // periodi della tariffa (date del giorno di cambio predefinito)
@@ -399,6 +403,7 @@
         B.push({ p: l.soggetta, bold: true }, { p: l.saluti, after: 0 }); (o.firma || FIRMA).split('\n').forEach((t, k) => B.push({ p: t, bold: k === 0, after: 0 }));
         X.scarica(nomeFile() + '.docx', new Blob([X.docx(B)], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }));
         msg(`<div class="warn ok">Documento Word scaricato: ${sel.length} ${sel.length === 1 ? 'villa' : 'ville'}.</div>`);
+        salvaStorico('word');
       } catch (x) { msg(`<div class="warn err">Non riuscito: ${esc(x.message || x)}</div>`); }
       btn.disabled = false;
     });
@@ -441,6 +446,60 @@
       h += P(esc(l.saluti) + ',', 'margin-top:8px') + (o.firma || FIRMA).split('\n').map((t, k) => P(k === 0 ? `<b>${esc(t)}</b>` : esc(t))).join('');
       return h + '</div>';
     }
+    // ---- storico delle offerte ----
+    let storico = [], aperte = {}, cercaSt = '';
+    async function salvaStorico(tipo, html) {
+      if (!store.saveOfferta) return;
+      try {
+        html = html || await htmlMail();
+        const stato = JSON.parse(JSON.stringify(o)); ['tab', 'q', 'f', 'fOpen', 'persOpen', 'ultima'].forEach(k => delete stato[k]);
+        const rec = { cliente: o.cliente.trim(), email: String(o.email || '').trim().toLowerCase(), lingua: o.lingua, oggetto: oggettoMail(), periodo: periodoTxt(), tariffa: o.tariff,
+          ville: scelte().map(v => ({ id: v.id, name: v.name, prezzo: prezzoTot(v) })), html, stato, creatoDa: String(store.user || '').toLowerCase(), quando: new Date().toISOString() };
+        // stessa offerta salvata poco fa (stesso testo): aggiorno quella invece di crearne un'altra
+        const u = o.ultima; const firma = rec.html.length + '|' + rec.cliente + '|' + rec.email + '|' + rec.oggetto + '|' + rec.ville.map(v => v.id + v.prezzo).join(',');
+        if (u && u.firma === firma && storico.some(x => x.id === u.id)) { const x = storico.find(y => y.id === u.id); rec.id = u.id; rec.tipi = Array.from(new Set((x.tipi || []).concat(tipo))); rec.quando = x.quando; }
+        else rec.tipi = [tipo];
+        const id = await store.saveOfferta(rec); o.ultima = { id, firma }; saveUI();
+      } catch (err) { console.warn('storico offerte', err); toast(err && err.code === 'permission-denied' ? 'Offerta non salvata nello storico: bisogna pubblicare la nuova regola di Firestore' : 'Offerta non salvata nello storico'); }
+    }
+    const chiaveCli = x => x.email ? 'm:' + x.email : x.cliente ? 'n:' + x.cliente.trim().toLowerCase() : '-';
+    const dataOra = iso => { try { const d = new Date(iso); return d.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ' ' + d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }); } catch (_) { return ''; } };
+    function drawStorico() {
+      const box = $('#off-storico'); if (!box) return;
+      $('#off-st-n').textContent = storico.length ? ` · ${storico.length}` : '';
+      const q = cercaSt.trim().toLowerCase();
+      const lista = storico.filter(x => !q || [x.cliente, x.email, x.oggetto, x.periodo].concat((x.ville || []).map(v => v.name)).join(' ').toLowerCase().includes(q));
+      const gruppi = {}; lista.forEach(x => { const k = chiaveCli(x); (gruppi[k] = gruppi[k] || []).push(x); });
+      const G = Object.entries(gruppi).map(([k, l]) => { l.sort((a, b) => String(b.quando).localeCompare(String(a.quando))); return { k, l, ultimo: l[0].quando }; }).sort((a, b) => String(b.ultimo).localeCompare(String(a.ultimo)));
+      box.innerHTML = `<section class="card"><h2>Storico delle offerte</h2>
+        <p class="note">Ogni offerta si salva da sola quando la copi per la mail o scarichi il Word, divisa per cliente (email, o nome se manca l'email). Da qui la rivedi, la ricopi o la riapri per modificarla.</p>
+        <div class="off-tools"><input type="search" id="off-st-q" placeholder="Cerca cliente, email, villa o periodo" value="${esc(cercaSt)}"></div>
+        ${G.length ? G.map(g => { const c = g.l.find(x => x.cliente) || g.l[0]; const em = g.l.find(x => x.email); const open = aperte[g.k] !== false;
+          return `<details class="off-cli" data-g="${esc(g.k)}" ${open ? 'open' : ''}><summary><b>${esc(c.cliente || (em ? em.email : 'Senza cliente'))}</b>${em && c.cliente ? ` <span class="note">${esc(em.email)}</span>` : ''}<span class="note off-cli-n">${g.l.length} ${g.l.length === 1 ? 'offerta' : 'offerte'} · ultima ${esc(dataOra(g.ultimo))}</span></summary>
+            ${g.l.map(x => `<div class="off-rec" data-rec="${esc(x.id)}">
+              <div class="off-rec-h"><div><b>${esc(x.oggetto || x.periodo || '')}</b><small class="note">${esc(dataOra(x.quando))} · ${esc((x.tipi || []).map(t => t === 'word' ? 'Word' : 'Mail').join(' + '))} · ${esc(x.lingua === 'en' ? 'inglese' : 'italiano')}${x.creatoDa && x.creatoDa !== String(store.user || '').toLowerCase() ? ' · ' + esc(x.creatoDa) : ''}</small>
+                <small class="off-rec-v">${(x.ville || []).map(v => `${esc(v.name)} <span class="note">${typeof v.prezzo === 'number' ? esc(S.money(v.prezzo)) : 'su richiesta'}</span>`).join(' · ')}</small></div>
+                <div class="off-rec-b"><button type="button" class="btn small" data-act="vedi">${aperte['r' + x.id] ? 'Chiudi' : 'Vedi'}</button><button type="button" class="btn small" data-act="copia">Copia per email</button><button type="button" class="btn small" data-act="riapri">Riapri</button><button type="button" class="btn small danger" data-act="del">Elimina</button></div></div>
+              ${aperte['r' + x.id] ? `<div class="off-prev off-rec-prev">${x.html || '<p class="note">Anteprima non disponibile.</p>'}</div>` : ''}</div>`).join('')}
+          </details>`; }).join('') : `<p class="note">${storico.length ? 'Nessuna offerta corrisponde alla ricerca.' : 'Ancora nessuna offerta salvata: compariranno qui quando copi una mail o scarichi un Word.'}</p>`}
+      </section>`;
+      const qi = $('#off-st-q'); qi.oninput = () => { cercaSt = qi.value; const pos = qi.selectionStart; drawStorico(); const n = $('#off-st-q'); n.focus(); n.setSelectionRange(pos, pos); };
+      $$('.off-cli', box).forEach(d => d.addEventListener('toggle', () => { aperte[d.dataset.g] = d.open; }));
+    }
+    $('#off-storico').addEventListener('click', async e => {
+      const b = e.target.closest('[data-act]'); if (!b) return; const id = b.closest('[data-rec]').dataset.rec; const x = storico.find(y => y.id === id); if (!x) return;
+      if (b.dataset.act === 'vedi') { aperte['r' + id] = !aperte['r' + id]; drawStorico(); }
+      if (b.dataset.act === 'copia') { const txt = (() => { const d = document.createElement('div'); d.innerHTML = x.html || ''; return d.innerText; })();
+        try { await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([x.html || ''], { type: 'text/html' }), 'text/plain': new Blob([txt], { type: 'text/plain' }) })]); toast('Offerta copiata: incollala in Gmail'); } catch (_) { toast('Il browser non ha permesso di copiare'); } }
+      if (b.dataset.act === 'riapri') { if (!confirm("Riaprire questa offerta? L'offerta che stai preparando verrà sostituita.")) return;
+        Object.keys(o).forEach(k => { if (!['tab', 'q', 'f', 'fOpen', 'persOpen'].includes(k)) delete o[k]; }); Object.assign(o, JSON.parse(JSON.stringify(x.stato || {})), { tab: 'nuova', ultima: null }); saveUI(); mount(main, ctx); }
+      if (b.dataset.act === 'del') { if (!confirm(`Eliminare questa offerta dallo storico?`)) return; try { await store.deleteOfferta(id); toast('Offerta eliminata'); } catch (err) { toast('Errore: ' + (err && err.message || err)); } }
+    });
+    $('#off-tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (!b) return; o.tab = b.dataset.tab; $$('#off-tabs button').forEach(z => z.classList.toggle('on', z === b)); $('#off-storico').hidden = o.tab !== 'storico'; $('#off-editor').hidden = o.tab === 'storico'; saveUI(); window.scrollTo(0, 0); });
+    if (store.listenOfferte) {
+      if (window.__sdbOffOff) { try { window.__sdbOffOff(); } catch (_) {} }
+      window.__sdbOffOff = store.listenOfferte(l => { storico = l; drawStorico(); }, err => { $('#off-storico').innerHTML = `<section class="card"><h2>Storico delle offerte</h2><div class="warn err">${err && err.code === 'permission-denied' ? 'Per lo storico bisogna pubblicare la nuova regola di Firestore (offerte).' : 'Errore: ' + esc(err && err.message || err)}</div></section>`; });
+    } else $('#off-tabs [data-tab="storico"]').hidden = true;
     $('#off-copy').addEventListener('click', async () => {
       if (!pronto()) return; const btn = $('#off-copy'); btn.disabled = true;
       try {
@@ -454,6 +513,7 @@
           const r = document.createRange(); r.selectNodeContents(box); const s = getSelection(); s.removeAllRanges(); s.addRange(r); ok = document.execCommand('copy'); s.removeAllRanges(); box.remove();
         }
         const nb = ok && o.brochure && store.listBrochure ? await scaricaBro() : 0;
+        if (ok) salvaStorico('mail', html);
         msg(ok ? `<div class="warn ok">Offerta copiata. Ora premi <b>Apri Gmail</b> e incolla nel testo del messaggio.${nb ? ` Poi trascina nella mail ${nb === 1 ? 'la brochure scaricata' : `le ${nb} brochure scaricate`} (cartella Download).` : ''}</div>` : '<div class="warn err">Il browser non ha permesso di copiare: usa Scarica Word e allega il documento.</div>');
       } catch (x) { msg(`<div class="warn err">Non riuscito: ${esc(x.message || x)}</div>`); }
       btn.disabled = false;

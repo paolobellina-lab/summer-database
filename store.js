@@ -25,7 +25,7 @@
 
   /* ------------------------------------------------------------------ LOCALE */
   function LocalStore() {
-    let state = null, canPersist = true; const memBro = [];
+    let state = null, canPersist = true; const memBro = [], offSubs = [];
     const subs = new Set();
     const read = () => { try { const raw = localStorage.getItem(KEY); if (raw) return JSON.parse(raw); } catch (e) { canPersist = false; } return null; };
     const persist = () => {
@@ -54,6 +54,9 @@
       setSettings(s) { state.settings = s; persist(); },
       setNotes(t) { state.notes = t; persist(); },
       setPreferiti(l) { state.preferiti = l; persist(); },
+      listenOfferte(cb) { offSubs.push(cb); cb((state.offerte || []).slice()); return () => { const i = offSubs.indexOf(cb); if (i >= 0) offSubs.splice(i, 1); }; },
+      saveOfferta(x) { const l = state.offerte = state.offerte || []; const id = x.id || 'o' + Date.now(); upsert(l, Object.assign({}, x, { id })); persist(); offSubs.forEach(f => f(l.slice())); return Promise.resolve(id); },
+      deleteOfferta(id) { state.offerte = (state.offerte || []).filter(x => x.id !== id); persist(); offSubs.forEach(f => f(state.offerte.slice())); return Promise.resolve(); },
       // brochure solo in memoria (in locale non c'è spazio per i PDF)
       listBrochure(villaId) { return Promise.resolve(memBro.filter(b => b.villaId === villaId)); },
       listAllBrochure() { return Promise.resolve(memBro.slice()); },
@@ -336,6 +339,14 @@
           .then(() => col('meta').doc('profili').update({ profili: strip(map) }));
       },
       // Scontrini (dell'app Scontrini): lettura, nuova spesa, modifica con storico, allegati, cancellazione.
+      // storico delle offerte: offerte/{id} = { cliente, email, lingua, oggetto, periodo, tariffa, ville: [{ id, name, prezzo }], html, stato, tipi, creatoDa, quando }
+      // chi ha accesso completo le vede tutte, gli altri solo le proprie
+      listenOfferte(cb, onErr) {
+        const q = prof.full ? db.collection('offerte') : db.collection('offerte').where('creatoDa', '==', String(api.user || '').toLowerCase());
+        return q.onSnapshot(snap => cb(snap.docs.map(d => Object.assign({}, d.data(), { id: d.id }))), onErr);
+      },
+      saveOfferta(x) { const ref = x.id ? db.collection('offerte').doc(x.id) : db.collection('offerte').doc(); const d = Object.assign({}, x); delete d.id; return ref.set(strip(d)).then(() => ref.id); },
+      deleteOfferta(id) { return db.collection('offerte').doc(id).delete(); },
       listenScontrini(cb, onErr) {
         return db.collection('scontrini').onSnapshot(snap => cb(snap.docs.map(d => Object.assign({}, d.data(), { id: d.id }))), onErr);
       },

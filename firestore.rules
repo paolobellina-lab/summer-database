@@ -102,6 +102,12 @@ service cloud.firestore {
     }
 
     // meta: un documento alla volta (l'app non legge più la cartella intera)
+    // storico delle offerte: chi usa la pagina Offerte vede e cancella le proprie, chi ha accesso completo tutte
+    match /offerte/{id} {
+      allow read, update, delete: if completo() || (pagina('offerte') && resource.data.creatoDa == emailUtente());
+      allow create: if completo() || (pagina('offerte') && request.resource.data.creatoDa == emailUtente());
+    }
+
     match /meta/accessi   { allow read: if autorizzato(); allow write: if amministratore(); }
     match /meta/profili   { allow read: if autorizzato(); allow write: if amministratore(); }
     match /meta/settings  { allow read: if autorizzato(); allow write: if completo(); }

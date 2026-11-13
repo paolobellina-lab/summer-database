@@ -967,3 +967,12 @@ table.prices.off-srv .off-inc input { width: auto; min-width: 0; flex: none; mar
 .off-col { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; text-transform: none; letter-spacing: 0; color: var(--fg); }
 .off-col input[type=color] { width: 34px; height: 28px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: none; }
 .off-col input[type=checkbox] { width: auto; }
+.off-page .head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 12px; }
+.off-cli { border: 1px solid var(--line); border-radius: 8px; background: var(--surface); margin-bottom: 10px; }
+.off-cli > summary { cursor: pointer; padding: 10px 14px; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+.off-cli-n { margin-left: auto; }
+.off-rec { border-top: 1px solid var(--line); padding: 10px 14px; }
+.off-rec-h { display: flex; flex-wrap: wrap; gap: 8px 14px; justify-content: space-between; align-items: flex-start; }
+.off-rec-h > div:first-child { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 320px; }
+.off-rec-b { display: flex; flex-wrap: wrap; gap: 6px; }
+.off-rec-prev { margin: 10px 0 0; max-height: 60vh; }
