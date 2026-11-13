@@ -976,15 +976,16 @@ window.SDBStore.ready.then(function () {
         <p class="note">Spunta i servizi che questa villa ha già compresi nel prezzo d'affitto: nelle Offerte, con "Predefinito", per questa villa risultano inclusi e non si sommano al prezzo.</p>
         <div class="v-srv" id="v-srv">${servizi(settings().servizi).map(x => `<label class="flag"><input type="checkbox" data-vsrv="${esc(x.key)}" ${(v.serviziInclusi || []).includes(x.key) ? 'checked' : ''} ${ro ? 'disabled' : ''}><span><b>${esc(x.label)}</b></span></label>`).join('')}</div>
       </section>
-      <section class="card" id="v-photos"><h2>Foto</h2>
-        <div class="ph-grid" id="ph-grid"></div>
-        <div class="ph-tools">${store.mode === 'online' && !ro ? `<label class="btn" for="ph-add">+ Aggiungi foto</label><input type="file" id="ph-add" accept="image/*" multiple hidden>` : ''}<span class="note" id="ph-msg"></span></div>
+      <section class="card v-media"><h2>Link e media</h2><div class="grid wide">${FIELDS.link.filter(([k]) => !hiddenField(k)).map(([k, l]) => linkInp(k, l)).join('')}</div>
+        <div class="v-sub" id="v-photos"><h3>Foto</h3>
+          <div class="ph-grid" id="ph-grid"></div>
+          <div class="ph-tools">${store.mode === 'online' && !ro ? `<label class="btn" for="ph-add">+ Aggiungi foto</label><input type="file" id="ph-add" accept="image/*" multiple hidden>` : ''}<span class="note" id="ph-msg"></span></div>
+        </div>
+        ${store.listBrochure ? `<div class="v-sub" id="v-bro"><h3>Brochure</h3>
+          <div class="bro-list" id="bro-list"><p class="note">Caricamento…</p></div>
+          ${ro ? '' : `<div class="ph-tools"><select id="bro-lang" aria-label="Lingua della brochure"><option value="en">Inglese</option><option value="it">Italiano</option><option value="">Altra lingua</option></select><label class="btn" for="bro-add">+ Carica brochure PDF</label><input type="file" id="bro-add" accept="application/pdf,.pdf" hidden><span class="note" id="bro-msg"></span></div>`}
+        </div>` : ''}
       </section>
-      ${store.listBrochure ? `<section class="card" id="v-bro"><h2>Brochure</h2>
-        <div class="bro-list" id="bro-list"><p class="note">Caricamento…</p></div>
-        ${ro ? '' : `<div class="ph-tools"><select id="bro-lang" aria-label="Lingua della brochure"><option value="en">Inglese</option><option value="it">Italiano</option><option value="">Altra lingua</option></select><label class="btn" for="bro-add">+ Carica brochure PDF</label><input type="file" id="bro-add" accept="application/pdf,.pdf" hidden><span class="note" id="bro-msg"></span></div>`}
-      </section>` : ''}
-      <section class="card"><h2>Link e media</h2><div class="grid wide">${FIELDS.link.filter(([k]) => !hiddenField(k)).map(([k, l]) => linkInp(k, l)).join('')}</div></section>
       ${hiddenField('listino') ? '' : '<section class="card" id="prices"></section>'}
       <section class="card"><h2>Disponibilità ${esc(st.seasonName)}</h2><div class="minitl" id="v-tl"></div><div class="blist" id="v-blist"></div></section>
     </div></div>`;
