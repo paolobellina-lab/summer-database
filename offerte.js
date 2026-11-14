@@ -82,9 +82,9 @@
     // elenco comune: i servizi che hanno tutte le ville dell'offerta (compresi o a pagamento); gli altri vanno sotto le ville che li hanno
     const inclTutte = () => { const vv = scelte(); return vv.length ? srvList().filter(x => vv.every(v => haServ(v, x.key))).map(x => x.key) : srvAttivi().filter(x => x.modo === 'inc').map(x => x.key); };
     const descrSel = k => { const sel = incSel(); return S.inclusioniDi(st).filter(i => i.servizio === k && sel.includes(i.id)); };
-    const testiSrv = k => { const l = descrSel(k).map(i => (o.lingua === 'en' ? i.en : i.it) || i.it || i.en); const x = srvList().find(z => z.key === k); return l.length ? l : [srvNome(x || { key: k, label: k })]; };
-    const srvInclusi = () => inclTutte().filter(k => !descrSel(k).length).map(k => srvNome(srvList().find(z => z.key === k) || { key: k, label: k }));
-    const inclSoloVilla = v => { const tutti = inclTutte(); return srvList().filter(x => haServ(v, x.key) && !tutti.includes(x.key)); };
+    const testiSrv = k => { const l = descrSel(k).map(i => (o.lingua === 'en' ? i.en : i.it) || i.it || i.en); const x = srvList().find(z => z.key === k); return l.length ? l : S.inclusioniDi(st).some(i => i.servizio === k) ? [] : [srvNome(x || { key: k, label: k })]; };
+    const srvInclusi = () => inclTutte().filter(k => !S.inclusioniDi(st).some(i => i.servizio === k)).map(k => srvNome(srvList().find(z => z.key === k) || { key: k, label: k }));
+    const inclSoloVilla = v => { const tutti = inclTutte(); return srvList().filter(x => haServ(v, x.key) && !tutti.includes(x.key) && testiSrv(x.key).length); };
     const st = settings();
     const fmtD = (iso, lang) => new Date(S.parse(iso)).toLocaleDateString(lang === 'en' ? 'en-GB' : 'it-IT', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
     const rangeTxt = (p, lang) => lang === 'en' ? `${fmtD(p.from, lang)} – ${fmtD(p.to, lang)}` : `dal ${fmtD(p.from, lang)} al ${fmtD(p.to, lang)}`;
@@ -349,7 +349,9 @@
     });
     $('#off-list').addEventListener('input', e => { const i = e.target.closest('[data-price]'); if (i) { o.prezzi[i.dataset.price] = i.value; save(); } const n = e.target.closest('[data-nota]'); if (n) { o.note[n.dataset.nota] = n.value; save(); } });
     drawSrv();
-    $('#off-srv').addEventListener('change', e => { const c = e.target.closest('[data-son]'); if (!c) return; const k = c.closest('[data-ok]').dataset.ok; o.srv[k] = Object.assign({}, o.srv[k], { on: c.checked }); drawSrv(); drawTexts(); save(); });
+    $('#off-srv').addEventListener('change', e => { const c = e.target.closest('[data-son]'); if (!c) return; const k = c.closest('[data-ok]').dataset.ok; o.srv[k] = Object.assign({}, o.srv[k], { on: c.checked });
+      // spuntando il servizio si spuntano anche le sue descrizioni collegate (poi si possono togliere una per una)
+      if (c.checked) { const sel = incSel().slice(); S.inclusioniDi(st).filter(i => i.servizio === k).forEach(i => { if (!sel.includes(i.id)) sel.push(i.id); }); o.incSel = sel; } drawSrv(); drawTexts(); save(); });
     $('#off-srv').addEventListener('click', e => { const bt = e.target.closest('[data-smode] button'); if (!bt || bt.disabled) return; const k = bt.closest('[data-ok]').dataset.ok; const cur = Object.assign({}, o.srv[k]); delete cur.incluso; o.srv[k] = Object.assign(cur, { modo: bt.dataset.m }); drawSrv(); drawTexts(); save(); });
     $('#off-srv').addEventListener('input', e => { if (!e.target.matches('[data-sprz]')) return; const k = e.target.closest('[data-ok]').dataset.ok; o.srv[k] = Object.assign({}, o.srv[k], { prezzo: e.target.value }); drawRiep(); save(); });
     $('#off-incl').addEventListener('change', e => { const c = e.target.closest('[data-inc]'); if (!c) return; const sel = incSel().filter(x => x !== c.dataset.inc); if (c.checked) sel.push(c.dataset.inc); o.incSel = sel; save(); });
