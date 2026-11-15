@@ -830,12 +830,14 @@
       d.innerHTML = `<form class="dlg" method="dialog"><h3>Promemoria della settimana</h3>
         ${C.length ? `<h4>Contatti da classificare <span class="note">${C.length}</span></h4><div class="promo-l">${C.slice(0, MAX).map(c => `<div class="promo-r"><div><b>${escH(c.nome || c.email || c.tel || 'Senza nome')}</b><small class="note">${escH([c.email, c.tel].filter(Boolean).join(' · '))}${c.email || c.tel ? ' · ' : ''}${c.l.length} ${c.l.length === 1 ? 'offerta' : 'offerte'}</small></div>${segTipo(c)}</div>`).join('')}${C.length > MAX ? `<p class="note">… e altri ${C.length - MAX} nella pagina Contatti.</p>` : ''}</div>` : ''}
         ${O.length ? `<h4>Offerte non ancora prese o perse <span class="note">${O.length}</span></h4><div class="promo-l">${O.slice(0, MAX).map(x => `<div class="promo-r"><div><b>${escH(x.cliente || x.email || x.telefono || 'Senza cliente')}</b><small class="note">${escH(dataBreve(x.quando))} · ${escH(x.periodo || x.oggetto || '')}${(x.ville || []).length ? ' · ' + escH(x.ville.map(v => v.name).join(', ')) : ''}</small></div>${selEsito(x)}</div>`).join('')}${O.length > MAX ? `<p class="note">… e altre ${O.length - MAX} nello Storico.</p>` : ''}</div>` : ''}
-        <div class="foot"><button type="button" class="btn" data-vai="contatti">Apri Contatti</button><button type="button" class="btn" data-vai="storico">Apri Storico</button><button type="button" class="btn primary" data-chiudi="1">Fatto</button></div></form>`;
+        <div class="foot"><button type="button" class="btn" data-dopo="1" title="La finestra si chiude e ricompare la prossima volta che apri l'app">Ricordamelo alla prossima apertura</button><button type="button" class="btn" data-vai="contatti">Apri Contatti</button><button type="button" class="btn" data-vai="storico">Apri Storico</button><button type="button" class="btn primary" data-chiudi="1">Fatto</button></div></form>`;
       const chiudi = () => { try { d.close(); } catch (_) { d.removeAttribute('open'); } };
       const errore = err => toast('Non salvato: ' + (err && err.code === 'permission-denied' ? 'solo chi ha fatto l\'offerta o ha accesso completo' : (err && err.message || err)));
       d.onclick = e => {
         if (e.target === d) { chiudi(); return; }
         if (e.target.closest('[data-chiudi]')) { chiudi(); return; }
+        // rimanda: tolgo la data dell'ultimo promemoria, così ricompare alla prossima apertura dell'app
+        if (e.target.closest('[data-dopo]')) { try { localStorage.removeItem(chiavePromo(store.user)); } catch (_) {} chiudi(); toast('Te lo ricordo alla prossima apertura'); return; }
         const v = e.target.closest('[data-vai]'); if (v) { chiudi(); ui.off = Object.assign(ui.off || {}, { tab: v.dataset.vai }); saveUI();
           if (location.hash === '#offerte') window.dispatchEvent(new HashChangeEvent('hashchange')); else location.hash = 'offerte'; return; }
         const b = e.target.closest('[data-tipo]'); if (!b) return; const c = C.find(z => z.k === b.closest('[data-tipo-c]').dataset.tipoC); if (!c) return;
