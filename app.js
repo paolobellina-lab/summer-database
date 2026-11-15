@@ -1024,7 +1024,7 @@ window.SDBStore.ready.then(function () {
       saveT = setTimeout(() => { store.upsertVilla(JSON.parse(JSON.stringify(v))); $('#saved').textContent = 'Salvato'; }, 350);
     };
     $$('[data-vsrv]').forEach(el => el.addEventListener('change', () => {
-      v.serviziInclusi = $$('[data-vsrv]').filter(x => x.checked).map(x => x.dataset.vsrv); save();
+      v.serviziInclusi = $$('[data-vsrv]').filter(x => x.checked).map(x => x.dataset.vsrv); save(); if ($('#prices')) drawPrices();
     }));
     $$('[data-k]').forEach(el => el.addEventListener('input', () => {
       v[el.dataset.k] = el.value;
@@ -1074,8 +1074,13 @@ window.SDBStore.ready.then(function () {
             <td><input data-f="acquisto" data-i="${i}" inputmode="numeric" value="${esc(fmtIn(p.acquisto[i]))}" placeholder="—"></td>
             <td><input class="adj" data-f="rettifica" data-i="${i}" inputmode="numeric" value="${esc(p.rettifica[i] ? fmtIn(p.rettifica[i]) : '')}" placeholder="0"></td>
             <td class="sale" data-sale="${i}"></td><td class="mg" data-mg="${i}"></td></tr>`).join('')}
-        </tbody></table></div>`;
+        </tbody></table></div>
+        ${srvPrezziHtml(false)}`;
       per.forEach((_, i) => upd(i));
+      $$('[data-vsp]', box).forEach(el => el.addEventListener('input', () => {
+        const k = el.dataset.vsp, val = S.parseMoney(el.value); v.prezziServizi = Object.assign({}, v.prezziServizi);
+        if (typeof val === 'number') v.prezziServizi[k] = val; else delete v.prezziServizi[k]; save();
+      }));
       const pm = $('#p-perm', box);
       if (pm) pm.addEventListener('click', e => {
         const b = e.target.closest('button'); if (!b) return;
@@ -1117,8 +1122,21 @@ window.SDBStore.ready.then(function () {
         <div class="tbl-wrap"><table class="prices"><thead><tr><th>Periodo</th>${canAcq() ? '<th style="text-align:right">Acquisto (netto)</th>' : ''}<th style="text-align:right">Vendita (listino)</th></tr></thead><tbody>
           ${per.map((pp, i) => { const sale = S.priceAt(v, t, i, 'listino'); const net = canAcq() ? S.priceAt(v, t, i, 'netto') : null;
             return `<tr><td class="per">${esc(pp.label)}${pp.label.includes(S.dm(pp.from)) ? '' : `<small>${S.dm(pp.from)} → ${S.dm(pp.to)}</small>`}</td>${canAcq() ? `<td class="sale">${net === null ? '—' : S.money(net)}</td>` : ''}<td class="sale${sale === 'ND' || sale === null ? ' nd' : ''}">${sale === null ? '—' : S.money(sale)}</td></tr>`; }).join('')}
-        </tbody></table></div>`;
+        </tbody></table></div>
+        ${srvPrezziHtml(true)}`;
       $('#p-tabs', box).addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; villaTab = b.dataset.t; drawPrices(); });
+    }
+    // servizi non compresi nel prezzo: prezzo di vendita per questa villa (vuoto = predefinito di Impostazioni). Le Offerte lo usano.
+    function srvPrezziHtml(sola) {
+      const def = k => { const d = (st.prezziServizi || {})[k] || {}; return typeof d.vendita === 'number' ? d.vendita : null; };
+      const l = servizi(st.servizi).filter(x => !(v.serviziInclusi || []).includes(x.key));
+      if (!l.length) return '';
+      return `<div class="v-sub"><h3>Servizi non compresi nel prezzo</h3>
+        <p class="note">Prezzo di vendita di ogni servizio per questa villa. Vuoto = prezzo predefinito di Impostazioni → Servizi e inclusioni. Le Offerte usano questi prezzi. I servizi compresi si scelgono in "Servizi compresi nel prezzo".</p>
+        <div class="tbl-wrap"><table class="prices v-srvp"><thead><tr><th>Servizio</th><th style="text-align:right">Prezzo €</th><th style="text-align:right">Predefinito</th></tr></thead><tbody>
+        ${l.map(x => { const pv = (v.prezziServizi || {})[x.key], d = def(x.key);
+          return `<tr><td>${esc(x.label)}</td><td style="text-align:right">${sola ? (typeof pv === 'number' ? S.money(pv) : '<span class="note">predefinito</span>') : `<input data-vsp="${esc(x.key)}" inputmode="numeric" value="${typeof pv === 'number' ? esc(fmtIn(pv)) : ''}" placeholder="${d === null ? '—' : esc(fmtIn(d))}">`}</td><td class="note" style="text-align:right">${d === null ? '—' : S.money(d)}</td></tr>`; }).join('')}
+        </tbody></table></div></div>`;
     }
     function fmtIn(x) { if (x === null || x === undefined || x === '') return ''; if (x === 'ND') return 'ND'; return new Intl.NumberFormat('it-IT').format(x); }
 
