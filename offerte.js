@@ -186,10 +186,11 @@
         </div>
         <div class="off-actions">
           <button type="button" class="btn primary" id="off-word">Scarica Word</button>
-          <button type="button" class="btn" id="off-copy">Apri in Gmail</button>
+          <button type="button" class="btn" id="off-copy">Copia per email</button>
+          <button type="button" class="btn" id="off-gmail">Apri Gmail</button>
           ${store.listBrochure ? '<button type="button" class="btn" id="off-bro-dl">Scarica brochure</button>' : ''}
         </div>
-        <p class="note">Qui sopra vedi la mail come arriverà al cliente. Premi <b>Apri in Gmail</b>: la mail si apre con destinatario e oggetto e il testo è già copiato, basta incollarlo nel messaggio (Ctrl+V, o ⌘V sul Mac); le brochure scaricate si trascinano dalla cartella Download. Cliente, lingua, testi e voci incluse si cambiano con <b>Personalizza</b>.</p>
+        <p class="note">Qui sopra vedi la mail come arriverà al cliente. Premi <b>Copia per email</b>, poi <b>Apri Gmail</b> e incolla nel messaggio (Ctrl+V, o ⌘V sul Mac); le brochure scaricate si trascinano dalla cartella Download. Cliente, lingua, testi e voci incluse si cambiano con <b>Personalizza</b>.</p>
         <div id="off-msg"></div>
       </section>
       </div>
@@ -522,25 +523,21 @@
       if (window.__sdbOffOff) { try { window.__sdbOffOff(); } catch (_) {} }
       window.__sdbOffOff = store.listenOfferte(l => { storico = l; drawStorico(); }, err => { $('#off-storico').innerHTML = `<section class="card"><h2>Storico delle offerte</h2><div class="warn err">${err && err.code === 'permission-denied' ? 'Per lo storico bisogna pubblicare la nuova regola di Firestore (offerte).' : 'Errore: ' + esc(err && err.message || err)}</div></section>`; });
     } else $('#off-tabs [data-tab="storico"]').hidden = true;
-    // un solo tasto: copia la mail (con formattazione) e apre Gmail con destinatario e oggetto; poi basta incollare.
-    // La copia avviene subito, prima di aprire Gmail: dopo, la pagina perde il fuoco e il browser non permette più di copiare.
     $('#off-copy').addEventListener('click', async () => {
       if (!pronto()) return; const btn = $('#off-copy'); btn.disabled = true;
-      clearTimeout(tPrev);
-      const prev = document.getElementById('off-anteprima'); const html = prev ? prev.innerHTML : '';
-      const box = document.createElement('div'); box.innerHTML = html; box.style.cssText = 'position:fixed;left:-9999px;top:0;width:640px'; box.contentEditable = 'true'; document.body.appendChild(box);
-      let ok = false; try { const r = document.createRange(); r.selectNodeContents(box); const sl = getSelection(); sl.removeAllRanges(); sl.addRange(r); ok = document.execCommand('copy'); sl.removeAllRanges(); } catch (_) {} box.remove();
-      const u = `https://mail.google.com/mail/?view=cm&fs=1${o.email ? '&to=' + encodeURIComponent(o.email) : ''}&su=${encodeURIComponent(oggettoMail())}`;
-      if (!ok) {
-        // ripiego: copia con gli appunti moderni, poi apro Gmail
-        try { const txt = box.innerText || ''; await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([txt], { type: 'text/plain' }) })]); ok = true; } catch (_) {}
-      }
-      const w = window.open(u, '_blank');
       try {
-        if (ok) salvaStorico('mail', html);
+        const html = await htmlMail();
+        const txt = (() => { const d = document.createElement('div'); d.innerHTML = html; return d.innerText; })();
+        let ok = false;
+        try { if (window.ClipboardItem && navigator.clipboard && navigator.clipboard.write) { await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([txt], { type: 'text/plain' }) })]); ok = true; } } catch (_) {}
+        if (!ok) {
+          // ripiego: seleziono l'anteprima e uso il comando Copia del browser
+          const box = document.createElement('div'); box.innerHTML = html; box.style.cssText = 'position:fixed;left:-9999px;top:0;width:640px'; box.contentEditable = 'true'; document.body.appendChild(box);
+          const r = document.createRange(); r.selectNodeContents(box); const s = getSelection(); s.removeAllRanges(); s.addRange(r); ok = document.execCommand('copy'); s.removeAllRanges(); box.remove();
+        }
         const nb = ok && o.brochure && store.listBrochure ? await scaricaBro() : 0;
-        msg(ok ? `<div class="warn ok">${w ? 'Gmail è aperto con destinatario e oggetto' : 'Il browser ha bloccato la nuova finestra: <a href="' + esc(u) + '" target="_blank" rel="noopener">apri Gmail da qui</a>'}. Clicca nel testo del messaggio e incolla (<b>Ctrl+V</b>, o ⌘V sul Mac).${nb ? ` Poi trascina nella mail ${nb === 1 ? 'la brochure scaricata' : `le ${nb} brochure scaricate`} (cartella Download).` : ''}</div>`
-          : '<div class="warn err">Il browser non ha permesso di copiare il testo: usa Scarica Word e allega il documento.</div>');
+        if (ok) salvaStorico('mail', html);
+        msg(ok ? `<div class="warn ok">Offerta copiata. Ora premi <b>Apri Gmail</b> e incolla nel testo del messaggio.${nb ? ` Poi trascina nella mail ${nb === 1 ? 'la brochure scaricata' : `le ${nb} brochure scaricate`} (cartella Download).` : ''}</div>` : '<div class="warn err">Il browser non ha permesso di copiare: usa Scarica Word e allega il documento.</div>');
       } catch (x) { msg(`<div class="warn err">Non riuscito: ${esc(x.message || x)}</div>`); }
       btn.disabled = false;
     });
@@ -552,6 +549,10 @@
       const n = await scaricaBro();
       msg(n ? `<div class="warn ok">${n} ${n === 1 ? 'brochure scaricata' : 'brochure scaricate'}: trascinale dalla cartella Download nella mail.</div>` : '<div class="warn err">Nessuna brochure per le ville scelte: caricale nella scheda di ogni villa.</div>');
       btn.disabled = false;
+    });
+    $('#off-gmail').addEventListener('click', () => {
+      const u = `https://mail.google.com/mail/?view=cm&fs=1${o.email ? '&to=' + encodeURIComponent(o.email) : ''}&su=${encodeURIComponent(oggettoMail())}`;
+      window.open(u, '_blank', 'noopener');
     });
   }
 
