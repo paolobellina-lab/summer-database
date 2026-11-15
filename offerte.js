@@ -37,6 +37,29 @@
     }
   };
   const FIRMA = 'Esmeralda Luxury Villas';
+  // esito delle offerte e tipo dei contatti (salvati nei documenti di offerte/)
+  const ESITI = [['corso', 'In corso'], ['sollecitata', 'Sollecitata'], ['presa', 'Presa'], ['persa', 'Persa']];
+  const esitoDi = x => ESITI.some(e => e[0] === x.esito) ? x.esito : 'corso';
+  const aperta = x => !['presa', 'persa'].includes(esitoDi(x));
+  const TIPI_C = [['lead', 'Lead'], ['prospect', 'Prospect']];
+  // numero di telefono con il prefisso internazionale, solo cifre (+39 / 0039 / cellulare italiano senza prefisso → 39…)
+  const telN = t => { let d = String(t || '').trim(); const piu = d.startsWith('+'); d = d.replace(/\D/g, '');
+    if (!d) return ''; if (!piu && d.startsWith('00')) d = d.slice(2); else if (!piu && /^3\d{8,9}$/.test(d)) d = '39' + d; return d; };
+  const chiaveCli = x => x.email ? 'm:' + String(x.email).toLowerCase() : x.telefono ? 't:' + (telN(x.telefono) || x.telefono) : x.cliente ? 'n:' + String(x.cliente).trim().toLowerCase() : '-';
+  // un contatto = le offerte con la stessa email (o telefono, o nome); il tipo è quello dell'offerta più recente che lo ha
+  function contatti(lista) {
+    const g = {}; lista.forEach(x => { const k = chiaveCli(x); (g[k] = g[k] || []).push(x); });
+    return Object.entries(g).map(([k, l]) => { l.sort((a, b) => String(b.quando).localeCompare(String(a.quando)));
+      const c = l.find(x => x.cliente) || l[0], em = l.find(x => x.email), tl = l.find(x => x.telefono), tp = l.find(x => TIPI_C.some(t => t[0] === x.tipoContatto));
+      return { k, l, ultimo: l[0].quando, nome: c.cliente || '', email: em ? em.email : '', tel: tl ? tl.telefono : '', tipo: tp ? tp.tipoContatto : '' }; })
+      .sort((a, b) => String(b.ultimo).localeCompare(String(a.ultimo)));
+  }
+  const setTipo = (store, c, tipo) => Promise.all(c.l.map(x => store.updateOfferta(x.id, { tipoContatto: tipo })));
+  const setEsito = (store, id, esito) => store.updateOfferta(id, { esito, esitoIl: new Date().toISOString() });
+  const dataBreve = iso => { try { return new Date(iso).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' }); } catch (_) { return ''; } };
+  const escH = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const selEsito = x => `<select class="off-esito es-${esitoDi(x)}" data-esito="${escH(x.id)}" aria-label="Esito dell'offerta">${ESITI.map(([k, t]) => `<option value="${k}" ${esitoDi(x) === k ? 'selected' : ''}>${t}</option>`).join('')}</select>`;
+  const segTipo = c => `<div class="seg off-tipo" data-tipo-c="${escH(c.k)}">${TIPI_C.map(([k, t]) => `<button type="button" data-tipo="${k}" class="${c.tipo === k ? 'on' : ''}">${t}</button>`).join('')}</div>`;
 
   function mount(main, ctx) {
     const { ui, saveUI, esc, data, store, $, $$, toast, S, settings, blocks, hiddenField } = ctx;
@@ -125,9 +148,10 @@
 
     main.innerHTML = `<div class="page"><div class="wrap off-page">
       <div class="head"><div><h1>Offerte</h1><div class="sub">Scegli il periodo e le ville: prepari un documento Word o una mail per il cliente, con foto, informazioni e prezzo</div></div>
-        <div class="seg off-tabs" id="off-tabs"><button type="button" data-tab="nuova" class="${o.tab !== 'storico' ? 'on' : ''}">Nuova offerta</button><button type="button" data-tab="storico" class="${o.tab === 'storico' ? 'on' : ''}">Storico<span id="off-st-n"></span></button></div></div>
+        <div class="seg off-tabs" id="off-tabs"><button type="button" data-tab="nuova" class="${!['storico', 'contatti'].includes(o.tab) ? 'on' : ''}">Nuova offerta</button><button type="button" data-tab="storico" class="${o.tab === 'storico' ? 'on' : ''}">Storico<span id="off-st-n"></span></button><button type="button" data-tab="contatti" class="${o.tab === 'contatti' ? 'on' : ''}">Contatti<span id="off-ct-n"></span></button></div></div>
       <div id="off-storico" ${o.tab === 'storico' ? '' : 'hidden'}></div>
-      <div id="off-editor" ${o.tab === 'storico' ? 'hidden' : ''}>
+      <div id="off-contatti" ${o.tab === 'contatti' ? '' : 'hidden'}></div>
+      <div id="off-editor" ${['storico', 'contatti'].includes(o.tab) ? 'hidden' : ''}>
       <section class="card"><h2>1 · Periodo</h2>
         <div class="seg off-tar" id="off-tar">${S.TARIFFE.map(t => `<button type="button" data-t="${t.key}" class="${o.tariff === t.key ? 'on' : ''}">${t.label}</button>`).join('')}</div>
         <div class="off-pernav"><button type="button" class="btn" id="off-prev" aria-label="Periodo precedente">‹</button><div class="off-persel" id="off-persel"></div><button type="button" class="btn" id="off-next" aria-label="Periodo successivo">›</button></div>
@@ -484,8 +508,7 @@
     }
     /* ---------- WhatsApp ---------- */
     // numero per wa.me: solo cifre con il prefisso internazionale (+39 / 0039 / cellulare italiano senza prefisso → 39…)
-    const telWA = t => { let d = String(t || '').trim(); const piu = d.startsWith('+'); d = d.replace(/\D/g, '');
-      if (!d) return ''; if (!piu && d.startsWith('00')) d = d.slice(2); else if (!piu && /^3\d{8,9}$/.test(d)) d = '39' + d; return d; };
+    const telWA = telN;
     const apriWA = testo => { const n = telWA(o.tel); window.open(`https://wa.me/${n}?text=${encodeURIComponent(testo)}`, '_blank', 'noopener'); };
     // l'offerta in testo semplice, con *grassetto* e _corsivo_ di WhatsApp; i link si vedono per intero
     function testoWA() {
@@ -621,7 +644,7 @@
       return X.pdf(pagine, `${l.titolo} ${o.cliente || ''} ${periodoTxt()}`.trim());
     }
     // ---- storico delle offerte ----
-    let storico = [], aperte = {}, cercaSt = '';
+    let storico = [], aperte = {}, cercaSt = '', cercaCt = '', fEsito = '', fTipo = '';
     async function salvaStorico(tipo, html) {
       if (!store.saveOfferta) return;
       try {
@@ -631,36 +654,74 @@
           ville: scelte().map(v => ({ id: v.id, name: v.name, prezzo: prezzoTot(v) })), html, stato, creatoDa: String(store.user || '').toLowerCase(), quando: new Date().toISOString() };
         // stessa offerta salvata poco fa (stesso testo): aggiorno quella invece di crearne un'altra
         const u = o.ultima; const firma = rec.html.length + '|' + rec.cliente + '|' + rec.email + '|' + rec.telefono + '|' + rec.oggetto + '|' + rec.ville.map(v => v.id + v.prezzo).join(',');
-        if (u && u.firma === firma && storico.some(x => x.id === u.id)) { const x = storico.find(y => y.id === u.id); rec.id = u.id; rec.tipi = Array.from(new Set((x.tipi || []).concat(tipo))); rec.quando = x.quando; }
-        else rec.tipi = [tipo];
+        if (u && u.firma === firma && storico.some(x => x.id === u.id)) { const x = storico.find(y => y.id === u.id); rec.id = u.id; rec.tipi = Array.from(new Set((x.tipi || []).concat(tipo))); rec.quando = x.quando; ['esito', 'esitoIl', 'tipoContatto'].forEach(k => { if (x[k] !== undefined) rec[k] = x[k]; }); }
+        else { rec.tipi = [tipo]; rec.esito = 'corso'; const c = contatti(storico).find(z => z.k === chiaveCli(rec)); if (c && c.tipo) rec.tipoContatto = c.tipo; }
         const id = await store.saveOfferta(rec); o.ultima = { id, firma }; saveUI();
       } catch (err) { console.warn('storico offerte', err); toast(err && err.code === 'permission-denied' ? 'Offerta non salvata nello storico: bisogna pubblicare la nuova regola di Firestore' : 'Offerta non salvata nello storico'); }
     }
-    const chiaveCli = x => x.email ? 'm:' + x.email : x.telefono ? 't:' + (telWA(x.telefono) || x.telefono) : x.cliente ? 'n:' + x.cliente.trim().toLowerCase() : '-';
     const TIPI = { word: 'Word', mail: 'Mail', whatsapp: 'WhatsApp', pdf: 'PDF' };
     const dataOra = iso => { try { const d = new Date(iso); return d.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ' ' + d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }); } catch (_) { return ''; } };
     function drawStorico() {
       const box = $('#off-storico'); if (!box) return;
       $('#off-st-n').textContent = storico.length ? ` · ${storico.length}` : '';
       const q = cercaSt.trim().toLowerCase();
-      const lista = storico.filter(x => !q || [x.cliente, x.email, x.telefono, x.oggetto, x.periodo].concat((x.ville || []).map(v => v.name)).join(' ').toLowerCase().includes(q));
+      const conta = {}; storico.forEach(x => { conta[esitoDi(x)] = (conta[esitoDi(x)] || 0) + 1; });
+      const lista = storico.filter(x => (!fEsito || (fEsito === 'aperte' ? aperta(x) : esitoDi(x) === fEsito)) && (!q || [x.cliente, x.email, x.telefono, x.oggetto, x.periodo].concat((x.ville || []).map(v => v.name)).join(' ').toLowerCase().includes(q)));
       const gruppi = {}; lista.forEach(x => { const k = chiaveCli(x); (gruppi[k] = gruppi[k] || []).push(x); });
       const G = Object.entries(gruppi).map(([k, l]) => { l.sort((a, b) => String(b.quando).localeCompare(String(a.quando))); return { k, l, ultimo: l[0].quando }; }).sort((a, b) => String(b.ultimo).localeCompare(String(a.ultimo)));
       box.innerHTML = `<section class="card"><h2>Storico delle offerte</h2>
         <p class="note">Ogni offerta si salva da sola quando la copi per la mail, la mandi su WhatsApp o scarichi Word o PDF, divisa per cliente (email, poi telefono, poi nome). Da qui la rivedi, la ricopi o la riapri per modificarla.</p>
-        <div class="off-tools"><input type="search" id="off-st-q" placeholder="Cerca cliente, email, villa o periodo" value="${esc(cercaSt)}"></div>
+        <div class="off-tools"><input type="search" id="off-st-q" placeholder="Cerca cliente, email, telefono, villa o periodo" value="${esc(cercaSt)}"></div>
+        <div class="off-chips" id="off-st-f">${[['', 'Tutte', storico.length], ['aperte', 'Da chiudere', storico.filter(aperta).length]].concat(ESITI.map(([k, t]) => [k, t, conta[k] || 0])).map(([k, t, n]) => `<button type="button" class="rp-chip${fEsito === k ? ' on' : ''}" data-fe="${k}">${t} <b>${n}</b></button>`).join('')}</div>
         ${G.length ? G.map(g => { const c = g.l.find(x => x.cliente) || g.l[0]; const em = g.l.find(x => x.email); const tl = g.l.find(x => x.telefono); const open = aperte[g.k] !== false;
           return `<details class="off-cli" data-g="${esc(g.k)}" ${open ? 'open' : ''}><summary><b>${esc(c.cliente || (em ? em.email : tl ? tl.telefono : 'Senza cliente'))}</b>${em && c.cliente ? ` <span class="note">${esc(em.email)}</span>` : ''}${tl && (c.cliente || em) ? ` <span class="note">${esc(tl.telefono)}</span>` : ''}<span class="note off-cli-n">${g.l.length} ${g.l.length === 1 ? 'offerta' : 'offerte'} · ultima ${esc(dataOra(g.ultimo))}</span></summary>
             ${g.l.map(x => `<div class="off-rec" data-rec="${esc(x.id)}">
               <div class="off-rec-h"><div><b>${esc(x.oggetto || x.periodo || '')}</b><small class="note">${esc(dataOra(x.quando))} · ${esc((x.tipi || []).map(t => TIPI[t] || t).join(' + '))} · ${esc(x.lingua === 'en' ? 'inglese' : 'italiano')}${x.creatoDa && x.creatoDa !== String(store.user || '').toLowerCase() ? ' · ' + esc(x.creatoDa) : ''}</small>
                 <small class="off-rec-v">${(x.ville || []).map(v => `${esc(v.name)} <span class="note">${typeof v.prezzo === 'number' ? esc(S.money(v.prezzo)) : 'su richiesta'}</span>`).join(' · ')}</small></div>
-                <div class="off-rec-b"><button type="button" class="btn small" data-act="vedi">${aperte['r' + x.id] ? 'Chiudi' : 'Vedi'}</button><button type="button" class="btn small" data-act="copia">Copia per email</button><button type="button" class="btn small" data-act="riapri">Riapri</button><button type="button" class="btn small danger" data-act="del">Elimina</button></div></div>
+                <div class="off-rec-b">${selEsito(x)}<button type="button" class="btn small" data-act="vedi">${aperte['r' + x.id] ? 'Chiudi' : 'Vedi'}</button><button type="button" class="btn small" data-act="copia">Copia per email</button><button type="button" class="btn small" data-act="riapri">Riapri</button><button type="button" class="btn small danger" data-act="del">Elimina</button></div></div>
               ${aperte['r' + x.id] ? `<div class="off-prev off-rec-prev">${x.html || '<p class="note">Anteprima non disponibile.</p>'}</div>` : ''}</div>`).join('')}
           </details>`; }).join('') : `<p class="note">${storico.length ? 'Nessuna offerta corrisponde alla ricerca.' : 'Ancora nessuna offerta salvata: compariranno qui quando copi una mail, mandi un WhatsApp o scarichi Word o PDF.'}</p>`}
       </section>`;
       const qi = $('#off-st-q'); qi.oninput = () => { cercaSt = qi.value; const pos = qi.selectionStart; drawStorico(); const n = $('#off-st-q'); n.focus(); n.setSelectionRange(pos, pos); };
       $$('.off-cli', box).forEach(d => d.addEventListener('toggle', () => { aperte[d.dataset.g] = d.open; }));
+      $$('[data-fe]', box).forEach(b => b.onclick = () => { fEsito = b.dataset.fe; drawStorico(); });
     }
+    // esito di un'offerta (Storico e Contatti)
+    const cambiaEsito = e => { const sl = e.target.closest('[data-esito]'); if (!sl) return; sl.className = 'off-esito es-' + sl.value;
+      Promise.resolve(setEsito(store, sl.dataset.esito, sl.value)).then(() => toast('Offerta: ' + (ESITI.find(z => z[0] === sl.value) || [, ''])[1].toLowerCase()), err => toast('Non salvato: ' + (err && err.code === 'permission-denied' ? 'solo chi ha fatto l\'offerta o ha accesso completo' : (err && err.message || err)))); };
+    $('#off-storico').addEventListener('change', cambiaEsito);
+
+    /* ---------- contatti: tutti i clienti dello storico, da classificare come Lead o Prospect ---------- */
+    function drawContatti() {
+      const box = $('#off-contatti'); if (!box) return;
+      const C = contatti(storico); const da = C.filter(c => !c.tipo).length;
+      $('#off-ct-n').textContent = da ? ` · ${da} da classificare` : C.length ? ` · ${C.length}` : '';
+      const q = cercaCt.trim().toLowerCase();
+      const vis2 = C.filter(c => (!fTipo || (fTipo === 'da' ? !c.tipo : c.tipo === fTipo)) && (!q || [c.nome, c.email, c.tel].concat(c.l.flatMap(x => (x.ville || []).map(v => v.name))).join(' ').toLowerCase().includes(q)));
+      const chip = (k, t, n) => `<button type="button" class="rp-chip${fTipo === k ? ' on' : ''}" data-ft="${k}">${t} <b>${n}</b></button>`;
+      box.innerHTML = `<section class="card"><h2>Contatti</h2>
+        <p class="note">Tutti i clienti a cui hai fatto un'offerta (dallo Storico). Segna per ognuno se è un <b>Lead</b> o un <b>Prospect</b>; ogni settimana un promemoria ti ricorda quelli ancora da classificare. Il tipo vale anche per le prossime offerte allo stesso cliente.</p>
+        <div class="off-tools"><input type="search" id="off-ct-q" placeholder="Cerca nome, email, telefono o villa" value="${esc(cercaCt)}"><button type="button" class="btn" id="off-promo" title="Contatti da classificare e offerte non ancora prese o perse">Promemoria</button></div>
+        <div class="off-chips">${chip('', 'Tutti', C.length)}${chip('da', 'Da classificare', da)}${TIPI_C.map(([k, t]) => chip(k, t, C.filter(c => c.tipo === k).length)).join('')}</div>
+        ${vis2.length ? `<div class="tbl-wrap"><table class="prices off-ct"><thead><tr><th>Cliente</th><th>Contatti</th><th>Offerte</th><th>Tipo</th></tr></thead><tbody>
+          ${vis2.map(c => { const n = {}; c.l.forEach(x => { n[esitoDi(x)] = (n[esitoDi(x)] || 0) + 1; });
+            return `<tr class="${c.tipo ? '' : 'off-ct-da'}"><td><b>${esc(c.nome || c.email || c.tel || 'Senza nome')}</b></td>
+              <td>${c.email ? `<a href="mailto:${esc(c.email)}">${esc(c.email)}</a>` : ''}${c.email && c.tel ? '<br>' : ''}${c.tel ? (telN(c.tel) ? `<a href="https://wa.me/${telN(c.tel)}" target="_blank" rel="noopener">${esc(c.tel)}</a>` : esc(c.tel)) : ''}${!c.email && !c.tel ? '<span class="note">—</span>' : ''}</td>
+              <td><a href="#" data-vedi-c="${esc(c.k)}">${c.l.length} ${c.l.length === 1 ? 'offerta' : 'offerte'}</a><small class="note"> · ultima ${esc(dataBreve(c.ultimo))}</small><br><small>${ESITI.filter(([k]) => n[k]).map(([k, t]) => `<span class="off-es-b es-${k}">${n[k]} ${t.toLowerCase()}</span>`).join(' ')}</small></td>
+              <td>${segTipo(c)}</td></tr>`; }).join('')}
+        </tbody></table></div>` : `<p class="note">${C.length ? 'Nessun contatto per questi filtri.' : 'Ancora nessun contatto: compariranno qui con le offerte salvate nello Storico.'}</p>`}
+      </section>`;
+      const qi = $('#off-ct-q'); qi.oninput = () => { cercaCt = qi.value; const pos = qi.selectionStart; drawContatti(); const nq = $('#off-ct-q'); nq.focus(); nq.setSelectionRange(pos, pos); };
+    }
+    $('#off-contatti').addEventListener('click', e => {
+      if (e.target.closest('#off-promo')) { promemoria(ctx, true); return; }
+      const f = e.target.closest('[data-ft]'); if (f) { fTipo = f.dataset.ft; drawContatti(); return; }
+      const v = e.target.closest('[data-vedi-c]'); if (v) { e.preventDefault(); const c = contatti(storico).find(z => z.k === v.dataset.vediC); if (!c) return;
+        cercaSt = c.email || c.tel || c.nome; fEsito = ''; o.tab = 'storico'; $$('#off-tabs button').forEach(z => z.classList.toggle('on', z.dataset.tab === 'storico')); $('#off-storico').hidden = false; $('#off-contatti').hidden = true; drawStorico(); saveUI(); window.scrollTo(0, 0); return; }
+      const b = e.target.closest('[data-tipo]'); if (!b) return; const c = contatti(storico).find(z => z.k === b.closest('[data-tipo-c]').dataset.tipoC); if (!c) return;
+      const tipo = c.tipo === b.dataset.tipo ? '' : b.dataset.tipo;
+      setTipo(store, c, tipo).then(() => toast(tipo ? `${c.nome || c.email || c.tel}: ${tipo === 'lead' ? 'Lead' : 'Prospect'}` : 'Tipo tolto'), err => toast('Non salvato: ' + (err && err.code === 'permission-denied' ? 'solo chi ha fatto le offerte o ha accesso completo' : (err && err.message || err))));
+    });
     $('#off-storico').addEventListener('click', async e => {
       const b = e.target.closest('[data-act]'); if (!b) return; const id = b.closest('[data-rec]').dataset.rec; const x = storico.find(y => y.id === id); if (!x) return;
       if (b.dataset.act === 'vedi') { aperte['r' + id] = !aperte['r' + id]; drawStorico(); }
@@ -670,11 +731,11 @@
         Object.keys(o).forEach(k => { if (!['tab', 'q', 'f', 'fOpen', 'persOpen'].includes(k)) delete o[k]; }); Object.assign(o, JSON.parse(JSON.stringify(x.stato || {})), { tab: 'nuova', ultima: null }); saveUI(); mount(main, ctx); }
       if (b.dataset.act === 'del') { if (!(await (window.SDBConferma ? window.SDBConferma : t => Promise.resolve(confirm(t)))('L\'offerta verrà tolta dallo storico.', { titolo: "Eliminare l'offerta?", ok: 'Elimina', danger: true }))) return; try { await store.deleteOfferta(id); toast('Offerta eliminata'); } catch (err) { toast('Errore: ' + (err && err.message || err)); } }
     });
-    $('#off-tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (!b) return; o.tab = b.dataset.tab; $$('#off-tabs button').forEach(z => z.classList.toggle('on', z === b)); $('#off-storico').hidden = o.tab !== 'storico'; $('#off-editor').hidden = o.tab === 'storico'; saveUI(); window.scrollTo(0, 0); });
+    $('#off-tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (!b) return; o.tab = b.dataset.tab; $$('#off-tabs button').forEach(z => z.classList.toggle('on', z === b)); $('#off-storico').hidden = o.tab !== 'storico'; $('#off-contatti').hidden = o.tab !== 'contatti'; $('#off-editor').hidden = ['storico', 'contatti'].includes(o.tab); saveUI(); window.scrollTo(0, 0); });
     if (store.listenOfferte) {
       if (window.__sdbOffOff) { try { window.__sdbOffOff(); } catch (_) {} }
-      window.__sdbOffOff = store.listenOfferte(l => { storico = l; drawStorico(); }, err => { $('#off-storico').innerHTML = `<section class="card"><h2>Storico delle offerte</h2><div class="warn err">${err && err.code === 'permission-denied' ? 'Per lo storico bisogna pubblicare la nuova regola di Firestore (offerte).' : 'Errore: ' + esc(err && err.message || err)}</div></section>`; });
-    } else $('#off-tabs [data-tab="storico"]').hidden = true;
+      window.__sdbOffOff = store.listenOfferte(l => { storico = l; drawStorico(); drawContatti(); }, err => { $('#off-storico').innerHTML = `<section class="card"><h2>Storico delle offerte</h2><div class="warn err">${err && err.code === 'permission-denied' ? 'Per lo storico bisogna pubblicare la nuova regola di Firestore (offerte).' : 'Errore: ' + esc(err && err.message || err)}</div></section>`; });
+    } else { $('#off-tabs [data-tab="storico"]').hidden = true; $('#off-tabs [data-tab="contatti"]').hidden = true; }
     $('#off-copy').addEventListener('click', async () => {
       if (!pronto()) return; const btn = $('#off-copy'); btn.disabled = true;
       try {
@@ -748,5 +809,45 @@
     });
   }
 
-  window.SDBOfferte = { mount };
+  /* ---------- promemoria settimanale (all'apertura dell'app, al massimo una volta ogni 7 giorni su questo dispositivo) ----------
+   * contatti ancora da classificare (Lead/Prospect) e offerte non ancora prese o perse: si sistemano direttamente nella finestra */
+  const SETTIMANA = 7 * 864e5;
+  const chiavePromo = u => 'sdb-off-promemoria:' + String(u || '').toLowerCase();
+  function promemoria(ctx, forza) {
+    const { store, toast, ui, saveUI } = ctx;
+    if (!store.listenOfferte || !store.updateOfferta) return;
+    let last = 0; try { last = Number(localStorage.getItem(chiavePromo(store.user))) || 0; } catch (_) {}
+    if (!forza && Date.now() - last < SETTIMANA) return;
+    let stop = null, fatto = false;
+    stop = store.listenOfferte(l => { if (fatto) return; fatto = true; setTimeout(() => { try { stop && stop(); } catch (_) {} }); mostra(l); }, () => {});
+    function mostra(l) {
+      const C = contatti(l).filter(c => !c.tipo);
+      const O = l.filter(aperta).sort((a, b) => String(a.quando).localeCompare(String(b.quando)));
+      if (!C.length && !O.length) { if (forza) toast('Niente da aggiornare: contatti classificati e offerte chiuse'); return; }
+      try { localStorage.setItem(chiavePromo(store.user), String(Date.now())); } catch (_) {}
+      const MAX = 25;
+      let d = document.getElementById('dlg-promo'); if (!d) { d = document.createElement('dialog'); d.id = 'dlg-promo'; d.className = 'dlg-conf dlg-promo'; document.body.appendChild(d); }
+      d.innerHTML = `<form class="dlg" method="dialog"><h3>Promemoria della settimana</h3>
+        ${C.length ? `<h4>Contatti da classificare <span class="note">${C.length}</span></h4><div class="promo-l">${C.slice(0, MAX).map(c => `<div class="promo-r"><div><b>${escH(c.nome || c.email || c.tel || 'Senza nome')}</b><small class="note">${escH([c.email, c.tel].filter(Boolean).join(' · '))}${c.email || c.tel ? ' · ' : ''}${c.l.length} ${c.l.length === 1 ? 'offerta' : 'offerte'}</small></div>${segTipo(c)}</div>`).join('')}${C.length > MAX ? `<p class="note">… e altri ${C.length - MAX} nella pagina Contatti.</p>` : ''}</div>` : ''}
+        ${O.length ? `<h4>Offerte non ancora prese o perse <span class="note">${O.length}</span></h4><div class="promo-l">${O.slice(0, MAX).map(x => `<div class="promo-r"><div><b>${escH(x.cliente || x.email || x.telefono || 'Senza cliente')}</b><small class="note">${escH(dataBreve(x.quando))} · ${escH(x.periodo || x.oggetto || '')}${(x.ville || []).length ? ' · ' + escH(x.ville.map(v => v.name).join(', ')) : ''}</small></div>${selEsito(x)}</div>`).join('')}${O.length > MAX ? `<p class="note">… e altre ${O.length - MAX} nello Storico.</p>` : ''}</div>` : ''}
+        <div class="foot"><button type="button" class="btn" data-vai="contatti">Apri Contatti</button><button type="button" class="btn" data-vai="storico">Apri Storico</button><button type="button" class="btn primary" data-chiudi="1">Fatto</button></div></form>`;
+      const chiudi = () => { try { d.close(); } catch (_) { d.removeAttribute('open'); } };
+      const errore = err => toast('Non salvato: ' + (err && err.code === 'permission-denied' ? 'solo chi ha fatto l\'offerta o ha accesso completo' : (err && err.message || err)));
+      d.onclick = e => {
+        if (e.target === d) { chiudi(); return; }
+        if (e.target.closest('[data-chiudi]')) { chiudi(); return; }
+        const v = e.target.closest('[data-vai]'); if (v) { chiudi(); ui.off = Object.assign(ui.off || {}, { tab: v.dataset.vai }); saveUI();
+          if (location.hash === '#offerte') window.dispatchEvent(new HashChangeEvent('hashchange')); else location.hash = 'offerte'; return; }
+        const b = e.target.closest('[data-tipo]'); if (!b) return; const c = C.find(z => z.k === b.closest('[data-tipo-c]').dataset.tipoC); if (!c) return;
+        const tipo = c.tipo === b.dataset.tipo ? '' : b.dataset.tipo; c.tipo = tipo;
+        b.parentNode.querySelectorAll('button').forEach(z => z.classList.toggle('on', z.dataset.tipo === tipo));
+        setTipo(store, c, tipo).catch(errore);
+      };
+      d.onchange = e => { const sl = e.target.closest('[data-esito]'); if (!sl) return; sl.className = 'off-esito es-' + sl.value; Promise.resolve(setEsito(store, sl.dataset.esito, sl.value)).catch(errore); };
+      d.oncancel = ev => { ev.preventDefault(); chiudi(); };
+      if (d.showModal) d.showModal(); else d.setAttribute('open', '');
+    }
+  }
+
+  window.SDBOfferte = { mount, promemoria };
 })();

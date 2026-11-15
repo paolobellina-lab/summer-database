@@ -314,10 +314,13 @@ window.SDBStore.ready.then(function () {
     if (h === 'ville') return viewVillas();
     if (h === 'spese' && window.SDBSpese) { spesePage = window.SDBSpese.mount(main, { ui, saveUI, esc, data, spese, store, $, $$, toast, schedaPren, compressImage, canAcq }); return; }
     if (h === 'appunti') return viewNotes();
+    // promemoria settimanale delle offerte (contatti da classificare, offerte non prese né perse): una volta per apertura dell'app
+    if (!promoFatto && canSee('offerte') && window.SDBOfferte && window.SDBOfferte.promemoria) { promoFatto = true; setTimeout(() => window.SDBOfferte.promemoria({ store, toast, ui, saveUI }), 2500); }
     if (h === 'offerte' && window.SDBOfferte) { return window.SDBOfferte.mount(main, { ui, saveUI, esc, data, store, $, $$, toast, S, settings, blocks, hiddenField, favLists, locations, normLoc, coverOf: id => (thumbs.map[id] || {}).fotoId || null }); }
     if (h === 'impostazioni') return viewSettings();
     return viewAvail();
   }
+  var promoFatto = false;
   window.addEventListener('hashchange', route);
   store.subscribe((st, origin) => {
     if (origin !== 'remote') return;
@@ -1755,7 +1758,8 @@ window.SDBStore.ready.then(function () {
         const telEm = {}; l.forEach(x => { const em = String(x.email || '').trim().toLowerCase(), tn = telN(x.telefono); if (em && tn) telEm[tn] = em; });
         const per = {};
         l.forEach(x => { const em = String(x.email || '').trim().toLowerCase(), tn = telN(x.telefono); const k = em || telEm[tn] || (tn ? 't:' + tn : ''); if (!k) return;
-          const c = per[k] = per[k] || { email: k.startsWith('t:') ? '' : k, tel: new Set(), nomi: new Set(), n: 0, prima: '', ultima: '', ville: new Set(), lingua: '' };
+          const c = per[k] = per[k] || { email: k.startsWith('t:') ? '' : k, tel: new Set(), nomi: new Set(), n: 0, prima: '', ultima: '', ville: new Set(), lingua: '', tipo: '', tipoQ: '' };
+          if (['lead', 'prospect'].includes(x.tipoContatto) && String(x.quando || '') >= c.tipoQ) { c.tipo = x.tipoContatto === 'lead' ? 'Lead' : 'Prospect'; c.tipoQ = String(x.quando || ''); }
           if (String(x.telefono || '').trim()) c.tel.add(String(x.telefono).trim());
           if (String(x.cliente || '').trim()) c.nomi.add(String(x.cliente).trim()); c.n++;
           const q = String(x.quando || ''); if (!c.prima || q < c.prima) c.prima = q; if (q >= c.ultima) { c.ultima = q; c.lingua = x.lingua === 'en' ? 'Inglese' : 'Italiano'; }
@@ -1764,8 +1768,8 @@ window.SDBStore.ready.then(function () {
         if (!righe.length) { toast(l.length ? 'Nessuna offerta con email o telefono del cliente' : 'Lo storico delle offerte è vuoto'); return; }
         const d = iso => iso ? new Date(iso).toLocaleDateString('it-IT') : '';
         const cell = x => '"' + String(x == null ? '' : x).replace(/"/g, '""') + '"';
-        const csv = '﻿' + [['Cliente', 'Email', 'Telefono', 'Lingua', 'Offerte', 'Prima offerta', 'Ultima offerta', 'Ville proposte']]
-          .concat(righe.map(c => [Array.from(c.nomi).join(' / '), c.email, Array.from(c.tel).join(' / '), c.lingua, c.n, d(c.prima), d(c.ultima), Array.from(c.ville).join(', ')]))
+        const csv = '﻿' + [['Cliente', 'Tipo', 'Email', 'Telefono', 'Lingua', 'Offerte', 'Prima offerta', 'Ultima offerta', 'Ville proposte']]
+          .concat(righe.map(c => [Array.from(c.nomi).join(' / '), c.tipo, c.email, Array.from(c.tel).join(' / '), c.lingua, c.n, d(c.prima), d(c.ultima), Array.from(c.ville).join(', ')]))
           .map(r => r.map(cell).join(';')).join('\r\n');
         window.SDBExport.scarica('Contatti offerte ' + S.iso(new Date()) + '.csv', new Blob([csv], { type: 'text/csv;charset=utf-8' }));
         toast(righe.length + (righe.length === 1 ? ' contatto esportato' : ' contatti esportati'));

@@ -57,6 +57,7 @@
       listenOfferte(cb) { offSubs.push(cb); cb((state.offerte || []).slice()); return () => { const i = offSubs.indexOf(cb); if (i >= 0) offSubs.splice(i, 1); }; },
       saveOfferta(x) { const l = state.offerte = state.offerte || []; const id = x.id || 'o' + Date.now(); upsert(l, Object.assign({}, x, { id })); persist(); offSubs.forEach(f => f(l.slice())); return Promise.resolve(id); },
       deleteOfferta(id) { state.offerte = (state.offerte || []).filter(x => x.id !== id); persist(); offSubs.forEach(f => f(state.offerte.slice())); return Promise.resolve(); },
+      updateOfferta(id, patch) { const x = (state.offerte || []).find(y => y.id === id); if (x) Object.assign(x, patch); persist(); offSubs.forEach(f => f((state.offerte || []).slice())); return Promise.resolve(); },
       // brochure solo in memoria (in locale non c'è spazio per i PDF)
       listBrochure(villaId) { return Promise.resolve(memBro.filter(b => b.villaId === villaId)); },
       listAllBrochure() { return Promise.resolve(memBro.slice()); },
@@ -347,6 +348,8 @@
       },
       saveOfferta(x) { const ref = x.id ? db.collection('offerte').doc(x.id) : db.collection('offerte').doc(); const d = Object.assign({}, x); delete d.id; return ref.set(strip(d)).then(() => ref.id); },
       deleteOfferta(id) { return db.collection('offerte').doc(id).delete(); },
+      // esito dell'offerta (esito, esitoIl) e tipo del contatto (tipoContatto): solo i campi cambiati
+      updateOfferta(id, patch) { return db.collection('offerte').doc(id).update(strip(patch)); },
       listenScontrini(cb, onErr) {
         return db.collection('scontrini').onSnapshot(snap => cb(snap.docs.map(d => Object.assign({}, d.data(), { id: d.id }))), onErr);
       },

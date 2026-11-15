@@ -1002,3 +1002,25 @@ dialog.dlg-conf { width: min(420px, calc(100vw - 32px)); margin: auto; }
 #prices .v-sub h3 { font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin: 0 0 6px; font-weight: 600; }
 table.prices.v-srvp input { width: 120px; text-align: right; }
 table.prices.v-srvp td { vertical-align: middle; }
+
+/* Offerte: esito, contatti, promemoria */
+.off-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 12px; }
+.off-esito { width: auto; flex: none; font-size: 12px; padding: 4px 8px; border-radius: 999px; border: 1px solid var(--line, #d9d4c7); font-weight: 600; }
+.es-corso { background: #eef3fb; color: #23457a; border-color: #c8d6ee; }
+.es-sollecitata { background: #fff4df; color: #8a5a00; border-color: #f0d79e; }
+.es-presa { background: #e5f5ea; color: #1d6b3a; border-color: #b9e0c5; }
+.es-persa { background: #f8e7e7; color: #8f2d2d; border-color: #e8c2c2; }
+.off-es-b { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 999px; margin: 2px 2px 0 0; border: 1px solid; }
+.off-tipo button { padding: 5px 10px; font-size: 13px; }
+.off-ct td { vertical-align: top; }
+.off-ct-da td:first-child { box-shadow: inset 3px 0 0 var(--accent, #b29362); }
+dialog.dlg-promo { width: min(680px, calc(100vw - 32px)); }
+.dlg-promo h4 { margin: 14px 0 6px; font-size: 14px; }
+.promo-l { max-height: 34vh; overflow: auto; border: 1px solid var(--line, #e4dccd); border-radius: 10px; }
+.promo-r { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; border-bottom: 1px solid var(--line, #eee6d8); }
+.promo-r:last-child { border-bottom: 0; }
+.promo-r small { display: block; }
+.dlg-promo .foot { flex-wrap: wrap; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .off-esito, :root:not([data-theme="light"]) .off-es-b { filter: brightness(.85) saturate(.9); } }
+:root[data-theme="dark"] .off-esito, :root[data-theme="dark"] .off-es-b { filter: brightness(.85) saturate(.9); }
+.promo-r > .seg { flex: none; }
