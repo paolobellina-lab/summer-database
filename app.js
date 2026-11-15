@@ -1369,7 +1369,7 @@ window.SDBStore.ready.then(function () {
           <button class="btn" id="s-export">Esporta backup (.json)</button>
           <label class="btn" for="s-import" title="Aggiunge e aggiorna ville e periodi. Non cancella nulla.">Importa backup</label><input type="file" id="s-import" accept=".json,.txt,application/json,text/plain,*/*" hidden>
           <button class="btn" id="s-copy">Copia backup negli appunti</button>
-          ${store.listenOfferte ? '<button class="btn" id="s-contatti" title="Excel con le email dei clienti a cui è stata fatta un\'offerta (dallo Storico delle offerte)">Esporta contatti</button>' : ''}
+          ${store.listenOfferte ? '<button class="btn" id="s-contatti" title="Excel con email e telefoni dei clienti a cui è stata fatta un\'offerta (dallo Storico delle offerte)">Esporta contatti</button>' : ''}
           ${window.SDB_SEED && store.mode === 'local' ? `<button class="btn danger" id="s-reset">Ripristina dati dall'Excel</button>` : ''}
         </div>
         <p class="note">L'importazione aggiunge e aggiorna ville e periodi presenti nel file. Non cancella nulla e non tocca gli scontrini.</p>
@@ -1750,18 +1750,22 @@ window.SDBStore.ready.then(function () {
       const fine = () => { btn.disabled = false; if (stop) { try { stop(); } catch (_) {} } };
       stop = store.listenOfferte(l => {
         if (fatto) return; fatto = true; setTimeout(fine);
+        // un contatto per email; chi ha solo il telefono si riconosce dal numero (unito all'email se un'altra offerta li ha insieme)
+        const telN = t => { let d = String(t || '').trim(); const piu = d.startsWith('+'); d = d.replace(/\D/g, ''); if (!d) return ''; if (!piu && d.startsWith('00')) d = d.slice(2); else if (!piu && /^3\d{8,9}$/.test(d)) d = '39' + d; return d; };
+        const telEm = {}; l.forEach(x => { const em = String(x.email || '').trim().toLowerCase(), tn = telN(x.telefono); if (em && tn) telEm[tn] = em; });
         const per = {};
-        l.forEach(x => { const em = String(x.email || '').trim().toLowerCase(); if (!em) return;
-          const c = per[em] = per[em] || { email: em, nomi: new Set(), n: 0, prima: '', ultima: '', ville: new Set(), lingua: '' };
+        l.forEach(x => { const em = String(x.email || '').trim().toLowerCase(), tn = telN(x.telefono); const k = em || telEm[tn] || (tn ? 't:' + tn : ''); if (!k) return;
+          const c = per[k] = per[k] || { email: k.startsWith('t:') ? '' : k, tel: new Set(), nomi: new Set(), n: 0, prima: '', ultima: '', ville: new Set(), lingua: '' };
+          if (String(x.telefono || '').trim()) c.tel.add(String(x.telefono).trim());
           if (String(x.cliente || '').trim()) c.nomi.add(String(x.cliente).trim()); c.n++;
           const q = String(x.quando || ''); if (!c.prima || q < c.prima) c.prima = q; if (q >= c.ultima) { c.ultima = q; c.lingua = x.lingua === 'en' ? 'Inglese' : 'Italiano'; }
           (x.ville || []).forEach(v => v && v.name && c.ville.add(v.name)); });
         const righe = Object.values(per).sort((a, b) => b.ultima.localeCompare(a.ultima));
-        if (!righe.length) { toast(l.length ? 'Nessuna offerta con l\'email del cliente' : 'Lo storico delle offerte è vuoto'); return; }
+        if (!righe.length) { toast(l.length ? 'Nessuna offerta con email o telefono del cliente' : 'Lo storico delle offerte è vuoto'); return; }
         const d = iso => iso ? new Date(iso).toLocaleDateString('it-IT') : '';
         const cell = x => '"' + String(x == null ? '' : x).replace(/"/g, '""') + '"';
-        const csv = '\ufeff' + [['Cliente', 'Email', 'Lingua', 'Offerte', 'Prima offerta', 'Ultima offerta', 'Ville proposte']]
-          .concat(righe.map(c => [Array.from(c.nomi).join(' / '), c.email, c.lingua, c.n, d(c.prima), d(c.ultima), Array.from(c.ville).join(', ')]))
+        const csv = '﻿' + [['Cliente', 'Email', 'Telefono', 'Lingua', 'Offerte', 'Prima offerta', 'Ultima offerta', 'Ville proposte']]
+          .concat(righe.map(c => [Array.from(c.nomi).join(' / '), c.email, Array.from(c.tel).join(' / '), c.lingua, c.n, d(c.prima), d(c.ultima), Array.from(c.ville).join(', ')]))
           .map(r => r.map(cell).join(';')).join('\r\n');
         window.SDBExport.scarica('Contatti offerte ' + S.iso(new Date()) + '.csv', new Blob([csv], { type: 'text/csv;charset=utf-8' }));
         toast(righe.length + (righe.length === 1 ? ' contatto esportato' : ' contatti esportati'));

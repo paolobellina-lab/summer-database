@@ -879,8 +879,15 @@ details.prof-item[open] > .prof-sum .chev { transform: translateY(1px) rotate(-1
 .off-list-pr { min-width: 90px; text-align: right; font-variant-numeric: tabular-nums; }
 .off-price { display: flex; align-items: center; gap: 8px; flex: 1 1 100%; font-size: 12px; color: var(--muted); }
 .off-price input { max-width: 160px; }
-.off-row { display: grid; grid-template-columns: 1fr 1fr auto auto; gap: 10px; align-items: end; }
+.off-row { display: grid; grid-template-columns: 1fr 1fr 1fr auto auto; gap: 10px; align-items: end; }
 .off-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0; }
+.off-act-gr { gap: 10px 22px; align-items: flex-end; }
+.off-act { display: grid; gap: 4px; }
+.off-act > span { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted, #777); }
+.off-act > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.btn.off-wa { border-color: #25d366; }
+.btn.primary.off-wa { background: #1fa855; border-color: #1fa855; color: #fff; }
+.off-wa-go { margin: 8px 0 4px; }
 @media (max-width: 760px) { .off-tar { grid-template-columns: 1fr 1fr; } .off-row { grid-template-columns: 1fr; } }
 /* completa le schede dal sito */
 .is-opts { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }

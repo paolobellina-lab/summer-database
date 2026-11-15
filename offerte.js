@@ -1,7 +1,8 @@
 /*
  * Pagina "Offerte": scegli tariffa e periodo, scegli le ville, e prepara per il cliente
  *  - un documento Word con foto, informazioni e prezzo di ogni villa;
- *  - una mail da incollare in Gmail (testo e foto copiati negli appunti), con "Apri Gmail".
+ *  - una mail da incollare in Gmail (testo e foto copiati negli appunti), con "Apri Gmail";
+ *  - un messaggio WhatsApp (testo, aperto già scritto nella chat del cliente) oppure un PDF da mandare su WhatsApp.
  * Italiano o inglese a scelta. Usa solo i dati che l'account può vedere (campi riservati esclusi).
  */
 (function () {
@@ -16,7 +17,9 @@
       proposte: 'Ecco le nostre proposte:', extra: 'Servizi a parte', totale: 'Totale con i servizi', inclVilla: 'Compreso per questa villa', webBro: 'Web brochure', video: 'Guarda il video', qui: 'qui', tariffa: 'Tariffa', inclusiTit: 'Le tariffe includono:',
       inclusi: 'Pulizia giornaliera della casa\nGiardinaggio e pulizia della piscina regolari\nCambio biancheria e asciugamani due volte a settimana\nProdotti da bagno di lusso all\'arrivo\nServizio concierge per tutte le prenotazioni in Costa Smeralda\nPulizia finale e lavanderia finale standard\nTutte le utenze, escluso il riscaldamento della piscina se presente',
       chiusaMail: 'Il nostro Concierge sarà a disposizione per qualsiasi servizio extra durante il soggiorno.',
-      soggetta: 'Offerta soggetta a disponibilità e ad approvazione finale del proprietario.'
+      soggetta: 'Offerta soggetta a disponibilità e ad approvazione finale del proprietario.',
+      villeTit: 'Ville proposte', sitoWeb: 'Sito web',
+      waBreve: (c, p) => `${c ? 'Gentile ' + c : 'Buongiorno'},\nin allegato la nostra proposta di ville per il periodo ${p}.\nRestiamo a disposizione per qualsiasi informazione.`
     },
     en: {
       titolo: 'Villa proposal', per: 'Dates', ospiti: 'Guests', camere: 'Bedrooms', bagni: 'Bathrooms', interni: 'Indoor', esterni: 'Outdoor',
@@ -28,7 +31,9 @@
       proposte: 'Herewith our suggestions:', extra: 'Extra services', totale: 'Total including services', inclVilla: 'Included for this villa', webBro: 'Web brochure', video: 'Watch the video', qui: 'here', tariffa: 'Rate', inclusiTit: 'The rates do include:',
       inclusi: 'Daily Cleaning for the resetting of the house\nRegular Gardening and pool cleaning\nLinen & towel change twice per week\nLuxury bath products on arrival\nConcierge Services for all reservations in Costa Smeralda\nStandard Final Cleaning and Final Laundry\nAll Utilities except the cost for the pool heating if present',
       chiusaMail: 'Our Concierge will be ready to accommodate any requests for extra services needed during your stay.',
-      soggetta: 'Offer subject to availability and owner\'s final approval.'
+      soggetta: 'Offer subject to availability and owner\'s final approval.',
+      villeTit: 'Proposed villas', sitoWeb: 'Website',
+      waBreve: (c, p) => `${c ? 'Dear ' + c : 'Hello'},\nplease find attached our villa proposal for the period ${p}.\nWe remain at your disposal for any further information.`
     }
   };
   const FIRMA = 'Esmeralda Luxury Villas';
@@ -37,7 +42,7 @@
     const { ui, saveUI, esc, data, store, $, $$, toast, S, settings, blocks, hiddenField } = ctx;
     const favLists = ctx.favLists || (() => []), locations = ctx.locations || (() => []), normLoc = ctx.normLoc || (x => String(x || '').trim().toUpperCase());
     const X = window.SDBExport;
-    const o = ui.off = Object.assign({ tariff: 'settimanale', idx: 0, ville: [], prezzi: {}, cliente: '', email: '', lingua: 'it', nFoto: 3, soloLibere: true, q: '', intro: '', chiusa: '', introMod: false, chiusaMod: false, note: {}, incSel: null, incExtra: '', firma: 'Esmeralda Luxury Villas' }, ui.off || {});
+    const o = ui.off = Object.assign({ tariff: 'settimanale', idx: 0, ville: [], prezzi: {}, cliente: '', email: '', tel: '', lingua: 'it', nFoto: 3, soloLibere: true, q: '', intro: '', chiusa: '', introMod: false, chiusaMod: false, note: {}, incSel: null, incExtra: '', firma: 'Esmeralda Luxury Villas' }, ui.off || {});
     const L = () => T[o.lingua] || T.it;
     if (!o.note) o.note = {};
     if (!o.f || typeof o.f !== 'object') o.f = {};
@@ -158,8 +163,9 @@
         <div class="row off-row">
           <label class="field"><span>Cliente</span><input id="off-cli" value="${esc(o.cliente)}" placeholder="es. Mr Smith"></label>
           <label class="field"><span>Email del cliente</span><input id="off-mail" type="text" inputmode="email" autocomplete="off" value="${esc(o.email)}" placeholder="facoltativa"></label>
+          <label class="field"><span>Telefono (WhatsApp)</span><input id="off-tel" type="tel" inputmode="tel" autocomplete="off" value="${esc(o.tel || '')}" placeholder="es. +39 333 1234567"></label>
           <div class="field"><span>Lingua</span><div class="seg" id="off-lang"><button type="button" data-l="it" class="${o.lingua === 'it' ? 'on' : ''}">Italiano</button><button type="button" data-l="en" class="${o.lingua === 'en' ? 'on' : ''}">English</button></div></div>
-          <label class="field"><span>Foto per villa (Word)</span><select id="off-nf">${[1, 3, 5, 8].map(n => `<option value="${n}" ${Number(o.nFoto) === n ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+          <label class="field"><span>Foto per villa (Word e PDF)</span><select id="off-nf">${[1, 3, 5, 8].map(n => `<option value="${n}" ${Number(o.nFoto) === n ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
         </div>
         <label class="field off-ogg-f"><span>Oggetto della mail</span><input id="off-ogg-in"></label>
         <div class="off-prevbar"><span class="note" id="off-ogg" hidden></span><div class="off-prevact"><label class="off-st-pick"><span>Stile</span><select id="off-st-sel" aria-label="Stile della mail"></select></label><button type="button" class="btn off-ftog" id="off-pers-t" aria-expanded="${o.persOpen ? 'true' : 'false'}"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z M13 7l4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>Personalizza</button></div></div>
@@ -184,13 +190,12 @@
           <label class="flag off-wb"><input type="checkbox" id="off-wb" ${o.linkWB ? 'checked' : ''}><span><b>Link Web Brochure</b><small>Sotto il prezzo di ogni villa che ce l'ha.</small></span></label>
           <label class="flag off-wb"><input type="checkbox" id="off-wba" ${o.linkWBA ? 'checked' : ''}><span><b>Link Web Brochure anonima</b><small>La versione senza logo, sotto il prezzo di ogni villa che ce l'ha.</small></span></label>
         </div>
-        <div class="off-actions">
-          <button type="button" class="btn primary" id="off-word">Scarica Word</button>
-          <button type="button" class="btn" id="off-copy">Copia per email</button>
-          <button type="button" class="btn" id="off-gmail">Apri Gmail</button>
-          ${store.listBrochure ? '<button type="button" class="btn" id="off-bro-dl">Scarica brochure</button>' : ''}
+        <div class="off-actions off-act-gr">
+          <div class="off-act"><span>Email</span><div><button type="button" class="btn primary" id="off-copy">Copia per email</button><button type="button" class="btn" id="off-gmail">Apri Gmail</button></div></div>
+          <div class="off-act"><span>WhatsApp</span><div><button type="button" class="btn off-wa" id="off-wa-txt">Messaggio</button><button type="button" class="btn off-wa" id="off-wa-pdf">PDF</button></div></div>
+          <div class="off-act"><span>File</span><div><button type="button" class="btn" id="off-word">Scarica Word</button><button type="button" class="btn" id="off-pdf">Scarica PDF</button>${store.listBrochure ? '<button type="button" class="btn" id="off-bro-dl">Scarica brochure</button>' : ''}</div></div>
         </div>
-        <p class="note">Qui sopra vedi la mail come arriverà al cliente. Premi <b>Copia per email</b>, poi <b>Apri Gmail</b> e incolla nel messaggio (Ctrl+V, o ⌘V sul Mac); le brochure scaricate si trascinano dalla cartella Download. Cliente, lingua, testi e voci incluse si cambiano con <b>Personalizza</b>.</p>
+        <p class="note">Qui sopra vedi la mail come arriverà al cliente. <b>Email</b>: premi <b>Copia per email</b>, poi <b>Apri Gmail</b> e incolla nel messaggio (Ctrl+V, o ⌘V sul Mac). <b>WhatsApp → Messaggio</b>: apre la chat del cliente con l'offerta già scritta in testo. <b>WhatsApp → PDF</b>: prepara l'offerta in PDF con le foto e la invia con due righe di accompagnamento (dal telefono si allegano da soli; dal computer si trascinano dalla cartella Download, come le brochure). Cliente, lingua, testi e voci incluse si cambiano con <b>Personalizza</b>.</p>
         <div id="off-msg"></div>
       </section>
       </div>
@@ -362,6 +367,7 @@
     $('#off-firma').addEventListener('input', e => { o.firma = e.target.value; save(); });
     $('#off-cli').addEventListener('input', e => { o.cliente = e.target.value; drawTexts(); save(); });
     $('#off-mail').addEventListener('input', e => { o.email = e.target.value.trim(); save(); });
+    $('#off-tel').addEventListener('input', e => { o.tel = e.target.value.trim(); save(); });
     $('#off-lang').addEventListener('click', e => { const b = e.target.closest('[data-l]'); if (!b) return; o.lingua = b.dataset.l; o.introMod = false; o.chiusaMod = false; o.oggettoMod = false; $$('#off-lang button').forEach(x => x.classList.toggle('on', x === b)); drawTexts(); save(); });
     $('#off-nf').addEventListener('change', e => { o.nFoto = Number(e.target.value); save(); });
     $('#off-ogg-in').addEventListener('input', e => { o.oggetto = e.target.value; o.oggettoMod = !!e.target.value.trim(); save(); });
@@ -430,14 +436,29 @@
       btn.disabled = false;
     });
 
+    // dati di ogni villa per mail, WhatsApp e PDF: dalla villa più cara, quelle su richiesta in fondo (come nell'esempio delle offerte)
+    const eurT = n => new Intl.NumberFormat('it-IT', { maximumFractionDigits: 0 }).format(n) + ' €';
+    function righeVille() {
+      const l = L();
+      const tar = (S.TARIFFE.find(t => t.key === o.tariff) || {}).label || '';
+      const tarEn = { settimanale: 'Weekly', bisettimanale: 'BiWeekly', mensile: 'Monthly', bimensile: 'Two-month' }[o.tariff] || tar;
+      const base = baseP()[o.idx];
+      const mese = base ? new Date(S.parse(base.from)).toLocaleDateString(o.lingua === 'en' ? 'en-GB' : 'it-IT', { month: 'long', timeZone: 'UTC' }) : '';
+      return scelte().map(v => ({ v, pr: prezzoTot(v) })).sort((a, b) => (b.pr === null ? -1 : b.pr) - (a.pr === null ? -1 : a.pr)).map(({ v, pr }) => {
+        const p = perOf(v); const diverso = p && base && (p.from !== base.from || p.to !== base.to);
+        const lab = (o.lingua === 'en' ? `${mese ? mese[0].toUpperCase() + mese.slice(1) + ' ' : ''}${tarEn} ${l.tariffa}` : `${l.tariffa} ${tar.toLowerCase()}${mese ? ' ' + mese : ''}`) + (diverso ? ' ' + rangeTxt(p, o.lingua) : '');
+        const iv = inclSoloVilla(v);
+        return { v, p, pr, lab, prTxt: pr === null ? l.richiesta : eurT(pr), nota: (o.note[v.id] || '').trim(),
+          titolo: 'Villa ' + v.name.replace(/^villa\s+/i, '').replace(/\b\w+/g, w => w[0].toUpperCase() + w.slice(1).toLowerCase()),
+          codice: vis(v, 'codice') ? String(v.codice).trim() : '', sito: vis(v, 'linkSito') ? String(v.linkSito).trim() : '',
+          video: vis(v, 'vimeo') ? String(v.vimeo).trim() : vis(v, 'youtube') ? String(v.youtube).trim() : '', psw: vis(v, 'psw') ? String(v.psw).trim() : '',
+          wb: linkWb(v), incl: iv.length ? iv.map(x => testiSrv(x.key).join(', ')).join('; ') : '' };
+      });
+    }
     // mail: HTML con stili in linea e foto incorporate, copiato negli appunti per incollarlo in Gmail
     async function htmlMail() {
       const l = L();
       const P = (x, st) => `<p style="margin:0${st ? ';' + st : ''}">${x}</p>`, BR = '<p style="margin:0"><br></p>';
-      const eur = n => new Intl.NumberFormat('it-IT', { maximumFractionDigits: 0 }).format(n) + ' €';
-      const tar = (S.TARIFFE.find(t => t.key === o.tariff) || {}).label || '';
-      const tarEn = { settimanale: 'Weekly', bisettimanale: 'BiWeekly', mensile: 'Monthly', bimensile: 'Two-month' }[o.tariff] || tar;
-      const base = baseP()[o.idx];
       const z = Object.assign({}, STILI_BASE[0], o.stile || {}); const acc = z.accento || '#000000', sep = !!z.separatori;
       const link = (u, t) => `<a href="${esc(u)}" target="_blank" style="color:${acc === '#000000' ? '#1155cc' : acc}${acc === '#000000' ? '' : ';text-decoration:none;border-bottom:1px solid ' + acc + '66'}">${t}</a>`;
       const TIT = t => z.titoli === 'maiuscoletto' ? P(`<span style="font-size:${Math.max(11, z.size - 3)}px;letter-spacing:2px;text-transform:uppercase;font-weight:bold;color:${acc}">${esc(t)}</span>`) : P(`<b><u>${esc(t)}</u></b>`);
@@ -445,21 +466,13 @@
       let h = `<div style="font-family:${z.font};color:${z.testo};font-size:${z.size}px;line-height:1.55">`;
       h += o.intro.split('\n').map(t => P(esc(t) || '<br>')).join('') + BR;
       h += TIT(l.proposte) + (sep ? HR : BR);
-      const mese = base ? new Date(S.parse(base.from)).toLocaleDateString(o.lingua === 'en' ? 'en-GB' : 'it-IT', { month: 'long', timeZone: 'UTC' }) : '';
-      // come nell'esempio: dalla villa più cara, quelle su richiesta in fondo
-      const ord = scelte().map(v => ({ v, pr: prezzoTot(v) })).sort((a, b) => (b.pr === null ? -1 : b.pr) - (a.pr === null ? -1 : a.pr));
-      for (const { v } of ord) {
-        const p = perOf(v); const pr = prezzoTot(v); const nota = (o.note[v.id] || '').trim();
-        const nome = esc(v.name.replace(/^villa\s+/i, '').replace(/\b\w+/g, w => w[0].toUpperCase() + w.slice(1).toLowerCase()));
-        const titolo = `Villa ${nome}`;
-        h += P(`<b${acc !== '#000000' ? ` style="color:${acc};font-size:${z.size + 2}px"` : ''}>${vis(v, 'linkSito') ? link(v.linkSito, titolo) : titolo}</b>${vis(v, 'codice') ? ` <b style="${acc !== '#000000' ? 'font-weight:normal;font-size:' + (z.size - 2) + 'px;letter-spacing:1px;color:' + z.testo : ''}">${esc(v.codice)}</b>` : ''}`);
-        const vid = vis(v, 'vimeo') ? v.vimeo : vis(v, 'youtube') ? v.youtube : '';
-        if (vid) h += P(`${esc(l.video)} ${link(vid, esc(l.qui))}${vis(v, 'psw') ? ' (psw: ' + esc(v.psw) + ')' : ''}`);
-        const diverso = p && base && (p.from !== base.from || p.to !== base.to);
-        const lab = (o.lingua === 'en' ? `${mese ? mese[0].toUpperCase() + mese.slice(1) + ' ' : ''}${tarEn} ${l.tariffa}` : `${l.tariffa} ${tar.toLowerCase()}${mese ? ' ' + mese : ''}`) + (diverso ? ' ' + rangeTxt(p, o.lingua) : '');
-        h += P(`<b>${esc(lab)}:</b> ${pr === null ? esc(l.richiesta) : eur(pr)}${nota ? ' - ' + esc(nota) + ' -' : ''}`);
-        const wb = linkWb(v); wb.forEach(u => { h += P(`${esc(l.webBro)}: ${link(u, esc(l.qui))}`); });
-        const iv = inclSoloVilla(v); if (iv.length) h += P(`${esc(l.inclVilla)}: ${esc(iv.map(x => testiSrv(x.key).join(', ')).join('; '))}`);
+      for (const r of righeVille()) {
+        const titolo = esc(r.titolo);
+        h += P(`<b${acc !== '#000000' ? ` style="color:${acc};font-size:${z.size + 2}px"` : ''}>${r.sito ? link(r.sito, titolo) : titolo}</b>${r.codice ? ` <b style="${acc !== '#000000' ? 'font-weight:normal;font-size:' + (z.size - 2) + 'px;letter-spacing:1px;color:' + z.testo : ''}">${esc(r.codice)}</b>` : ''}`);
+        if (r.video) h += P(`${esc(l.video)} ${link(r.video, esc(l.qui))}${r.psw ? ' (psw: ' + esc(r.psw) + ')' : ''}`);
+        h += P(`<b>${esc(r.lab)}:</b> ${r.pr === null ? esc(l.richiesta) : eurT(r.pr)}${r.nota ? ' - ' + esc(r.nota) + ' -' : ''}`);
+        r.wb.forEach(u => { h += P(`${esc(l.webBro)}: ${link(u, esc(l.qui))}`); });
+        if (r.incl) h += P(`${esc(l.inclVilla)}: ${esc(r.incl)}`);
         h += sep ? HR : BR;
       }
       const inc = incTesti();
@@ -469,6 +482,144 @@
       h += P(esc(l.saluti) + ',', 'margin-top:8px') + (o.firma || FIRMA).split('\n').map((t, k) => P(k === 0 ? `<b>${esc(t)}</b>` : esc(t))).join('');
       return h + '</div>';
     }
+    /* ---------- WhatsApp ---------- */
+    // numero per wa.me: solo cifre con il prefisso internazionale (+39 / 0039 / cellulare italiano senza prefisso → 39…)
+    const telWA = t => { let d = String(t || '').trim(); const piu = d.startsWith('+'); d = d.replace(/\D/g, '');
+      if (!d) return ''; if (!piu && d.startsWith('00')) d = d.slice(2); else if (!piu && /^3\d{8,9}$/.test(d)) d = '39' + d; return d; };
+    const apriWA = testo => { const n = telWA(o.tel); window.open(`https://wa.me/${n}?text=${encodeURIComponent(testo)}`, '_blank', 'noopener'); };
+    // l'offerta in testo semplice, con *grassetto* e _corsivo_ di WhatsApp; i link si vedono per intero
+    function testoWA() {
+      const l = L(); const B = t => `*${String(t).replace(/\*/g, '')}*`; const r0 = [];
+      r0.push(o.intro.trim(), '', B(l.proposte), '');
+      righeVille().forEach(r => {
+        r0.push(B(r.titolo) + (r.codice ? ' (' + r.codice + ')' : ''));
+        if (r.sito) r0.push(r.sito);
+        if (r.video) r0.push(`${l.video}: ${r.video}${r.psw ? ' (psw: ' + r.psw + ')' : ''}`);
+        r0.push(`${r.lab}: ${B(r.prTxt)}${r.nota ? ' – ' + r.nota : ''}`);
+        r.wb.forEach(u => r0.push(`${l.webBro}: ${u}`));
+        if (r.incl) r0.push(`${l.inclVilla}: ${r.incl}`);
+        r0.push('');
+      });
+      const inc = incTesti(); if (inc.length) r0.push(B(l.inclusiTit), ...inc.map(t => '• ' + t), '');
+      o.chiusa.split('\n').filter(t => t.trim()).forEach(t => r0.push(t.trim()));
+      r0.push(`_${l.soggetta}_`, '', l.saluti + ',');
+      (o.firma || FIRMA).split('\n').forEach((t, k) => { if (t.trim()) r0.push(k === 0 ? B(t.trim()) : t.trim()); });
+      return r0.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+    }
+    const testoBreve = () => L().waBreve(o.cliente.trim(), periodoTxt()) + '\n\n' + L().saluti + ',\n' + String(o.firma || FIRMA).split('\n')[0].trim();
+
+    /* ---------- PDF ---------- */
+    // pagine A4 disegnate su un canvas (1240×1754 px, 150 dpi), poi un PDF con un'immagine per pagina e i link cliccabili
+    const caricaImg = src => new Promise(res => { const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = src; });
+    async function pdfOfferta(passo) {
+      const l = L(); const W = 1240, H = 1754, M = 96, CW = W - 2 * M, FONDO = H - M - 36;
+      const z = Object.assign({}, STILI_BASE[0], o.stile || {}); const FF = z.font || 'Georgia,serif';
+      const GOLD = '#B29362', NAVY = '#142861', TXT = '#2b2b2b', GREY = '#777777';
+      const pagine = []; let c = null, g = null, y = 0, links = [];
+      const font = (px, b, it) => `${it ? 'italic ' : ''}${b ? 'bold ' : ''}${px}px ${FF}`;
+      const chiudi = async () => {
+        if (!c) return; const n = pagine.length + 1;
+        g.strokeStyle = GOLD; g.lineWidth = 1.5; g.beginPath(); g.moveTo(M, H - M + 6); g.lineTo(W - M, H - M + 6); g.stroke();
+        g.font = font(18); g.fillStyle = GREY; g.textAlign = 'left'; g.fillText(String(o.firma || FIRMA).split('\n')[0].trim(), M, H - M + 36);
+        g.textAlign = 'right'; g.fillText(String(n), W - M, H - M + 36); g.textAlign = 'left';
+        const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.86));
+        pagine.push({ jpeg: new Uint8Array(await blob.arrayBuffer()), w: W, h: H, links }); c = null;
+      };
+      const nuova = async () => { await chiudi(); c = document.createElement('canvas'); c.width = W; c.height = H; g = c.getContext('2d'); g.fillStyle = '#ffffff'; g.fillRect(0, 0, W, H); y = M; links = []; };
+      const spezza = (t, maxW) => { const out = [];
+        String(t == null ? '' : t).split('\n').forEach(par => { const ws = par.split(/\s+/).filter(Boolean); if (!ws.length) { out.push(''); return; } let cur = '';
+          ws.forEach(w => { const prova = cur ? cur + ' ' + w : w; if (g.measureText(prova).width <= maxW) { cur = prova; return; } if (cur) out.push(cur);
+            cur = w; while (g.measureText(cur).width > maxW && cur.length > 1) { let k = cur.length - 1; while (k > 1 && g.measureText(cur.slice(0, k)).width > maxW) k--; out.push(cur.slice(0, k)); cur = cur.slice(k); } });
+          out.push(cur); });
+        return out; };
+      // testo a capo automatico; maxRighe/fino: si ferma e mette "…" invece di andare alla pagina dopo
+      const testo = async (t, op = {}) => {
+        const px = op.px || 25, LH = Math.round(px * (op.lh || 1.45)), x = op.x || M, w = op.w || CW;
+        g.font = font(px, op.b, op.it); let righe = spezza(t, w);
+        if (op.tronca) { const n = Math.max(1, Math.floor((FONDO - y) / LH)); if (righe.length > n) { righe = righe.slice(0, n); righe[n - 1] = righe[n - 1].replace(/\s*\S*$/, '') + ' …'; } }
+        for (const r of righe) {
+          if (y + LH > FONDO) { await nuova(); g.font = font(px, op.b, op.it); }
+          const rw = g.measureText(r).width; const rx = op.center ? (W - rw) / 2 : x;
+          if (op.spazio) { g.save(); g.letterSpacing = op.spazio + 'px'; }
+          g.fillStyle = op.col || TXT; g.fillText(r, rx, y + px);
+          if (op.spazio) g.restore();
+          if (op.link && r) { links.push({ x: rx - 4, y: y - 4, w: rw + 8, h: LH + 4, url: op.link }); g.fillRect(rx, y + px + 5, rw, 1.5); }
+          y += LH;
+        }
+        y += op.dopo != null ? op.dopo : 8;
+      };
+      const linea = (yy, col) => { g.strokeStyle = col || GOLD; g.lineWidth = 2; g.beginPath(); g.moveTo(M, yy); g.lineTo(W - M, yy); g.stroke(); };
+      const copri = (im, x, yy, w, h) => { const k = Math.max(w / im.naturalWidth, h / im.naturalHeight); const sw = w / k, sh = h / k; g.drawImage(im, (im.naturalWidth - sw) / 2, (im.naturalHeight - sh) / 2, sw, sh, x, yy, w, h); };
+      // etichetta: valore (valore con link)
+      const riga = async (lab, val, link) => {
+        const px = 23; g.font = font(px, true); const lw = g.measureText(lab + ': ').width;
+        if (y + px * 1.5 > FONDO) await nuova();
+        g.font = font(px, true); g.fillStyle = TXT; g.fillText(lab + ':', M, y + px);
+        const yy = y; await testo(val, { px, x: M + lw, w: CW - lw, link, col: link ? NAVY : TXT, dopo: 4 }); if (y === yy) y += px * 1.45;
+      };
+      const R = righeVille();
+
+      // copertina: logo, titolo, periodo, testo iniziale e riepilogo delle ville con i prezzi
+      await nuova();
+      try { const lg = await caricaImg('icons/logo-240.png'); if (lg) { g.drawImage(lg, (W - 200) / 2, y, 200, 200); y += 230; } } catch (_) {}
+      await testo(l.titolo.toUpperCase(), { px: 30, b: true, col: GOLD, center: true, spazio: 6, dopo: 6 });
+      await testo(periodoTxt(), { px: 40, col: NAVY, center: true, dopo: 40 });
+      linea(y); y += 40;
+      await testo(o.intro.trim(), { px: 26, dopo: 36 });
+      await testo(l.villeTit.toUpperCase(), { px: 22, b: true, col: GOLD, spazio: 3, dopo: 10 });
+      for (const r of R) {
+        if (y + 56 > FONDO) await nuova();
+        g.font = font(27, true); g.fillStyle = NAVY; g.fillText(r.titolo, M, y + 34);
+        g.font = font(27, true); g.textAlign = 'right'; g.fillText(r.prTxt, W - M, y + 34); g.textAlign = 'left';
+        g.strokeStyle = '#e4dccd'; g.lineWidth = 1; g.beginPath(); g.moveTo(M, y + 52); g.lineTo(W - M, y + 52); g.stroke(); y += 60;
+      }
+
+      // una pagina per villa
+      for (let i = 0; i < R.length; i++) {
+        const r = R[i], v = r.v; passo && passo(`Preparo ${v.name} (${i + 1} di ${R.length})…`);
+        await nuova();
+        await testo(r.titolo, { px: 46, b: true, col: NAVY, link: r.sito || null, dopo: 0 });
+        const sub = [r.codice, r.p ? rangeTxt(r.p, o.lingua) : ''].filter(Boolean).join('  ·  ');
+        if (sub) await testo(sub, { px: 22, col: GREY, dopo: 16 }); else y += 16;
+        const fs = await fotoDi(v, 1400, 0.82); const ims = (await Promise.all(fs.slice(0, 4).map(f => caricaImg(f.url)))).filter(Boolean);
+        if (ims[0]) { const h0 = ims.length > 1 ? 560 : 700; copri(ims[0], M, y, CW, h0); y += h0 + 12; }
+        const resto = ims.slice(1, 4);
+        if (resto.length) { const gap = 12, tw = (CW - gap * (resto.length - 1)) / resto.length, th = 230; resto.forEach((im, k) => copri(im, M + k * (tw + gap), y, tw, th)); y += th + 24; }
+        // caratteristiche su due colonne
+        const info = infoVilla(v);
+        if (info.length) { const colW = CW / 2, rh = 40;
+          for (let k = 0; k < info.length; k += 2) { if (y + rh > FONDO) await nuova();
+            [info[k], info[k + 1]].forEach((kv, j) => { if (!kv) return; const x = M + j * colW; g.font = font(21); g.fillStyle = GREY; g.fillText(String(kv[0]), x, y + 26); g.font = font(23, true); g.fillStyle = TXT; g.fillText(String(kv[1]).slice(0, 40), x + 190, y + 26); });
+            g.strokeStyle = '#eee6d8'; g.lineWidth = 1; g.beginPath(); g.moveTo(M, y + rh - 2); g.lineTo(W - M, y + rh - 2); g.stroke(); y += rh; }
+          y += 20; }
+        // riquadro del prezzo
+        if (y + 110 > FONDO) await nuova();
+        linea(y); g.font = font(23, true); g.fillStyle = GOLD; g.fillText(r.lab.toUpperCase().slice(0, 60), M, y + 62);
+        g.font = font(40, true); g.fillStyle = NAVY; g.textAlign = 'right'; g.fillText(r.prTxt, W - M, y + 66); g.textAlign = 'left';
+        linea(y + 96); y += 116;
+        if (r.nota) await testo(r.nota, { px: 23, it: true, dopo: 8 });
+        if (r.incl) await riga(l.inclVilla, r.incl);
+        if (r.video) await riga(l.video, l.qui, r.video);
+        if (r.video && r.psw) await riga('Password', r.psw);
+        for (const u of r.wb) await riga(l.webBro, l.qui, u);
+        if (r.sito) await riga(l.sitoWeb, l.sito, r.sito);
+        y += 8;
+        if (vis(v, 'descrizione')) await testo(String(v.descrizione), { px: 22, lh: 1.5, col: TXT, tronca: true });
+      }
+
+      // ultima pagina: cosa comprendono le tariffe, testo finale e firma
+      await nuova();
+      const inc = incTesti();
+      if (inc.length) { await testo(l.inclusiTit.toUpperCase(), { px: 24, b: true, col: GOLD, spazio: 3, dopo: 14 });
+        for (const t of inc) { if (y + 40 > FONDO) await nuova(); g.fillStyle = GOLD; g.beginPath(); g.arc(M + 8, y + 17, 5, 0, 7); g.fill(); await testo(t, { px: 25, x: M + 32, w: CW - 32, dopo: 4 }); }
+        y += 30; }
+      for (const t of o.chiusa.split('\n').filter(x => x.trim())) await testo(t.trim(), { px: 25, dopo: 10 });
+      y += 10; await testo(l.soggetta, { px: 25, b: true, it: true, col: GOLD, dopo: 30 });
+      await testo(l.saluti + ',', { px: 25, dopo: 4 });
+      for (const [k, t] of String(o.firma || FIRMA).split('\n').entries()) if (t.trim()) await testo(t.trim(), { px: 25, b: k === 0, col: k === 0 ? NAVY : TXT, dopo: 2 });
+      await chiudi();
+      return X.pdf(pagine, `${l.titolo} ${o.cliente || ''} ${periodoTxt()}`.trim());
+    }
     // ---- storico delle offerte ----
     let storico = [], aperte = {}, cercaSt = '';
     async function salvaStorico(tipo, html) {
@@ -476,35 +627,36 @@
       try {
         html = html || await htmlMail();
         const stato = JSON.parse(JSON.stringify(o)); ['tab', 'q', 'f', 'fOpen', 'persOpen', 'ultima'].forEach(k => delete stato[k]);
-        const rec = { cliente: o.cliente.trim(), email: String(o.email || '').trim().toLowerCase(), lingua: o.lingua, oggetto: oggettoMail(), periodo: periodoTxt(), tariffa: o.tariff,
+        const rec = { cliente: o.cliente.trim(), email: String(o.email || '').trim().toLowerCase(), telefono: String(o.tel || '').trim(), lingua: o.lingua, oggetto: oggettoMail(), periodo: periodoTxt(), tariffa: o.tariff,
           ville: scelte().map(v => ({ id: v.id, name: v.name, prezzo: prezzoTot(v) })), html, stato, creatoDa: String(store.user || '').toLowerCase(), quando: new Date().toISOString() };
         // stessa offerta salvata poco fa (stesso testo): aggiorno quella invece di crearne un'altra
-        const u = o.ultima; const firma = rec.html.length + '|' + rec.cliente + '|' + rec.email + '|' + rec.oggetto + '|' + rec.ville.map(v => v.id + v.prezzo).join(',');
+        const u = o.ultima; const firma = rec.html.length + '|' + rec.cliente + '|' + rec.email + '|' + rec.telefono + '|' + rec.oggetto + '|' + rec.ville.map(v => v.id + v.prezzo).join(',');
         if (u && u.firma === firma && storico.some(x => x.id === u.id)) { const x = storico.find(y => y.id === u.id); rec.id = u.id; rec.tipi = Array.from(new Set((x.tipi || []).concat(tipo))); rec.quando = x.quando; }
         else rec.tipi = [tipo];
         const id = await store.saveOfferta(rec); o.ultima = { id, firma }; saveUI();
       } catch (err) { console.warn('storico offerte', err); toast(err && err.code === 'permission-denied' ? 'Offerta non salvata nello storico: bisogna pubblicare la nuova regola di Firestore' : 'Offerta non salvata nello storico'); }
     }
-    const chiaveCli = x => x.email ? 'm:' + x.email : x.cliente ? 'n:' + x.cliente.trim().toLowerCase() : '-';
+    const chiaveCli = x => x.email ? 'm:' + x.email : x.telefono ? 't:' + (telWA(x.telefono) || x.telefono) : x.cliente ? 'n:' + x.cliente.trim().toLowerCase() : '-';
+    const TIPI = { word: 'Word', mail: 'Mail', whatsapp: 'WhatsApp', pdf: 'PDF' };
     const dataOra = iso => { try { const d = new Date(iso); return d.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ' ' + d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }); } catch (_) { return ''; } };
     function drawStorico() {
       const box = $('#off-storico'); if (!box) return;
       $('#off-st-n').textContent = storico.length ? ` · ${storico.length}` : '';
       const q = cercaSt.trim().toLowerCase();
-      const lista = storico.filter(x => !q || [x.cliente, x.email, x.oggetto, x.periodo].concat((x.ville || []).map(v => v.name)).join(' ').toLowerCase().includes(q));
+      const lista = storico.filter(x => !q || [x.cliente, x.email, x.telefono, x.oggetto, x.periodo].concat((x.ville || []).map(v => v.name)).join(' ').toLowerCase().includes(q));
       const gruppi = {}; lista.forEach(x => { const k = chiaveCli(x); (gruppi[k] = gruppi[k] || []).push(x); });
       const G = Object.entries(gruppi).map(([k, l]) => { l.sort((a, b) => String(b.quando).localeCompare(String(a.quando))); return { k, l, ultimo: l[0].quando }; }).sort((a, b) => String(b.ultimo).localeCompare(String(a.ultimo)));
       box.innerHTML = `<section class="card"><h2>Storico delle offerte</h2>
-        <p class="note">Ogni offerta si salva da sola quando la copi per la mail o scarichi il Word, divisa per cliente (email, o nome se manca l'email). Da qui la rivedi, la ricopi o la riapri per modificarla.</p>
+        <p class="note">Ogni offerta si salva da sola quando la copi per la mail, la mandi su WhatsApp o scarichi Word o PDF, divisa per cliente (email, poi telefono, poi nome). Da qui la rivedi, la ricopi o la riapri per modificarla.</p>
         <div class="off-tools"><input type="search" id="off-st-q" placeholder="Cerca cliente, email, villa o periodo" value="${esc(cercaSt)}"></div>
-        ${G.length ? G.map(g => { const c = g.l.find(x => x.cliente) || g.l[0]; const em = g.l.find(x => x.email); const open = aperte[g.k] !== false;
-          return `<details class="off-cli" data-g="${esc(g.k)}" ${open ? 'open' : ''}><summary><b>${esc(c.cliente || (em ? em.email : 'Senza cliente'))}</b>${em && c.cliente ? ` <span class="note">${esc(em.email)}</span>` : ''}<span class="note off-cli-n">${g.l.length} ${g.l.length === 1 ? 'offerta' : 'offerte'} · ultima ${esc(dataOra(g.ultimo))}</span></summary>
+        ${G.length ? G.map(g => { const c = g.l.find(x => x.cliente) || g.l[0]; const em = g.l.find(x => x.email); const tl = g.l.find(x => x.telefono); const open = aperte[g.k] !== false;
+          return `<details class="off-cli" data-g="${esc(g.k)}" ${open ? 'open' : ''}><summary><b>${esc(c.cliente || (em ? em.email : tl ? tl.telefono : 'Senza cliente'))}</b>${em && c.cliente ? ` <span class="note">${esc(em.email)}</span>` : ''}${tl && (c.cliente || em) ? ` <span class="note">${esc(tl.telefono)}</span>` : ''}<span class="note off-cli-n">${g.l.length} ${g.l.length === 1 ? 'offerta' : 'offerte'} · ultima ${esc(dataOra(g.ultimo))}</span></summary>
             ${g.l.map(x => `<div class="off-rec" data-rec="${esc(x.id)}">
-              <div class="off-rec-h"><div><b>${esc(x.oggetto || x.periodo || '')}</b><small class="note">${esc(dataOra(x.quando))} · ${esc((x.tipi || []).map(t => t === 'word' ? 'Word' : 'Mail').join(' + '))} · ${esc(x.lingua === 'en' ? 'inglese' : 'italiano')}${x.creatoDa && x.creatoDa !== String(store.user || '').toLowerCase() ? ' · ' + esc(x.creatoDa) : ''}</small>
+              <div class="off-rec-h"><div><b>${esc(x.oggetto || x.periodo || '')}</b><small class="note">${esc(dataOra(x.quando))} · ${esc((x.tipi || []).map(t => TIPI[t] || t).join(' + '))} · ${esc(x.lingua === 'en' ? 'inglese' : 'italiano')}${x.creatoDa && x.creatoDa !== String(store.user || '').toLowerCase() ? ' · ' + esc(x.creatoDa) : ''}</small>
                 <small class="off-rec-v">${(x.ville || []).map(v => `${esc(v.name)} <span class="note">${typeof v.prezzo === 'number' ? esc(S.money(v.prezzo)) : 'su richiesta'}</span>`).join(' · ')}</small></div>
                 <div class="off-rec-b"><button type="button" class="btn small" data-act="vedi">${aperte['r' + x.id] ? 'Chiudi' : 'Vedi'}</button><button type="button" class="btn small" data-act="copia">Copia per email</button><button type="button" class="btn small" data-act="riapri">Riapri</button><button type="button" class="btn small danger" data-act="del">Elimina</button></div></div>
               ${aperte['r' + x.id] ? `<div class="off-prev off-rec-prev">${x.html || '<p class="note">Anteprima non disponibile.</p>'}</div>` : ''}</div>`).join('')}
-          </details>`; }).join('') : `<p class="note">${storico.length ? 'Nessuna offerta corrisponde alla ricerca.' : 'Ancora nessuna offerta salvata: compariranno qui quando copi una mail o scarichi un Word.'}</p>`}
+          </details>`; }).join('') : `<p class="note">${storico.length ? 'Nessuna offerta corrisponde alla ricerca.' : 'Ancora nessuna offerta salvata: compariranno qui quando copi una mail, mandi un WhatsApp o scarichi Word o PDF.'}</p>`}
       </section>`;
       const qi = $('#off-st-q'); qi.oninput = () => { cercaSt = qi.value; const pos = qi.selectionStart; drawStorico(); const n = $('#off-st-q'); n.focus(); n.setSelectionRange(pos, pos); };
       $$('.off-cli', box).forEach(d => d.addEventListener('toggle', () => { aperte[d.dataset.g] = d.open; }));
@@ -549,6 +701,46 @@
       const n = await scaricaBro();
       msg(n ? `<div class="warn ok">${n} ${n === 1 ? 'brochure scaricata' : 'brochure scaricate'}: trascinale dalla cartella Download nella mail.</div>` : '<div class="warn err">Nessuna brochure per le ville scelte: caricale nella scheda di ogni villa.</div>');
       btn.disabled = false;
+    });
+    // WhatsApp, messaggio di testo: apre la chat del cliente (o la scelta del contatto) con l'offerta già scritta; il testo resta anche negli appunti
+    $('#off-wa-txt').addEventListener('click', () => {
+      if (!pronto()) return; const t = testoWA();
+      try { navigator.clipboard && navigator.clipboard.writeText(t).catch(() => {}); } catch (_) {}
+      apriWA(t); salvaStorico('whatsapp');
+      msg(`<div class="warn ok">WhatsApp aperto con l'offerta già scritta${telWA(o.tel) ? '' : ': scegli il contatto'}. Controlla e premi Invia. Il testo è anche negli appunti, se servisse incollarlo.${o.brochure ? ' Per le brochure usa <b>WhatsApp → PDF</b> dal telefono, oppure Scarica brochure e trascinale nella chat.' : ''}</div>`);
+    });
+    // PDF: prima si prepara (foto comprese), poi un tasto lo manda: dal telefono con Condividi (PDF e brochure già allegati),
+    // dal computer si scarica e si apre WhatsApp con due righe di accompagnamento
+    let pdfPronto = null;
+    async function preparaPdf(btn) {
+      if (!pronto()) return null; btn.disabled = true;
+      try {
+        const blob = await pdfOfferta(t => msg(`<p class="note">${esc(t)}</p>`));
+        const file = new File([blob], nomeFile() + '.pdf', { type: 'application/pdf' });
+        const bro = [];
+        if (o.brochure && store.listBrochure) for (const v of scelte()) { const b = broScelta(await broDi(v.id)); if (!b) continue; msg(`<p class="note">Preparo la brochure di ${esc(v.name)}…</p>`);
+          try { const bl = await store.getBrochure(b); bro.push(new File([bl], b.nome || (v.name + '.pdf'), { type: 'application/pdf' })); } catch (_) {} }
+        pdfPronto = { file, bro }; salvaStorico('pdf'); return pdfPronto;
+      } catch (x) { msg(`<div class="warn err">PDF non riuscito: ${esc(x.message || x)}</div>`); return null; }
+      finally { btn.disabled = false; }
+    }
+    const mb = n => (n / 1e6).toFixed(1).replace('.', ',') + ' MB';
+    $('#off-pdf').addEventListener('click', async () => {
+      const r = await preparaPdf($('#off-pdf')); if (!r) return;
+      X.scarica(r.file.name, r.file); msg(`<div class="warn ok">PDF scaricato (${mb(r.file.size)}).</div>`);
+    });
+    $('#off-wa-pdf').addEventListener('click', async () => {
+      const r = await preparaPdf($('#off-wa-pdf')); if (!r) return;
+      const files = [r.file].concat(r.bro);
+      const condividi = !!(navigator.canShare && (() => { try { return navigator.canShare({ files }); } catch (_) { return false; } })());
+      msg(`<div class="warn ok">PDF pronto: ${r.file.name} (${mb(r.file.size)})${r.bro.length ? ` + ${r.bro.length} brochure` : ''}.
+        <div class="off-wa-go"><button type="button" class="btn primary off-wa" id="off-wa-send">${condividi ? 'Invia su WhatsApp' : 'Scarica e apri WhatsApp'}</button></div>
+        <small>${condividi ? 'Si apre la scelta dell\'app: scegli WhatsApp e il contatto. Il PDF' + (r.bro.length ? ' e le brochure arrivano' : ' arriva') + ' con due righe di accompagnamento.' : 'Il PDF' + (r.bro.length ? ' e le brochure si scaricano' : ' si scarica') + ' nella cartella Download e si apre WhatsApp con due righe già scritte: trascina i file nella chat e invia.'}</small></div>`);
+      $('#off-wa-send').addEventListener('click', async () => {
+        const breve = testoBreve();
+        if (condividi) { try { await navigator.share({ files, text: breve }); } catch (err) { if (err && err.name !== 'AbortError') toast('Condivisione non riuscita: ' + (err.message || err)); } return; }
+        apriWA(breve); X.scarica(r.file.name, r.file); r.bro.forEach((f, k) => setTimeout(() => X.scarica(f.name, f), 600 * (k + 1)));
+      });
     });
     $('#off-gmail').addEventListener('click', () => {
       const u = `https://mail.google.com/mail/?view=cm&fs=1${o.email ? '&to=' + encodeURIComponent(o.email) : ''}&su=${encodeURIComponent(oggettoMail())}`;

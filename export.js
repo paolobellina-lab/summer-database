@@ -99,5 +99,34 @@
   // nome di file sicuro su Windows, Mac e telefono
   const nomeFile = s => String(s || '').normalize('NFC').replace(/[–—]/g, '-').replace(/[\\/:*?"<>|\u0000-\u001f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80) || 'file';
 
-  window.SDBExport = { zip, docx, dataUrlBytes, scarica, nomeFile };
+  /* ---------- PDF ----------
+   * pdf(pages): un PDF A4 verticale con una pagina per immagine JPEG (disegnata prima su un canvas)
+   * pages: [{ jpeg: Uint8Array, w, h (pixel), links: [{ x, y, w, h, url }] (pixel, dall'alto) }]
+   * I link restano cliccabili (annotazioni /URI sopra l'immagine). */
+  const pdfStr = s => String(s || '').replace(/[^\x20-\x7e]/g, c => encodeURIComponent(c)).replace(/([\\()])/g, '\\$1');
+  function pdf(pages, titolo) {
+    const PW = 595.28, PH = 841.89, f = n => (Math.round(n * 100) / 100).toString();
+    const objs = [null, null]; const add = parts => { objs.push(parts); return objs.length; };
+    const kids = pages.map(p => {
+      const k = PW / p.w, hPt = p.h * k;
+      const img = add([`<< /Type /XObject /Subtype /Image /Width ${p.w} /Height ${p.h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${p.jpeg.length} >>\nstream\n`, p.jpeg, '\nendstream']);
+      const cs = `q ${f(PW)} 0 0 ${f(hPt)} 0 ${f(PH - hPt)} cm /Im0 Do Q`;
+      const con = add([`<< /Length ${cs.length} >>\nstream\n${cs}\nendstream`]);
+      const ann = (p.links || []).filter(a => a && a.url).map(a => add([`<< /Type /Annot /Subtype /Link /Rect [${f(a.x * k)} ${f(PH - (a.y + a.h) * k)} ${f((a.x + a.w) * k)} ${f(PH - a.y * k)}] /Border [0 0 0] /A << /S /URI /URI (${pdfStr(a.url)}) >> >>`]));
+      return add([`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${f(PW)} ${f(PH)}] /Resources << /XObject << /Im0 ${img} 0 R >> >> /Contents ${con} 0 R${ann.length ? ` /Annots [${ann.map(i => i + ' 0 R').join(' ')}]` : ''} >>`]);
+    });
+    objs[0] = ['<< /Type /Catalog /Pages 2 0 R >>'];
+    objs[1] = [`<< /Type /Pages /Kids [${kids.map(i => i + ' 0 R').join(' ')}] /Count ${kids.length} >>`];
+    const info = add([`<< /Title (${pdfStr(titolo || '')}) /Producer (Summer Database) >>`]);
+    const out = []; let off = 0; const offs = [];
+    const push = x => { const b = typeof x === 'string' ? enc.encode(x) : x; out.push(b); off += b.length; };
+    push('%PDF-1.4\n%âãÏÓ\n');
+    objs.forEach((parts, i) => { offs.push(off); push(`${i + 1} 0 obj\n`); parts.forEach(push); push('\nendobj\n'); });
+    const xref = off;
+    push(`xref\n0 ${objs.length + 1}\n0000000000 65535 f \n` + offs.map(n => String(n).padStart(10, '0') + ' 00000 n \n').join(''));
+    push(`trailer\n<< /Size ${objs.length + 1} /Root 1 0 R /Info ${info} 0 R >>\nstartxref\n${xref}\n%%EOF\n`);
+    return new Blob(out, { type: 'application/pdf' });
+  }
+
+  window.SDBExport = { zip, docx, pdf, dataUrlBytes, scarica, nomeFile };
 })();
