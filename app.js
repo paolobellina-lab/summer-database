@@ -791,6 +791,18 @@ window.SDBStore.ready.then(function () {
     });
     const del = $('#b-del');
     if (del) del.addEventListener('click', () => {
+      // una prenotazione con scontrini non si cancella: prima si spostano gli scontrini su un'altra prenotazione o si eliminano
+      if (store.mode === 'online' && window.SDBSpese && store.listenScontrini) {
+        const msg = h => { $('#b-confirm').innerHTML = `<div class="warn err">${h}</div>`; };
+        if (spese.error || !canSee('prenotazioni')) { msg('Non posso controllare se questa prenotazione ha scontrini, quindi non la elimino. Chiedi a chi vede la pagina Prenotazioni.'); return; }
+        if (!spese.ready) { msg('Sto controllando gli scontrini di questa prenotazione: riprova tra un attimo.'); return; }
+        const t = window.SDBSpese.totaleBooking(spese.list, data().bookings, b.id);
+        if (t.n) {
+          msg(`Questa prenotazione ha <b>${t.n} ${t.n === 1 ? 'scontrino' : 'scontrini'}</b> (${window.SDBSpese.euro(t.tot)}): non si può eliminare. Prima sposta ${t.n === 1 ? 'lo scontrino' : 'gli scontrini'} su un'altra prenotazione (Modifica → Prenotazione) oppure elimina${t.n === 1 ? 'lo' : 'li'}. <button type="button" class="btn small" id="b-del-sp">Apri le spese</button>`);
+          $('#b-del-sp').onclick = () => { dlg.close(); goSpese({ spPren: b.id }); };
+          return;
+        }
+      }
       $('#b-confirm').innerHTML = `<div class="confirm-bar">Eliminare questo periodo? <button type="button" class="btn small danger solid" id="b-del-ok">Elimina</button><button type="button" class="btn small" id="b-del-no">No</button></div>`;
       $('#b-del-ok').addEventListener('click', () => { store.removeBooking(b.id); dlg.close(); toast('Periodo eliminato'); route(); });
       $('#b-del-no').addEventListener('click', () => { $('#b-confirm').innerHTML = ''; });

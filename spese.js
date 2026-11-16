@@ -21,13 +21,14 @@
   const normPren = b => ({ id: b.id, villaId: b.villaId, cliente: (b.cliente || '').trim() || 'Prenotazione senza nome', from: b.from, to: b.to, status: b.status || '' });
 
   /* Collegamento scontrino → prenotazione, nell'ordine concordato:
-     1) per ID (stessa villa e, se c'è la copia, stesso check-in)  2) stessa villa + stesse date della copia
+     1) per ID (stessa villa, anche con date cambiate)            2) stessa villa + stesse date della copia
      3) la copia, segnata "non più in calendario"                  4) null = spese generali della villa */
   function trovaPren(s, bookings) {
     if (!s.prenotazioneId && !s.prenotazione) return null;
     const snap = s.prenotazione || null;
+    // per ID (stessa villa): anche se le date della prenotazione sono state cambiate dopo lo scontrino
     const perId = s.prenotazioneId ? bookings.find(b => b.id === s.prenotazioneId && b.villaId === s.villaId) : null;
-    if (perId && (!snap || perId.from === snap.from)) return normPren(perId);
+    if (perId) return normPren(perId);
     if (snap) {
       const perDate = bookings.find(b => b.villaId === s.villaId && b.from === snap.from && b.to === snap.to);
       if (perDate) return normPren(perDate);
