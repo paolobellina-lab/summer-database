@@ -1100,3 +1100,4 @@ dialog.dlg-promo { width: min(680px, calc(100vw - 32px)); }
 .sp-rc .amount.sp-neg { color: var(--danger); }
 .b-dep-note small { display: block; padding-top: 6px; line-height: 1.35; }
 .pr-dep { margin-top: 16px; }
+.fav-chip.off { opacity: .6; border-style: dashed; }

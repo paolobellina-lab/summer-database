@@ -281,6 +281,10 @@ window.SDBStore.ready.then(function () {
     return { id: b.id, villaId: b.villaId, villa: v.name, cliente: b.cliente || 'Senza nome', from: b.from, to: b.to, righe, servizi: srvRighe, acq, totVendita, totAcquisto, haPrezzo: typeof b.prezzoVendita === 'number', deposito: typeof b.deposito === 'number' ? b.deposito : null };
   }
   // pagina Prenotazioni: riepilogo di una prenotazione, oppure l'elenco filtrato per villa
+  // account abilitati all'app Scontrini (meta/accessi) con le loro assegnazioni (meta/assegnazioni): elenco unico, senza doppio inserimento
+  const accScontrini = () => { const as = data().assegnazioni || [];
+    return (((data().accessi || {}).utenti) || []).filter(u => (u.app || []).includes('scontrini')).map(u => { const e = String(u.email || '').toLowerCase(); const a = as.find(x => x.email === e) || {};
+      return { email: e, nome: u.nome || a.nome || '', ville: a.ville || [], prenotazioni: a.prenotazioni || [] }; }); };
   const goSpese = (opts) => { if (opts.spPren) { location.hash = 'prenotazioni-' + encodeURIComponent(opts.spPren); return; } Object.assign(ui, { prVilla: opts.spVilla || '', prQ: '', prStato: '' }); saveUI(); location.hash = 'prenotazioni'; };
   // vendita (affitto + servizi a parte) e acquisto previsto (solo per chi vede i prezzi di acquisto) di una prenotazione
   const valoriPren = b => { const sv = srvTot(b); const hv = typeof b.prezzoVendita === 'number', ha = typeof b.prezzoAcquisto === 'number';
@@ -660,7 +664,7 @@ window.SDBStore.ready.then(function () {
       </div>
       <div class="pricehint" id="b-hint"></div>
       <div id="b-spese"></div>
-      ${canSee('prenotazioni') && (data().assegnazioni || []).length ? `<div class="field"><span>Assegnata a (app Scontrini)</span><div class="as-mini">${(data().assegnazioni || []).map(ac => `<label class="as-check"><input type="checkbox" data-bacc="${esc(ac.email)}" ${(ac.prenotazioni || []).includes(b.id) || (ac.ville || []).includes(b.villaId) ? 'checked' : ''} ${(ac.ville || []).includes(b.villaId) ? 'disabled title="Ha già tutta la villa"' : ''}> ${esc(ac.nome || ac.email)}</label>`).join('')}</div></div>` : ''}
+      ${canSee('prenotazioni') && accScontrini().length ? `<div class="field"><span>Assegnata a (app Scontrini)</span><div class="as-mini">${accScontrini().map(ac => `<label class="as-check"><input type="checkbox" data-bacc="${esc(ac.email)}" ${(ac.prenotazioni || []).includes(b.id) || (ac.ville || []).includes(b.villaId) ? 'checked' : ''} ${(ac.ville || []).includes(b.villaId) ? 'disabled title="Ha già tutta la villa"' : ''}> ${esc(ac.nome || ac.email)}</label>`).join('')}</div></div>` : ''}
       </section>
       <section class="dsec sec-srv"><h4>Servizi</h4>
       <div class="srv-list">
@@ -790,7 +794,8 @@ window.SDBStore.ready.then(function () {
       const accBoxes = $$('[data-bacc]', dlg);
       if (accBoxes.length) {
         const l = JSON.parse(JSON.stringify(data().assegnazioni || [])); let changed = false;
-        accBoxes.forEach(cb => { if (cb.disabled) return; const ac = l.find(z => z.email === cb.dataset.bacc); if (!ac) return; ac.prenotazioni = ac.prenotazioni || []; const has = ac.prenotazioni.includes(b.id); if (cb.checked && !has) { ac.prenotazioni.push(b.id); changed = true; } if (!cb.checked && has) { ac.prenotazioni = ac.prenotazioni.filter(z => z !== b.id); changed = true; } });
+        accBoxes.forEach(cb => { if (cb.disabled) return; let ac = l.find(z => z.email === cb.dataset.bacc);
+          if (!ac) { if (!cb.checked) return; const u = accScontrini().find(z => z.email === cb.dataset.bacc); ac = { email: cb.dataset.bacc, nome: (u && u.nome) || '', ville: [], prenotazioni: [] }; l.push(ac); } ac.prenotazioni = ac.prenotazioni || []; const has = ac.prenotazioni.includes(b.id); if (cb.checked && !has) { ac.prenotazioni.push(b.id); changed = true; } if (!cb.checked && has) { ac.prenotazioni = ac.prenotazioni.filter(z => z !== b.id); changed = true; } });
         if (changed) store.setAssegnazioni(l);
       }
       dlg.close(); toast(existing ? 'Periodo aggiornato' : 'Periodo inserito');

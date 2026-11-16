@@ -534,8 +534,16 @@
       let q = '';
       const accs = () => (data().assegnazioni || []);
       const save = l => store.setAssegnazioni(l);
+      /* elenco = gli account abilitati all'app Scontrini (Impostazioni → Account autorizzati), con le loro assegnazioni;
+         più quelli che hanno ancora assegnazioni ma non sono più abilitati (si possono togliere) */
+      const elenco = () => {
+        const as = accs(), out = scAccounts().map(u => { const e = String(u.email || '').toLowerCase(); const a = as.find(x => x.email === e) || {};
+          return { email: e, nome: u.nome || a.nome || '', ville: a.ville || [], prenotazioni: a.prenotazioni || [], abilitato: true }; });
+        as.filter(a => !out.some(x => x.email === a.email)).forEach(a => out.push(Object.assign({}, a, { abilitato: false })));
+        return out;
+      };
       const draw = () => {
-        const list = accs();
+        const list = elenco();
         if (selAcc && !list.some(a => a.email === selAcc)) selAcc = '';
         if (!selAcc && list.length) selAcc = list[0].email;
         const acc = list.find(a => a.email === selAcc);
@@ -545,11 +553,10 @@
         const nAss = a => (a.ville || []).length + ' ville · ' + (a.prenotazioni || []).length + ' prenotazioni';
         dlg.innerHTML = `<div class="dlg assign">
           <h3>Account e assegnazioni</h3>
-          <p class="note">Nell'app Scontrini un account con assegnazioni vede solo le ville e le prenotazioni scelte qui. Gli account si scelgono tra quelli autorizzati all'app Scontrini (Impostazioni → Account autorizzati).</p>
-          <div class="as-accs">${list.map(a => `<button type="button" class="fav-chip ${a.email === selAcc ? 'on' : ''}" data-acc="${esc(a.email)}">${esc(a.nome || a.email)} <em>${esc(nAss(a))}</em></button>`).join('')}${scAccounts().filter(u => !list.some(a => a.email === u.email)).length ? '<button type="button" class="fav-chip add" id="as-new">+ Aggiungi account</button>' : ''}</div>
-          <div id="as-form" hidden class="as-form"><select id="as-pick">${scAccounts().filter(u => !list.some(a => a.email === u.email)).map(u => `<option value="${esc(u.email)}">${esc(u.nome ? u.nome + ' · ' + u.email : u.email)}</option>`).join('')}</select><button type="button" class="btn small primary" id="as-add">Aggiungi</button><button type="button" class="btn small" id="as-x">Annulla</button></div>
-          ${!scAccounts().length ? '<div class="warn">Nessun account autorizzato all\'app Scontrini. Aggiungili in Impostazioni → Account autorizzati.</div>' : ''}
-          ${acc ? `<div class="as-head"><div><b>${esc(acc.nome || acc.email)}</b><small>${esc(acc.email)}</small></div><button type="button" class="btn small danger" id="as-rm">Rimuovi account</button></div>
+          <p class="note">Qui ci sono tutti gli account abilitati all'app Scontrini in Impostazioni → Account autorizzati. Ognuno vede nell'app Scontrini solo le ville e le prenotazioni spuntate qui; senza nessuna spunta non vede niente.</p>
+          <div class="as-accs">${list.map(a => `<button type="button" class="fav-chip ${a.email === selAcc ? 'on' : ''}${a.abilitato ? '' : ' off'}" data-acc="${esc(a.email)}">${esc(a.nome || a.email)} <em>${esc(a.abilitato ? nAss(a) : 'non più abilitato')}</em></button>`).join('')}</div>
+          ${!list.length ? '<div class="warn">Nessun account abilitato all\'app Scontrini. Abilitalo in Impostazioni → Account autorizzati (app "Scontrini") e comparirà qui.</div>' : ''}
+          ${acc ? `<div class="as-head"><div><b>${esc(acc.nome || acc.email)}</b><small>${esc(acc.email)}${acc.abilitato ? '' : ' · non più abilitato all\'app Scontrini'}</small></div>${acc.abilitato ? ((acc.ville || []).length || (acc.prenotazioni || []).length ? '<button type="button" class="btn small" id="as-rm">Togli tutte le spunte</button>' : '') : '<button type="button" class="btn small danger" id="as-rm">Togli dall\'elenco</button>'}</div>
           <input type="search" id="as-q" placeholder="Cerca villa o cliente" value="${esc(q)}">
           <div class="as-list">${vl.map(v => {
             const bs = bookings.filter(b => b.villaId === v.id && b.status !== 'richiesta').sort((x, y) => String(y.from).localeCompare(String(x.from)));
@@ -557,20 +564,16 @@
             return `<details class="as-villa${all || nb ? ' has' : ''}${bs.length ? ' can-open' : ''}" ${q || nb ? 'open' : ''}><summary><label class="as-check" onclick="event.stopPropagation()"><input type="checkbox" data-av="${esc(v.id)}" ${all ? 'checked' : ''}> <b>${esc(v.name)}</b></label><span>${all ? 'tutta la villa' : nb ? nb + (nb === 1 ? ' prenotazione' : ' prenotazioni') + ' su ' + bs.length : bs.length ? bs.length + (bs.length === 1 ? ' prenotazione' : ' prenotazioni') : 'nessuna prenotazione'}</span></summary>
               ${bs.length ? `<div class="as-bks">${bs.map(b => `<label class="as-check"><input type="checkbox" data-ab="${esc(b.id)}" ${all || bSet.has(b.id) ? 'checked' : ''} ${all ? 'disabled' : ''}> ${esc((b.cliente || '').trim() || 'Senza nome')} · ${dataBreve(b.from)} → ${dataBreve(b.to)}</label>`).join('')}</div>` : ''}
             </details>`;
-          }).join('')}</div>` : '<p class="note">Aggiungi il primo account per scegliere cosa può vedere.</p>'}
+          }).join('')}</div>` : ''}
           <div class="foot"><button type="button" class="btn primary" id="as-ok">Fatto</button></div></div>`;
-        const upd = fn => { const l = JSON.parse(JSON.stringify(accs())); const a = l.find(x => x.email === selAcc); if (!a) return; a.ville = a.ville || []; a.prenotazioni = a.prenotazioni || []; fn(a); save(l); draw(); };
+        // la prima spunta crea da sola la riga dell'account in meta/assegnazioni
+        const upd = fn => { const l = JSON.parse(JSON.stringify(accs())); let a = l.find(x => x.email === selAcc);
+          if (!a) { const u = list.find(x => x.email === selAcc); if (!u) return; a = { email: u.email, nome: u.nome || '', ville: [], prenotazioni: [] }; l.push(a); }
+          a.ville = a.ville || []; a.prenotazioni = a.prenotazioni || []; fn(a); save(l); draw(); };
         $$('#dlg [data-acc]').forEach(b => b.onclick = () => { selAcc = b.dataset.acc; draw(); });
-        const nb = $('#as-new'); if (nb) nb.onclick = () => { $('#as-form').hidden = false; $('#as-pick').focus(); };
-        const x = $('#as-x'); if (x) x.onclick = () => { $('#as-form').hidden = true; };
-        const ad = $('#as-add'); if (ad) ad.onclick = () => {
-          const email = $('#as-pick').value; if (!email) return;
-          const u = scAccounts().find(x => x.email === email);
-          if (accs().some(a => a.email === email)) { selAcc = email; draw(); return; }
-          save(accs().concat([{ email, nome: (u && u.nome) || '', ville: [], prenotazioni: [] }])); selAcc = email; draw();
-        };
         const rm = $('#as-rm'); if (rm) rm.onclick = () => {
-          rm.outerHTML = `<span class="as-rmq">Rimuovere? Vedrà di nuovo tutto. <button type="button" class="btn small danger solid" id="as-rmok">Rimuovi</button></span>`;
+          if (acc.abilitato) { upd(a => { a.ville = []; a.prenotazioni = []; }); return; }
+          rm.outerHTML = `<span class="as-rmq">Togliere le sue assegnazioni? <button type="button" class="btn small danger solid" id="as-rmok">Togli</button></span>`;
           $('#as-rmok').onclick = () => { save(accs().filter(a => a.email !== selAcc)); selAcc = ''; draw(); };
         };
         const qi = $('#as-q'); if (qi) qi.oninput = e => { q = e.target.value.trim().toLowerCase(); const pos = e.target.selectionStart; draw(); const n = $('#as-q'); n.focus(); n.setSelectionRange(pos, pos); };
