@@ -330,7 +330,7 @@ window.SDBStore.ready.then(function () {
     if (h === 'appunti') return viewNotes();
     // promemoria settimanale delle offerte (contatti da classificare, offerte non prese né perse): una volta per apertura dell'app
     if (!promoFatto && canSee('offerte') && window.SDBOfferte && window.SDBOfferte.promemoria) { promoFatto = true; setTimeout(() => window.SDBOfferte.promemoria({ store, toast, ui, saveUI }), 2500); }
-    if (h === 'offerte' && window.SDBOfferte) { return window.SDBOfferte.mount(main, { ui, saveUI, esc, data, store, $, $$, toast, S, settings, blocks, hiddenField, favLists, locations, normLoc, coverOf: id => (thumbs.map[id] || {}).fotoId || null }); }
+    if (h === 'offerte' && window.SDBOfferte) { return window.SDBOfferte.mount(main, { ui, saveUI, esc, data, store, $, $$, toast, S, settings, blocks, hiddenField, favLists, locations, normLoc, coverOf: id => (thumbs.map[id] || {}).fotoId || null, openBooking, canEdit, stati }); }
     if (h === 'impostazioni') return viewSettings();
     return viewAvail();
   }
@@ -630,7 +630,8 @@ window.SDBStore.ready.then(function () {
     if (existing && existing._nd) { toast('Periodo non disponibile'); return; }
     if (!existing && !canEdit()) { toast('Il tuo profilo può solo visualizzare le prenotazioni'); return; }
     const ro = !canEdit();
-    const b = existing ? Object.assign({}, existing) : { id: S.uid('b'), villaId: init.villaId, status: 'occupato', from: init.from, to: init.to, cliente: '', note: '' };
+    // init.pre: dati iniziali di una prenotazione nuova (es. da un'offerta: cliente, stato, prezzo); init.onSaved(b) dopo il salvataggio
+    const b = existing ? Object.assign({}, existing) : Object.assign({ id: S.uid('b'), villaId: init.villaId, status: 'occupato', from: init.from, to: init.to, cliente: '', note: '' }, init.pre || {});
     let color = bookingColor(b); let colorTouched = !isDefaultColor(b);
     const villas = sortedVillas();
     dlg.innerHTML = `<form class="dlg" method="dialog" id="bform">
@@ -792,7 +793,9 @@ window.SDBStore.ready.then(function () {
         accBoxes.forEach(cb => { if (cb.disabled) return; const ac = l.find(z => z.email === cb.dataset.bacc); if (!ac) return; ac.prenotazioni = ac.prenotazioni || []; const has = ac.prenotazioni.includes(b.id); if (cb.checked && !has) { ac.prenotazioni.push(b.id); changed = true; } if (!cb.checked && has) { ac.prenotazioni = ac.prenotazioni.filter(z => z !== b.id); changed = true; } });
         if (changed) store.setAssegnazioni(l);
       }
-      dlg.close(); toast(existing ? 'Periodo aggiornato' : 'Periodo inserito'); route();
+      dlg.close(); toast(existing ? 'Periodo aggiornato' : 'Periodo inserito');
+      if (typeof init.onSaved === 'function') { try { init.onSaved(Object.assign({}, b)); } catch (_) {} }
+      route();
     });
     const del = $('#b-del');
     if (del) del.addEventListener('click', () => {

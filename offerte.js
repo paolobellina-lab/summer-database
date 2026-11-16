@@ -679,7 +679,7 @@
             ${g.l.map(x => `<div class="off-rec" data-rec="${esc(x.id)}">
               <div class="off-rec-h"><div><b>${esc(x.oggetto || x.periodo || '')}</b><small class="note">${esc(dataOra(x.quando))} · ${esc((x.tipi || []).map(t => TIPI[t] || t).join(' + '))} · ${esc(x.lingua === 'en' ? 'inglese' : 'italiano')}${x.creatoDa && x.creatoDa !== String(store.user || '').toLowerCase() ? ' · ' + esc(x.creatoDa) : ''}</small>
                 <small class="off-rec-v">${(x.ville || []).map(v => `${esc(v.name)} <span class="note">${typeof v.prezzo === 'number' ? esc(S.money(v.prezzo)) : 'su richiesta'}</span>`).join(' · ')}</small></div>
-                <div class="off-rec-b">${selEsito(x)}<button type="button" class="btn small" data-act="vedi">${aperte['r' + x.id] ? 'Chiudi' : 'Vedi'}</button><button type="button" class="btn small" data-act="copia">Copia per email</button><button type="button" class="btn small" data-act="riapri">Riapri</button><button type="button" class="btn small danger" data-act="del">Elimina</button></div></div>
+                <div class="off-rec-b">${selEsito(x)}<button type="button" class="btn small" data-act="vedi">${aperte['r' + x.id] ? 'Chiudi' : 'Vedi'}</button><button type="button" class="btn small" data-act="copia">Copia per email</button><button type="button" class="btn small" data-act="riapri">Riapri</button>${ctx.openBooking && ctx.canEdit && ctx.canEdit() ? `<button type="button" class="btn small${(x.prenotazioni || []).length ? '' : ' primary'}" data-act="pren">${(x.prenotazioni || []).length ? 'Prenotata ✓' : 'Prenota'}</button>` : ''}<button type="button" class="btn small danger" data-act="del">Elimina</button></div></div>
               ${aperte['r' + x.id] ? `<div class="off-prev off-rec-prev">${x.html || '<p class="note">Anteprima non disponibile.</p>'}</div>` : ''}</div>`).join('')}
           </details>`; }).join('') : `<p class="note">${storico.length ? 'Nessuna offerta corrisponde alla ricerca.' : 'Ancora nessuna offerta salvata: compariranno qui quando copi una mail, mandi un WhatsApp o scarichi Word o PDF.'}</p>`}
       </section>`;
@@ -723,11 +723,45 @@
       const tipo = c.tipo === b.dataset.tipo ? '' : b.dataset.tipo;
       setTipo(store, c, tipo).then(() => toast(tipo ? `${c.nome || c.email || c.tel}: ${tipo === 'lead' ? 'Lead' : 'Prospect'}` : 'Tipo tolto'), err => toast('Non salvato: ' + (err && err.code === 'permission-denied' ? 'solo chi ha fatto le offerte o ha accesso completo' : (err && err.message || err))));
     });
+    /* offerta → prenotazione: si sceglie la villa tra quelle proposte e lo stato (Opzione, Confermato…), poi si apre la
+       finestra della prenotazione già compilata (villa, date del periodo dell'offerta, cliente, prezzo) da controllare e salvare.
+       Salvata, l'offerta ricorda la prenotazione (prenotazioni: [id]) e, se lo stato è confermato, diventa "Presa". */
+    function daOffertaAPrenotazione(x) {
+      const tar = (x.stato && x.stato.tariff) || x.tariffa || o.tariff, idx = x.stato && typeof x.stato.idx === 'number' ? x.stato.idx : null;
+      const vl = (x.ville || []).map(r => { const v = data().villas.find(z => z.id === r.id); const p = v && idx != null ? S.periodsFor(st, v, tar)[idx] : null; return { r, v, p }; }).filter(z => z.v);
+      if (!vl.length) { toast('Le ville di questa offerta non ci sono più'); return; }
+      const fatte = (x.prenotazioni || []).map(id => data().bookings.find(bk => bk.id === id)).filter(Boolean);
+      const stList = (ctx.stati ? ctx.stati() : []).filter(z => z.key !== 'owner');
+      const d = $('#dlg');
+      d.innerHTML = `<form class="dlg" id="op-form"><h3>Trasforma in prenotazione</h3>
+        <p class="note">${esc(x.cliente || x.email || x.telefono || 'Cliente')} · ${esc(x.periodo || '')}</p>
+        ${fatte.length ? `<div class="warn">Da questa offerta c'è già ${fatte.length === 1 ? 'una prenotazione' : fatte.length + ' prenotazioni'}: ${fatte.map(bk => esc((data().villas.find(v => v.id === bk.villaId) || {}).name || '') + ' · ' + esc(S.dm(bk.from)) + ' → ' + esc(S.dm(bk.to))).join(', ')}.</div>` : ''}
+        <section class="dsec sec-date"><h4>Villa</h4><div class="op-ville">
+          ${vl.map((z, i) => `<label class="flag"><input type="radio" name="op-v" value="${esc(z.v.id)}" ${i === 0 ? 'checked' : ''}><span><b>${esc(z.v.name)}</b><small>${z.p ? esc(S.dm(z.p.from)) + ' → ' + esc(S.dm(z.p.to)) : 'date da scegliere'} · ${typeof z.r.prezzo === 'number' ? esc(S.money(z.r.prezzo)) : 'prezzo su richiesta'}</small></span></label>`).join('')}</div></section>
+        <section class="dsec sec-st"><h4>Stato</h4><div class="seg" id="op-st">${stList.map(z => `<button type="button" data-st="${esc(z.key)}" class="${z.key === 'opzione' ? 'on' : ''}">${esc(z.label)}</button>`).join('')}</div>
+          <p class="note">Nella finestra che si apre controlli date, prezzo e servizi prima di salvare. Il prezzo è quello dell'offerta (affitto più servizi a parte).</p></section>
+        <div class="foot"><button type="button" class="btn" id="op-no">Annulla</button><button type="submit" class="btn primary">Continua</button></div></form>`;
+      let stato = stList.some(z => z.key === 'opzione') ? 'opzione' : (stList[0] || {}).key || 'occupato';
+      $$('#op-st button', d).forEach(bt => bt.onclick = () => { stato = bt.dataset.st; $$('#op-st button', d).forEach(z => z.classList.toggle('on', z === bt)); });
+      $('#op-no').onclick = () => d.close();
+      $('#op-form').onsubmit = ev => { ev.preventDefault();
+        const z = vl.find(y => y.v.id === (d.querySelector('[name="op-v"]:checked') || {}).value) || vl[0]; d.close();
+        const from = z.p ? z.p.from : S.iso(new Date()), to = z.p ? z.p.to : S.iso(new Date(Date.now() + 7 * 864e5));
+        ctx.openBooking({ villaId: z.v.id, from, to,
+          pre: { cliente: x.cliente || '', status: stato, prezzoVendita: typeof z.r.prezzo === 'number' ? z.r.prezzo : undefined, note: `Da offerta del ${dataBreve(x.quando)}${x.email ? ' · ' + x.email : ''}${x.telefono ? ' · ' + x.telefono : ''}` },
+          onSaved: bk => { const patch = { prenotazioni: Array.from(new Set((x.prenotazioni || []).concat(bk.id))) };
+            const conf = (ctx.stati ? ctx.stati() : []).find(s0 => s0.key === bk.status);
+            if (bk.status === 'confermato' || bk.status === 'occupato' || (conf && /conferm/i.test(conf.label))) { patch.esito = 'presa'; patch.esitoIl = new Date().toISOString(); }
+            Promise.resolve(store.updateOfferta(x.id, patch)).then(() => toast(patch.esito ? 'Prenotazione inserita: offerta segnata come presa' : 'Prenotazione inserita e collegata all\'offerta'), () => {}); } });
+      };
+      if (d.showModal) d.showModal(); else d.setAttribute('open', '');
+    }
     $('#off-storico').addEventListener('click', async e => {
       const b = e.target.closest('[data-act]'); if (!b) return; const id = b.closest('[data-rec]').dataset.rec; const x = storico.find(y => y.id === id); if (!x) return;
       if (b.dataset.act === 'vedi') { aperte['r' + id] = !aperte['r' + id]; drawStorico(); }
       if (b.dataset.act === 'copia') { const txt = (() => { const d = document.createElement('div'); d.innerHTML = x.html || ''; return d.innerText; })();
         try { await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([x.html || ''], { type: 'text/html' }), 'text/plain': new Blob([txt], { type: 'text/plain' }) })]); toast('Offerta copiata: incollala in Gmail'); } catch (_) { toast('Il browser non ha permesso di copiare'); } }
+      if (b.dataset.act === 'pren') { daOffertaAPrenotazione(x); return; }
       if (b.dataset.act === 'riapri') { if (!(await (window.SDBConferma ? window.SDBConferma : t => Promise.resolve(confirm(t)))("L'offerta che stai preparando verrà sostituita da questa.", { titolo: "Riaprire l'offerta?", ok: 'Riapri' }))) return;
         Object.keys(o).forEach(k => { if (!['tab', 'q', 'f', 'fOpen', 'persOpen'].includes(k)) delete o[k]; }); Object.assign(o, JSON.parse(JSON.stringify(x.stato || {})), { tab: 'nuova', ultima: null }); saveUI(); mount(main, ctx); }
       if (b.dataset.act === 'del') { if (!(await (window.SDBConferma ? window.SDBConferma : t => Promise.resolve(confirm(t)))('L\'offerta verrà tolta dallo storico.', { titolo: "Eliminare l'offerta?", ok: 'Elimina', danger: true }))) return; try { await store.deleteOfferta(id); toast('Offerta eliminata'); } catch (err) { toast('Errore: ' + (err && err.message || err)); } }
