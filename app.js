@@ -124,7 +124,7 @@ window.SDBStore.ready.then(function () {
         <a href="#disponibilita" data-r="disponibilita"><span class="l-full">Disponibilità</span><span class="l-short">Calendario</span></a>
         <a href="#ville" data-r="ville">Ville</a>
         <a href="#offerte" data-r="offerte">Offerte</a>
-        <a href="#spese" data-r="spese">Spese</a>
+        <a href="#prenotazioni" data-r="prenotazioni"><span class="l-full">Prenotazioni</span><span class="l-short">Prenot.</span></a>
         <a href="#appunti" data-r="appunti">Appunti</a>
         <a href="#impostazioni" data-r="impostazioni"><span class="l-full">Impostazioni</span><span class="l-short">Impost.</span></a>
       </nav>
@@ -138,14 +138,14 @@ window.SDBStore.ready.then(function () {
   /* Profilo dell'account collegato (store.profile, deciso all'accesso):
      full = vede e modifica tutto; altrimenti acquisto (prezzi di acquisto), modifica (prenotazioni),
      dettaglio (false = prenotazioni solo come ND), pagine visibili, ville condivise. */
-  const PAGES = [['disponibilita', 'Disponibilità'], ['ville', 'Ville'], ['offerte', 'Offerte'], ['spese', 'Spese'], ['appunti', 'Appunti'], ['impostazioni', 'Impostazioni']];
+  const PAGES = [['disponibilita', 'Disponibilità'], ['ville', 'Ville'], ['offerte', 'Offerte'], ['prenotazioni', 'Prenotazioni'], ['appunti', 'Appunti'], ['impostazioni', 'Impostazioni']];
   const ME = () => store.profile || { full: true, acquisto: true, modifica: true, dettaglio: true, pagine: null, ville: [] };
   const isFull = () => !!ME().full;
   const canAcq = () => isFull() || !!ME().acquisto;
   const canEdit = () => isFull() || (!!ME().modifica && !!ME().dettaglio);
   const canDetail = () => isFull() || !!ME().dettaglio;
   const isAdmin = () => store.mode !== 'online' || !!ME().admin;
-  const allowedPages = () => isFull() ? PAGES.map(p => p[0]) : PAGES.map(p => p[0]).filter(k => (ME().pagine || []).includes(k));
+  const allowedPages = () => isFull() ? PAGES.map(p => p[0]) : PAGES.map(p => p[0]).filter(k => (ME().pagine || []).map(x => x === 'spese' ? 'prenotazioni' : x).includes(k));
   const canSee = p => store.mode !== 'online' || allowedPages().includes(p);
 
   /* ---------- Backup ----------
@@ -183,7 +183,7 @@ window.SDBStore.ready.then(function () {
   const speseChanged = () => { if (spesePage) spesePage.render(); speseHooks.forEach(f => { try { f(); } catch (_) {} }); };
   let speseUnsub = null;
   const startSpese = () => {
-    if (speseUnsub || !(store.mode === 'online' && store.listenScontrini && window.SDBSpese) || !canSee('spese')) return;
+    if (speseUnsub || !(store.mode === 'online' && store.listenScontrini && window.SDBSpese) || !canSee('prenotazioni')) return;
     speseUnsub = store.listenScontrini(l => { spese.list = isFull() ? l : l.filter(x => data().villas.some(v => v.id === x.villaId)); spese.ready = true; spese.error = null; speseChanged(); }, err => { spese.error = err; speseChanged(); });
   };
   const stopSpese = () => { if (speseUnsub) { try { speseUnsub(); } catch (_) {} speseUnsub = null; spese.list = []; spese.ready = false; } };
@@ -279,7 +279,11 @@ window.SDBStore.ready.then(function () {
     const totAcquisto = acq ? (typeof b.prezzoAcquisto === 'number' ? b.prezzoAcquisto : 0) + sv.acquisto : null;
     return { id: b.id, villaId: b.villaId, villa: v.name, cliente: b.cliente || 'Senza nome', from: b.from, to: b.to, righe, servizi: srvRighe, acq, totVendita, totAcquisto, haPrezzo: typeof b.prezzoVendita === 'number' };
   }
-  const goSpese = (opts) => { Object.assign(ui, { spVilla: '', spPren: '', spQ: '' }, opts); saveUI(); location.hash = 'spese'; };
+  // pagina Prenotazioni: riepilogo di una prenotazione, oppure l'elenco filtrato per villa
+  const goSpese = (opts) => { if (opts.spPren) { location.hash = 'prenotazioni-' + encodeURIComponent(opts.spPren); return; } Object.assign(ui, { prVilla: opts.spVilla || '', prQ: '', prStato: '' }); saveUI(); location.hash = 'prenotazioni'; };
+  // vendita (affitto + servizi a parte) e acquisto previsto (solo per chi vede i prezzi di acquisto) di una prenotazione
+  const valoriPren = b => { const sv = srvTot(b); const hv = typeof b.prezzoVendita === 'number', ha = typeof b.prezzoAcquisto === 'number';
+    return { vendita: hv || sv.vendita ? (hv ? b.prezzoVendita : 0) + sv.vendita : null, acquisto: canAcq() && (ha || sv.acquisto) ? (ha ? b.prezzoAcquisto : 0) + sv.acquisto : null }; };
   // pulsante "Installa app" (Chrome/Edge su Android, Windows, Mac)
   let installEvt = window.__sdbInstall || null;
   const isInstalled = () => { try { return window.matchMedia('(display-mode: standalone)').matches || window.matchMedia('(display-mode: minimal-ui)').matches || navigator.standalone === true; } catch (_) { return false; } };
@@ -298,13 +302,17 @@ window.SDBStore.ready.then(function () {
     sy.querySelector('span').textContent = store.mode === 'online' ? (store.online === false ? 'Offline · si sincronizza appena torna la rete' : 'Online') : (store.canPersist ? 'Salvato su questo dispositivo' : 'Memoria non disponibile');
   }
 
+  // contesto della pagina Prenotazioni (spese.js)
+  const ctxPren = () => ({ ui, saveUI, esc, data, spese, store, $, $$, toast, schedaPren, compressImage, canAcq, canEdit, isFull, S,
+    stati, statoLabel, bookingColor, valori: valoriPren, openBooking, cover: id => (thumbs.map[id] || {}).thumb || '', onThumbs: f => { villasRedraw = f; } });
   /* ---------- router ---------- */
   function route() {
     let h = (location.hash || '#disponibilita').slice(1);
     spesePage = null; speseHooks.clear(); villasRedraw = null;
-    if (canSee('spese')) startSpese(); else stopSpese();
+    if (canSee('prenotazioni')) startSpese(); else stopSpese();
     // pagina non permessa a questo account: vado alla prima consentita
-    const pageOf = h.startsWith('villa-') ? (canSee('ville') ? 'ville' : 'disponibilita') : h.startsWith('impostazioni-') ? 'impostazioni' : (PAGES.some(p => p[0] === h) ? h : 'disponibilita');
+    if (h === 'spese' || h.startsWith('spese-')) { location.hash = 'prenotazioni'; return; }
+    const pageOf = h.startsWith('villa-') ? (canSee('ville') ? 'ville' : 'disponibilita') : h.startsWith('impostazioni-') ? 'impostazioni' : h.startsWith('prenotazioni-') ? 'prenotazioni' : (PAGES.some(p => p[0] === h) ? h : 'disponibilita');
     if (!canSee(pageOf)) {
       const first = allowedPages()[0];
       if (!first) { refreshShell(''); main.innerHTML = `<div class="page"><div class="wrap"><div class="card"><p class="note">${ME().none ? 'Al tuo account non è ancora stato assegnato un profilo. Chiedi all\'amministratore.' : 'Al tuo profilo non è stata assegnata nessuna pagina. Chiedi all\'amministratore.'}</p></div></div></div>`; return; }
@@ -313,9 +321,10 @@ window.SDBStore.ready.then(function () {
     }
     if (h.startsWith('villa-')) { refreshShell('villa'); return viewVilla(h.slice(6)); }
     if (h.startsWith('impostazioni-')) { refreshShell('impostazioni'); return viewSettings(h.slice(13)); }
+    if (h.startsWith('prenotazioni-') && window.SDBSpese) { refreshShell('prenotazioni'); spesePage = window.SDBSpese.mount(main, ctxPren(), decodeURIComponent(h.slice(13))); return; }
     refreshShell(h);
     if (h === 'ville') return viewVillas();
-    if (h === 'spese' && window.SDBSpese) { spesePage = window.SDBSpese.mount(main, { ui, saveUI, esc, data, spese, store, $, $$, toast, schedaPren, compressImage, canAcq }); return; }
+    if (h === 'prenotazioni' && window.SDBSpese) { spesePage = window.SDBSpese.mount(main, ctxPren(), ''); return; }
     if (h === 'appunti') return viewNotes();
     // promemoria settimanale delle offerte (contatti da classificare, offerte non prese né perse): una volta per apertura dell'app
     if (!promoFatto && canSee('offerte') && window.SDBOfferte && window.SDBOfferte.promemoria) { promoFatto = true; setTimeout(() => window.SDBOfferte.promemoria({ store, toast, ui, saveUI }), 2500); }
@@ -644,7 +653,7 @@ window.SDBStore.ready.then(function () {
       </div>
       <div class="pricehint" id="b-hint"></div>
       <div id="b-spese"></div>
-      ${canSee('spese') && (data().assegnazioni || []).length ? `<div class="field"><span>Assegnata a (app Scontrini)</span><div class="as-mini">${(data().assegnazioni || []).map(ac => `<label class="as-check"><input type="checkbox" data-bacc="${esc(ac.email)}" ${(ac.prenotazioni || []).includes(b.id) || (ac.ville || []).includes(b.villaId) ? 'checked' : ''} ${(ac.ville || []).includes(b.villaId) ? 'disabled title="Ha già tutta la villa"' : ''}> ${esc(ac.nome || ac.email)}</label>`).join('')}</div></div>` : ''}
+      ${canSee('prenotazioni') && (data().assegnazioni || []).length ? `<div class="field"><span>Assegnata a (app Scontrini)</span><div class="as-mini">${(data().assegnazioni || []).map(ac => `<label class="as-check"><input type="checkbox" data-bacc="${esc(ac.email)}" ${(ac.prenotazioni || []).includes(b.id) || (ac.ville || []).includes(b.villaId) ? 'checked' : ''} ${(ac.ville || []).includes(b.villaId) ? 'disabled title="Ha già tutta la villa"' : ''}> ${esc(ac.nome || ac.email)}</label>`).join('')}</div></div>` : ''}
       </section>
       <section class="dsec sec-srv"><h4>Servizi</h4>
       <div class="srv-list">
@@ -757,7 +766,7 @@ window.SDBStore.ready.then(function () {
       paint();
     };
     f.addEventListener('input', check); f.addEventListener('change', check); check();
-    if (existing && store.mode === 'online' && window.SDBSpese && canSee('spese')) {
+    if (existing && store.mode === 'online' && window.SDBSpese && canSee('prenotazioni')) {
       const drawSp = () => {
         const el = $('#b-spese'); if (!el) return;
         if (!spese.ready) { el.innerHTML = ''; return; }
@@ -1174,7 +1183,7 @@ window.SDBStore.ready.then(function () {
         : '<div class="note">Nessun periodo inserito. Usa “+ Periodo” o clicca sul calendario.</div>';
     };
     drawBookings();
-    if (store.mode === 'online' && window.SDBSpese && canSee('spese')) {
+    if (store.mode === 'online' && window.SDBSpese && canSee('prenotazioni')) {
       const anno = new Date().getFullYear();
       const drawSp = () => {
         const el = $('#v-spese'); if (!el || !spese.ready) return;

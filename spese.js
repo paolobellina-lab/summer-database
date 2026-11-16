@@ -1,7 +1,10 @@
 /*
- * Pagina "Spese": scontrini dell'app Scontrini. Si possono inserire nuove spese, modificarle (con storico),
- * cancellarle e aggiungere allegati (foto o PDF). Esporta in Excel (CSV) o in Word per prenotazione,
- * con uno zip delle foto e degli allegati. "scontrini_foto" e "scontrini_allegati" si leggono solo quando servono.
+ * Pagina "Prenotazioni" (#prenotazioni, prima "Spese"): le prenotazioni della stagione come schede (stessa grafica
+ * delle ville), dalle prossime alle passate, con vendita, acquisto previsto e spese reali (scontrini dell'app Scontrini).
+ * Cliccando una scheda (#prenotazioni-<chiave>) si apre il riepilogo: valori, servizi e le singole spese, con
+ * Nuova spesa, Stampa, Esporta. Le spese si modificano (con storico), si cancellano e hanno allegati (foto o PDF).
+ * Esporta: Excel (CSV) o Word per prenotazione con lo zip delle foto. "scontrini_foto" e "scontrini_allegati"
+ * si leggono solo quando servono.
  */
 (function () {
   const fmtEuro = new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' });
@@ -43,184 +46,34 @@
     return { tot: somma(r), n: r.length };
   }
 
-  const OPEN_KEY = 'summer-db-spese-aperti';
-  let aperti = new Set();
-  try { aperti = new Set(JSON.parse(localStorage.getItem(OPEN_KEY) || '[]')); } catch (_) {}
-  const saveOpen = () => { try { localStorage.setItem(OPEN_KEY, JSON.stringify([...aperti])); } catch (_) {} };
+  const ggMese = s => (s ? daIso(s).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' }) : '');
+  const nNotti = (a, b) => Math.round((daIso(b) - daIso(a)) / 864e5);
+  const segno = n => (n > 0 ? '+' : n < 0 ? '−' : '') + euro(Math.abs(n));
 
-  function periodo(ui) {
-    const t = new Date(), y = t.getFullYear();
-    switch (ui.spPeriodo) {
-      case 'mese': return [isoLocale(new Date(y, t.getMonth(), 1)), null];
-      case '3m': return [isoLocale(new Date(y, t.getMonth() - 2, 1)), null];
-      case 'anno': return [`${y}-01-01`, null];
-      case 'annoprec': return [`${y - 1}-01-01`, `${y - 1}-12-31`];
-      case 'custom': return [ui.spDa || null, ui.spA || null];
-      default: return [null, null];
-    }
-  }
-
-  /* ---------------------------------------------------------------- pagina */
-  function mount(main, ctx) {
-    const { ui, saveUI, esc, data, spese, store, $, $$, toast } = ctx;
+  /* ---------------------------------------------------------------- finestre delle spese (nuova, modifica, allegati, esporta) */
+  function azioni(ctx) {
+    const { ui, esc, data, spese, store, $, $$, toast } = ctx;
     const X = window.SDBExport;
-    if (!ui.spPeriodo) ui.spPeriodo = 'anno';
-    let ordinati = [];
-
-    if (store.mode !== 'online') {
-      main.innerHTML = `<div class="page"><div class="wrap"><div class="head"><div><h1>Spese</h1><div class="sub">Scontrini inseriti con l'app Scontrini</div></div></div>
-        <div class="card"><p class="note">Disponibile solo con i dati online: apri l'app dall'indirizzo pubblicato e accedi con Google.</p></div></div></div>`;
-      return;
-    }
-
     const ville = () => data().villas.slice().sort((a, b) => String(a.name).localeCompare(String(b.name), 'it', { numeric: true }));
     const nomeVilla = id => { const v = data().villas.find(x => x.id === id); return v ? v.name : 'Villa ' + id; };
     const descPren = o => { const p = trovaPren(o, data().bookings); return nomeVilla(o.villaId) + ' · ' + (p ? p.cliente + ' ' + dataBreve(p.from) : 'spese generali'); };
-    const P = [['tutto', 'Tutto'], ['mese', 'Questo mese'], ['3m', 'Ultimi 3 mesi'], ['anno', "Quest'anno"], ['annoprec', 'Anno scorso'], ['custom', 'Scegli date…']];
-
-    main.innerHTML = `<div class="page"><div class="wrap">
-      <div class="head"><div><h1>Spese</h1><div class="sub">Scontrini dell'app Scontrini · modificabili, aggiornati in tempo reale</div></div>
-        <div class="actions no-print">
-          <button class="btn primary" type="button" id="sp-new">+ Nuova spesa</button>
-          <button class="btn" type="button" id="sp-assign">Account e assegnazioni</button>
-          <button class="btn" type="button" id="sp-exp">Espandi tutto</button>
-          <button class="btn" type="button" id="sp-csv">Esporta</button>
-          <button class="btn" type="button" id="sp-print">Stampa</button>
-        </div></div>
-      <div class="card sp-filters no-print">
-        <label class="field"><span>Villa</span><select id="sp-villa"><option value="">Tutte le ville</option>${ville().map(v => `<option value="${esc(v.id)}" ${ui.spVilla === v.id ? 'selected' : ''}>${esc(v.name)}</option>`).join('')}</select></label>
-        <label class="field sp-pren"><span>Prenotazione</span><select id="sp-pren"><option value="">Tutte le prenotazioni</option></select></label>
-        <label class="field"><span>Periodo</span><select id="sp-per">${P.map(([k, l]) => `<option value="${k}" ${ui.spPeriodo === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
-        <label class="field sp-date" ${ui.spPeriodo === 'custom' ? '' : 'hidden'}><span>Dal</span><input type="date" id="sp-da" value="${esc(ui.spDa || '')}"></label>
-        <label class="field sp-date" ${ui.spPeriodo === 'custom' ? '' : 'hidden'}><span>Al</span><input type="date" id="sp-a" value="${esc(ui.spA || '')}"></label>
-        <label class="field sp-q"><span>Cerca</span><input type="search" id="sp-q" placeholder="Motivo, categoria o cliente" value="${esc(ui.spQ || '')}"></label>
-      </div>
-      <div class="sp-summary"><div><b id="sp-tot">€ 0,00</b><span>Totale spese</span></div><div><b id="sp-n">0</b><span>Scontrini</span></div><div><b id="sp-p">0</b><span>Prenotazioni con spese</span></div></div>
-      <div id="sp-out"></div>
-    </div></div>`;
-
-    const out = $('#sp-out');
     const nAll = s => (s.hasFoto ? 1 : 0) + Math.max(0, Number(s.allegati) || 0);
-    function render() {
-      if (!document.body.contains(out)) return;
-      const bookings = data().bookings;
-      if (spese.error) { out.innerHTML = `<div class="card"><p class="note">Non riesco a leggere gli scontrini: ${esc(spese.error.code === 'permission-denied' ? 'questo account non è autorizzato.' : spese.error.message || spese.error)}</p></div>`; return; }
-      if (!spese.ready) { out.innerHTML = '<p class="note">Caricamento scontrini…</p>'; return; }
-      const [da, a] = periodo(ui);
-      const q = (ui.spQ || '').trim().toLowerCase();
-      const vf = ui.spVilla || '';
-      const only = ui.spPren || '';
-      const prenById = new Map();
-      const prenDi = s => { if (!('_p' in s)) { s._p = trovaPren(s, bookings); } if (s._p) prenById.set(s._p.id, s._p); return s._p; };
-      const lista = spese.list.map(s => Object.assign({}, s));
+    const A = { ville, nomeVilla, nAll, righe: () => [] };
 
-      const righe = lista.filter(s => {
-        if (vf && s.villaId !== vf) return false;
-        if (da && String(s.data) < da) return false;
-        if (a && String(s.data) > a) return false;
-        const p = prenDi(s);
-        if (only === '__gen' && p) return false;
-        if (only && only !== '__gen' && (!p || p.id !== only)) return false;
-        if (q && !`${s.motivo || ''} ${s.categoria || ''} ${p ? p.cliente : ''}`.toLowerCase().includes(q)) return false;
-        return true;
-      });
-
-      // menu "Prenotazione": prenotazioni che hanno scontrini (della villa scelta, se c'è)
-      const opts = new Map(); let hasGen = false;
-      lista.forEach(s => {
-        if (vf && s.villaId !== vf) return;
-        const p = prenDi(s);
-        if (!p) { hasGen = true; return; }
-        if (!opts.has(p.id)) opts.set(p.id, { p, villa: s.villaId });
-      });
-      if (only && only !== '__gen' && !opts.has(only)) { const bb = bookings.find(x => x.id === only); if (bb) opts.set(only, { p: normPren(bb), villa: bb.villaId }); }
-      const ordered = [...opts.values()].sort((x, y) => String(y.p.from).localeCompare(String(x.p.from)));
-      const optHtml = '<option value="">Tutte le prenotazioni</option>'
-        + (hasGen || only === '__gen' ? `<option value="__gen" ${only === '__gen' ? 'selected' : ''}>Spese generali della villa</option>` : '')
-        + ordered.map(({ p, villa }) => `<option value="${esc(p.id)}" ${only === p.id ? 'selected' : ''}>${vf ? '' : esc(nomeVilla(villa)) + ' · '}${esc(p.cliente)} · ${dataBreve(p.from)} → ${dataBreve(p.to)}${p.nonInCalendario ? ' (non più in calendario)' : ''}</option>`).join('');
-      const sel = $('#sp-pren');
-      if (sel && sel.dataset.h !== optHtml) { sel.innerHTML = optHtml; sel.dataset.h = optHtml; sel.value = only || ''; }
-
-      const perVilla = new Map();
-      righe.forEach(s => {
-        const pid = (prenDi(s) || {}).id || '';
-        if (!perVilla.has(s.villaId)) perVilla.set(s.villaId, new Map());
-        const g = perVilla.get(s.villaId); if (!g.has(pid)) g.set(pid, []); g.get(pid).push(s);
-      });
-      const villeOrd = [...perVilla.keys()].sort((x, y) => String(nomeVilla(x)).localeCompare(String(nomeVilla(y)), 'it', { numeric: true }));
-
-      ordinati = []; let html = '', nPren = 0;
-      villeOrd.forEach(vid => {
-        const gruppi = perVilla.get(vid);
-        const pids = [...gruppi.keys()].filter(Boolean).sort((x, y) => String(prenById.get(y).from).localeCompare(String(prenById.get(x).from)));
-        if (gruppi.has('')) pids.push('');
-        nPren += pids.filter(Boolean).length;
-        html += `<section class="sp-villa"><div class="sp-villa-head"><h2><a href="#villa-${esc(vid)}">${esc(nomeVilla(vid))}</a></h2><span class="amount">${euro(somma([...gruppi.values()].flat()))}</span></div>`;
-        pids.forEach(pid => {
-          const l = gruppi.get(pid).sort((x, y) => String(x.data).localeCompare(String(y.data)));
-          const p = prenById.get(pid);
-          const key = vid + '|' + (pid || 'generali');
-          const open = aperti.has(key) || !!only;
-          const cats = {}; l.forEach(s => { const c = s.categoria || 'Altro'; cats[c] = (cats[c] || 0) + (Number(s.importo) || 0); });
-          l.forEach(s => ordinati.push({ s, villa: nomeVilla(vid), p }));
-          html += `<details class="sp-group${p ? '' : ' generale'}${p && p.nonInCalendario ? ' old' : ''}" data-key="${esc(key)}" ${open ? 'open' : ''}>
-            <summary>
-              <div class="sp-main"><strong>${p ? esc(p.cliente) : 'Spese generali della villa'}</strong>
-                <span>${p ? `${dataBreve(p.from)} → ${dataBreve(p.to)}${p.nonInCalendario ? ' · <em>non più in calendario</em>' : ''}` : 'Non legate a una prenotazione'} · ${l.length} ${l.length === 1 ? 'scontrino' : 'scontrini'}</span></div>
-              <span class="amount">${euro(somma(l))}</span>
-            </summary>
-            <div class="sp-body">
-              <div class="sp-cats">${Object.entries(cats).sort((x, y) => y[1] - x[1]).map(([c, t]) => `<span>${esc(c)} <b>${euro(t)}</b></span>`).join('')}</div>
-              ${l.map(s => `<div class="sp-rc${Array.isArray(s.storico) && s.storico.length ? ' edited' : ''}">
-                <span class="d">${dataIt(s.data)}</span>
-                <div class="m">${esc(s.motivo || '—')}<small>${esc(s.categoria || '')}${s.creatoDa ? ' · ' + esc(s.creatoDa) : ''}${s.modificatoDa ? ` · <span class="sp-mod">modificato da ${esc(s.modificatoDa)}${s.modificatoIl ? ' il ' + esc(quando(s.modificatoIl)) : ''}</span>` : ''}</small></div>
-                <span class="amount">${euro(s.importo)}</span>
-                <div class="sp-act no-print">
-                  <button class="btn small" type="button" data-foto="${esc(s.id)}">${nAll(s) ? 'Allegati · ' + nAll(s) : '+ Allegato'}</button>
-                  <button class="btn small" type="button" data-edit="${esc(s.id)}">Modifica</button>
-                </div>
-                ${Array.isArray(s.storico) && s.storico.length ? `<div class="sp-old">${s.storico.slice().reverse().map(o => `<div class="sp-old-row"><s><span>${dataIt(o.data)}</span> ${esc(o.motivo || '—')} · ${esc(o.categoria || '')}${o.villaId !== s.villaId || (o.prenotazioneId || null) !== (s.prenotazioneId || null) ? ' · ' + esc(descPren(o)) : ''} · <b>${euro(o.importo)}</b></s><small>versione sostituita${o.sostituitoDa ? ' da ' + esc(o.sostituitoDa) : ''}${o.sostituitoIl ? ' il ' + esc(quando(o.sostituitoIl)) : ''}</small></div>`).join('')}</div>` : ''}
-              </div>`).join('')}
-            </div>
-          </details>`;
-        });
-        html += '</section>';
-      });
-      out.innerHTML = html || '<div class="empty">Nessuno scontrino per questi filtri.</div>';
-      $('#sp-tot').textContent = euro(somma(righe));
-      $('#sp-n').textContent = righe.length;
-      $('#sp-p').textContent = nPren;
-      const all = $$('details.sp-group', out);
-      $('#sp-exp').textContent = all.length && all.every(d => d.open) ? 'Comprimi tutto' : 'Espandi tutto';
-    }
-
-    // filtri
-    const bind = (id, k, ev) => $('#' + id).addEventListener(ev, e => { ui[k] = e.target.value; saveUI(); render(); });
-    $('#sp-villa').addEventListener('change', e => { ui.spVilla = e.target.value; ui.spPren = ''; saveUI(); render(); });
-    bind('sp-pren', 'spPren', 'change'); bind('sp-da', 'spDa', 'change'); bind('sp-a', 'spA', 'change');
-    let t; $('#sp-q').addEventListener('input', e => { ui.spQ = e.target.value; saveUI(); clearTimeout(t); t = setTimeout(render, 120); });
-    $('#sp-per').addEventListener('change', e => { ui.spPeriodo = e.target.value; saveUI(); $$('.sp-date').forEach(x => { x.hidden = ui.spPeriodo !== 'custom'; }); render(); });
-
-    out.addEventListener('toggle', e => {
-      const k = e.target.dataset && e.target.dataset.key; if (!k) return;
-      if (e.target.open) aperti.add(k); else aperti.delete(k); saveOpen();
-    }, true);
-    $('#sp-exp').addEventListener('click', () => {
-      const all = $$('details.sp-group', out); const apri = all.some(d => !d.open);
-      all.forEach(d => { d.open = apri; const k = d.dataset.key; if (apri) aperti.add(k); else aperti.delete(k); });
-      saveOpen(); $('#sp-exp').textContent = apri ? 'Comprimi tutto' : 'Espandi tutto';
-    });
-    $('#sp-print').addEventListener('click', () => { $$('details.sp-group', out).forEach(d => { d.open = true; }); setTimeout(() => window.print(), 60); });
-
-    // account dell'app Scontrini: quali ville e prenotazioni vede ciascuno
-    $('#sp-assign').addEventListener('click', () => openAssign(ctx));
+    // una riga di spesa (con la versione precedente barrata in rosso se è stata modificata)
+    A.rigaSpesa = s => `<div class="sp-rc${Array.isArray(s.storico) && s.storico.length ? ' edited' : ''}">
+      <span class="d">${dataIt(s.data)}</span>
+      <div class="m">${esc(s.motivo || '—')}<small>${esc(s.categoria || '')}${s.creatoDa ? ' · ' + esc(s.creatoDa) : ''}${s.modificatoDa ? ` · <span class="sp-mod">modificato da ${esc(s.modificatoDa)}${s.modificatoIl ? ' il ' + esc(quando(s.modificatoIl)) : ''}</span>` : ''}</small></div>
+      <span class="amount">${euro(s.importo)}</span>
+      <div class="sp-act no-print">
+        <button class="btn small" type="button" data-foto="${esc(s.id)}">${nAll(s) ? 'Allegati · ' + nAll(s) : '+ Allegato'}</button>
+        <button class="btn small" type="button" data-edit="${esc(s.id)}">Modifica</button>
+      </div>
+      ${Array.isArray(s.storico) && s.storico.length ? `<div class="sp-old">${s.storico.slice().reverse().map(o => `<div class="sp-old-row"><s><span>${dataIt(o.data)}</span> ${esc(o.motivo || '—')} · ${esc(o.categoria || '')}${o.villaId !== s.villaId || (o.prenotazioneId || null) !== (s.prenotazioneId || null) ? ' · ' + esc(descPren(o)) : ''} · <b>${euro(o.importo)}</b></s><small>versione sostituita${o.sostituitoDa ? ' da ' + esc(o.sostituitoDa) : ''}${o.sostituitoIl ? ' il ' + esc(quando(o.sostituitoIl)) : ''}</small></div>`).join('')}</div>` : ''}
+    </div>`;
 
     // modifica / cancellazione dello scontrino (lo storico conserva la versione precedente)
-    out.addEventListener('click', e => {
-      const b = e.target.closest('[data-edit]'); if (!b) return;
-      const s = spese.list.find(x => x.id === b.dataset.edit); if (s) openEdit(s);
-    });
-    function openEdit(s) {
+    A.openEdit = function (s) {
       const dlg = $('#dlg');
       const bookings = data().bookings;
       const cur = trovaPren(s, bookings);
@@ -278,14 +131,10 @@
         };
       };
       if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', '');
-    }
+    };
 
     /* allegati: la foto principale (scontrini_foto, vista anche dall'app Scontrini) e gli altri allegati
        (scontrini_allegati). Si leggono solo quando si apre la finestra. */
-    out.addEventListener('click', e => {
-      const b = e.target.closest('[data-foto]'); if (!b) return;
-      const s = spese.list.find(x => x.id === b.dataset.foto); if (s) openAllegati(s.id);
-    });
     const MAXPDF = 700 * 1024;
     async function leggiFile(f) {
       if (f.type === 'application/pdf' || /\.pdf$/i.test(f.name)) {
@@ -295,7 +144,7 @@
       }
       return { nome: f.name.replace(/\.[^.]+$/, '') + '.jpg', tipo: 'image/jpeg', dati: await ctx.compressImage(f, 1500, 750000) };
     }
-    async function openAllegati(id) {
+    A.openAllegati = async function (id) {
       const dlg = $('#dlg'); const s = () => spese.list.find(x => x.id === id) || {};
       const p = trovaPren(s(), data().bookings);
       dlg.innerHTML = `<div class="dlg sp-photo">
@@ -315,7 +164,7 @@
           if (s().hasFoto) { const img = await store.getFoto(id); if (img) items.push({ id: '', nome: 'Foto dello scontrino', tipo: 'image/jpeg', dati: img, principale: true }); }
           (await store.listAllegati(id)).forEach(a => items.push(a));
           if (!$('#al-list')) return;
-          box.innerHTML = items.length ? items.map((a, i) => `<figure class="al-item">${a.tipo === 'application/pdf' ? `<div class="al-pdf">PDF</div>` : `<img src="${a.dati}" alt="${esc(a.nome)}">`}
+          box.innerHTML = items.length ? items.map(a => `<figure class="al-item">${a.tipo === 'application/pdf' ? `<div class="al-pdf">PDF</div>` : `<img src="${a.dati}" alt="${esc(a.nome)}">`}
             <figcaption><span>${esc(a.nome || 'Allegato')}${a.principale ? '' : a.creatoDa ? `<small>aggiunto da ${esc(a.creatoDa)}</small>` : ''}</span>
               <a class="btn small" href="${a.dati}" download="${esc(X.nomeFile((a.nome || 'allegato').replace(/\.(jpg|pdf)$/i, '')) + (a.tipo === 'application/pdf' ? '.pdf' : '.jpg'))}">Scarica</a>
               ${a.principale ? '' : `<button type="button" class="btn small danger" data-aldel="${esc(a.id)}">Togli</button>`}</figcaption></figure>`).join('')
@@ -336,12 +185,12 @@
           m.innerHTML = ''; toast(files.length === 1 ? 'Allegato aggiunto' : files.length + ' allegati aggiunti'); draw();
         } catch (x) { m.innerHTML = `<div class="warn err">${esc(x.code === 'permission-denied' ? 'Le regole di Firestore non permettono ancora gli allegati: pubblica le regole aggiornate.' : x.message || x)}</div>`; draw(); }
       });
-    }
+    };
 
-    // nuova spesa: stessa struttura dell'app Scontrini
-    $('#sp-new').addEventListener('click', () => {
+    // nuova spesa: stessa struttura dell'app Scontrini (villa e prenotazione già scelte se si parte da una prenotazione)
+    A.openNuova = function (villa0, pren0) {
       const dlg = $('#dlg'); const bookings = data().bookings;
-      const villa0 = ui.spVilla || (ville()[0] || {}).id || '';
+      villa0 = villa0 || ui.prVilla || (ville()[0] || {}).id || '';
       const prenOpts = (vid, sel) => `<option value="">Spese generali della villa</option>` + bookings.filter(x => x.villaId === vid && !x._nd).sort((x, y) => String(y.from).localeCompare(String(x.from)))
         .map(x => `<option value="${esc(x.id)}" ${x.id === sel ? 'selected' : ''}>${esc((x.cliente || '').trim() || 'Senza nome')} · ${dataBreve(x.from)} → ${dataBreve(x.to)}</option>`).join('');
       let foto = null;
@@ -349,7 +198,7 @@
         <h3>Nuova spesa</h3>
         <section class="dsec sec-date"><h4>Villa e prenotazione</h4>
           <label class="field"><span>Villa</span><select id="nw-villa">${ville().map(v => `<option value="${esc(v.id)}" ${v.id === villa0 ? 'selected' : ''}>${esc(v.name)}</option>`).join('')}</select></label>
-          <label class="field"><span>Prenotazione</span><select id="nw-pren">${prenOpts(villa0, ui.spPren)}</select></label></section>
+          <label class="field"><span>Prenotazione</span><select id="nw-pren">${prenOpts(villa0, pren0 || '')}</select></label></section>
         <section class="dsec sec-cli"><h4>Importo e data</h4>
           <div class="row"><label class="field"><span>Importo €</span><input id="nw-imp" inputmode="decimal" required placeholder="0,00"></label>
           <label class="field"><span>Data</span><input type="date" id="nw-data" value="${isoLocale(new Date())}" required></label></div></section>
@@ -379,26 +228,22 @@
       });
       if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', '');
       setTimeout(() => $('#nw-imp') && $('#nw-imp').focus(), 50);
-    });
+    };
 
     // CSV per Excel: separatore ";", BOM UTF-8, importi con la virgola
-    function exportCsv() {
-      if (!ordinati.length) { toast('Niente da esportare'); return; }
+    function exportCsv(righe, nomeFile) {
+      if (!righe.length) { toast('Niente da esportare'); return; }
       const cella = v => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`;
       const rows = [['Villa', 'Prenotazione', 'Check-in', 'Check-out', 'Data scontrino', 'Categoria', 'Motivo', 'Importo', 'Inserito da', 'Allegati']];
-      ordinati.forEach(({ s, villa, p }) => rows.push([villa, p ? p.cliente : 'Spese generali', p ? dataIt(p.from) : '', p ? dataIt(p.to) : '', dataIt(s.data), s.categoria || '', s.motivo || '', (Number(s.importo) || 0).toFixed(2).replace('.', ','), s.creatoDa || '', nAll(s)]));
+      righe.forEach(({ s, villa, p }) => rows.push([villa, p ? p.cliente : 'Spese generali', p ? dataIt(p.from) : '', p ? dataIt(p.to) : '', dataIt(s.data), s.categoria || '', s.motivo || '', (Number(s.importo) || 0).toFixed(2).replace('.', ','), s.creatoDa || '', nAll(s)]));
       const testo = '﻿' + rows.map(r => r.map(cella).join(';')).join('\r\n');
-      const aEl = document.createElement('a');
-      aEl.href = URL.createObjectURL(new Blob([testo], { type: 'text/csv;charset=utf-8' }));
-      aEl.download = `spese-ville_${isoLocale(new Date())}.csv`;
-      document.body.appendChild(aEl); aEl.click(); aEl.remove();
-      setTimeout(() => URL.revokeObjectURL(aEl.href), 1500);
+      X.scarica(nomeFile || `spese-ville_${isoLocale(new Date())}.csv`, new Blob([testo], { type: 'text/csv;charset=utf-8' }));
     }
-
 
     /* Word: un file per prenotazione (una villa alla volta) con la scheda prenotazione, le note spese e i totali;
        a parte uno zip con le foto e gli allegati di tutti gli scontrini esportati. */
     const speseDi = (villaId, pid, bookings) => spese.list.filter(s => { if (s.villaId !== villaId) return false; const p = trovaPren(s, bookings); return pid === '__gen' ? !p : p && p.id === pid; }).sort((x, y) => String(x.data).localeCompare(String(y.data)));
+    const ctxMoney = n => euro(n).replace(/,00\s?€$/, ' €');
     function wordDoc(villaId, pid, bookings) {
       const l = speseDi(villaId, pid, bookings);
       const sc = pid !== '__gen' && ctx.schedaPren ? ctx.schedaPren(pid) : null;
@@ -415,16 +260,16 @@
       B.push({ h2: 'Totali' });
       const tot = [];
       if (sc) tot.push(['Totale vendita (affitto + servizi a parte)', sc.haPrezzo ? ctxMoney(sc.totVendita) : 'prezzo di vendita non inserito']);
-      tot.push(['Totale spese', euro(somma(l))]);
-      if (sc && sc.acq && sc.totAcquisto) tot.push(['Totale acquisto (affitto + servizi a parte)', ctxMoney(sc.totAcquisto)]);
+      if (sc && sc.acq && sc.totAcquisto) tot.push(['Acquisto previsto (affitto + servizi a parte)', ctxMoney(sc.totAcquisto)]);
+      tot.push(['Acquisto reale (totale spese)', euro(somma(l))]);
+      if (sc && sc.haPrezzo) tot.push(['Margine reale (vendita − spese)', ctxMoney(sc.totVendita - somma(l))]);
       B.push({ kv: tot });
       B.push({ p: `Esportato il ${new Date().toLocaleString('it-IT')} da ${store.user || ''}. Foto e allegati sono nel file zip scaricato insieme.`, small: true });
       const nome = X.nomeFile(`Spese ${nomeVilla(villaId)} - ${titolo}${sc ? ' ' + sc.from : old ? ' ' + old.from : ''}`) + '.docx';
       return { nome, blob: new Blob([X.docx(B)], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }), spese: l, cartella: X.nomeFile(titolo + (sc ? ' ' + sc.from : old ? ' ' + old.from : '')) };
     }
-    const ctxMoney = n => euro(n).replace(/,00\s?€$/, ' €');
     async function zipAllegati(gruppi, onStep) {
-      const entries = []; const used = new Set(); let n = 0, tot = gruppi.reduce((t, g) => t + g.spese.length, 0);
+      const entries = []; const used = new Set(); let n = 0; const tot = gruppi.reduce((t, g) => t + g.spese.length, 0);
       for (const g of gruppi) for (const s of g.spese) {
         n++; onStep(`Foto e allegati: scontrino ${n} di ${tot}…`);
         const base = `${g.cartella}/${s.data || 'senza-data'}_${(Number(s.importo) || 0).toFixed(2).replace('.', ',')}_${X.nomeFile(s.categoria || 'spesa')}`;
@@ -434,34 +279,36 @@
       }
       return entries;
     }
-    $('#sp-csv').addEventListener('click', () => {
+    // Esporta: pre = { villa, pid } dal riepilogo di una prenotazione (solo quella spuntata); senza pre: generale
+    A.openExport = function (pre) {
       const dlg = $('#dlg'); const bookings = data().bookings;
+      const righeX = A.righe();
       const villeCon = ville().filter(v => bookings.some(b => b.villaId === v.id && !b._nd) || spese.list.some(s => s.villaId === v.id));
-      let modo = 'word'; let villa = ui.spVilla && villeCon.some(v => v.id === ui.spVilla) ? ui.spVilla : (villeCon[0] || {}).id || '';
+      let modo = 'word'; let villa = pre && pre.villa ? pre.villa : ui.prVilla && villeCon.some(v => v.id === ui.prVilla) ? ui.prVilla : (villeCon[0] || {}).id || '';
       const voci = vid => {
         const l = bookings.filter(b => b.villaId === vid && !b._nd).sort((x, y) => String(y.from).localeCompare(String(x.from))).map(b => ({ id: b.id, label: `${(b.cliente || '').trim() || 'Senza nome'} · ${dataBreve(b.from)} → ${dataBreve(b.to)}` }));
-        // prenotazioni non più in calendario con scontrini
         const old = new Map(); spese.list.filter(s => s.villaId === vid).forEach(s => { const p = trovaPren(s, bookings); if (p && p.nonInCalendario && !old.has(p.id)) old.set(p.id, { id: p.id, label: `${p.cliente} · ${dataBreve(p.from)} → ${dataBreve(p.to)} (non più in calendario)` }); });
         const gen = spese.list.some(s => s.villaId === vid && !trovaPren(s, bookings)) ? [{ id: '__gen', label: 'Spese generali della villa' }] : [];
         return l.concat([...old.values()], gen).map(o => Object.assign(o, { spese: speseDi(vid, o.id, bookings) }));
       };
+      const spunta = o => pre && pre.pid ? o.id === pre.pid : o.spese.length > 0;
       const draw = () => {
         const v = voci(villa);
-        dlg.innerHTML = `<div class="dlg" id="ex-dlg"><h3>Esporta</h3>
-          <div class="seg ex-seg"><button type="button" data-m="word" class="${modo === 'word' ? 'on' : ''}">Word per prenotazione</button><button type="button" data-m="xls" class="${modo === 'xls' ? 'on' : ''}">Excel – tutti gli scontrini</button></div>
-          ${modo === 'xls' ? `<p class="note">Un file con tutti gli scontrini mostrati in questo momento (filtri attuali): <b>${ordinati.length}</b> ${ordinati.length === 1 ? 'scontrino' : 'scontrini'}. Si apre con Excel.</p>`
+        dlg.innerHTML = `<div class="dlg" id="ex-dlg"><h3>Esporta${pre && pre.pid ? ' questa prenotazione' : ''}</h3>
+          <div class="seg ex-seg"><button type="button" data-m="word" class="${modo === 'word' ? 'on' : ''}">Word per prenotazione</button><button type="button" data-m="xls" class="${modo === 'xls' ? 'on' : ''}">Excel – scontrini</button></div>
+          ${modo === 'xls' ? `<p class="note">Un file con ${pre && pre.pid ? 'gli scontrini di questa prenotazione' : 'gli scontrini delle prenotazioni mostrate in questo momento (filtri attuali)'}: <b>${righeX.length}</b> ${righeX.length === 1 ? 'scontrino' : 'scontrini'}. Si apre con Excel.</p>`
           : `<label class="field"><span>Villa</span><select id="ex-villa">${villeCon.map(x => `<option value="${esc(x.id)}" ${x.id === villa ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></label>
-            <div class="ex-head"><span class="note">Un file Word per ogni prenotazione scelta: scheda prenotazione, note spese, totale spese e totale vendita.</span><button type="button" class="btn small" id="ex-all">Seleziona tutte</button></div>
-            <div class="ex-list">${v.length ? v.map(o => `<label class="flag"><input type="checkbox" data-ex="${esc(o.id)}" ${o.spese.length ? 'checked' : ''}><span><b>${esc(o.label)}</b><small>${o.spese.length ? o.spese.length + (o.spese.length === 1 ? ' scontrino · ' : ' scontrini · ') + euro(somma(o.spese)) : 'nessuna nota spese'}</small></span></label>`).join('') : '<p class="note">Nessuna prenotazione per questa villa.</p>'}</div>
+            <div class="ex-head"><span class="note">Un file Word per ogni prenotazione scelta: scheda prenotazione, note spese, vendita, acquisto previsto e reale.</span><button type="button" class="btn small" id="ex-all">Seleziona tutte</button></div>
+            <div class="ex-list">${v.length ? v.map(o => `<label class="flag"><input type="checkbox" data-ex="${esc(o.id)}" ${spunta(o) ? 'checked' : ''}><span><b>${esc(o.label)}</b><small>${o.spese.length ? o.spese.length + (o.spese.length === 1 ? ' scontrino · ' : ' scontrini · ') + euro(somma(o.spese)) : 'nessuna nota spese'}</small></span></label>`).join('') : '<p class="note">Nessuna prenotazione per questa villa.</p>'}</div>
             <label class="flag"><input type="checkbox" id="ex-zip" checked><span><b>Scarica anche lo zip con foto e allegati</b><small>Un solo file zip, con una cartella per prenotazione.</small></span></label>`}
           <div id="ex-msg"></div>
           <div class="foot"><button type="button" class="btn" id="ex-close">Chiudi</button><button type="button" class="btn primary" id="ex-go">Scarica</button></div></div>`;
         $$('.ex-seg button', dlg).forEach(b => b.onclick = () => { modo = b.dataset.m; draw(); });
         $('#ex-close').onclick = () => dlg.close();
-        if ($('#ex-villa')) $('#ex-villa').onchange = e => { villa = e.target.value; draw(); };
+        if ($('#ex-villa')) $('#ex-villa').onchange = e => { villa = e.target.value; pre = null; draw(); };
         if ($('#ex-all')) $('#ex-all').onclick = () => { const cbs = $$('[data-ex]', dlg); const all = cbs.every(c => c.checked); cbs.forEach(c => { c.checked = !all; }); };
         $('#ex-go').onclick = async () => {
-          if (modo === 'xls') { exportCsv(); dlg.close(); return; }
+          if (modo === 'xls') { exportCsv(righeX); dlg.close(); return; }
           const ids = $$('[data-ex]', dlg).filter(c => c.checked).map(c => c.dataset.ex);
           if (!ids.length) { $('#ex-msg').innerHTML = '<div class="warn err">Scegli almeno una prenotazione.</div>'; return; }
           const go = $('#ex-go'); go.disabled = true; const step = t => { const m = $('#ex-msg'); if (m) m.innerHTML = `<p class="note">${esc(t)}</p>`; };
@@ -473,20 +320,193 @@
               const entries = await zipAllegati(docs, step); nz = entries.length;
               if (nz) X.scarica(X.nomeFile(`Allegati ${nomeVilla(villa)} ${isoLocale(new Date())}`) + '.zip', X.zip(entries));
             }
-            step(`Scaricati ${docs.length} ${docs.length === 1 ? 'file Word' : 'file Word'}${$('#ex-zip') && $('#ex-zip').checked ? (nz ? ` e lo zip con ${nz} ${nz === 1 ? 'allegato' : 'allegati'}` : '; nessuna foto o allegato da mettere nello zip') : ''}.`);
+            step(`Scaricati ${docs.length} file Word${$('#ex-zip') && $('#ex-zip').checked ? (nz ? ` e lo zip con ${nz} ${nz === 1 ? 'allegato' : 'allegati'}` : '; nessuna foto o allegato da mettere nello zip') : ''}.`);
           } catch (x) { $('#ex-msg').innerHTML = `<div class="warn err">Esportazione non riuscita: ${esc(x.message || x)}</div>`; }
           go.disabled = false;
         };
       };
       draw();
       if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', '');
+    };
+    return A;
+  }
+
+  /* ---------------------------------------------------------------- dati della pagina
+     Una voce per ogni prenotazione in calendario (anche senza spese), più le prenotazioni "non più in calendario"
+     che hanno scontrini e, per villa, le spese generali. chiave: id prenotazione | old|villa|id | gen|villa */
+  function voci(ctx) {
+    const { data, spese } = ctx;
+    const bks = data().bookings.filter(b => !b._nd);
+    const conSpese = ctx.online && spese.ready;
+    const per = new Map(), old = new Map(), gen = new Map();
+    if (conSpese) spese.list.forEach(s => {
+      const p = trovaPren(s, bks);
+      if (!p) { (gen.get(s.villaId) || gen.set(s.villaId, []).get(s.villaId)).push(s); return; }
+      const k = p.nonInCalendario ? 'old|' + s.villaId + '|' + p.id : p.id;
+      if (p.nonInCalendario && !old.has(k)) old.set(k, p);
+      (per.get(k) || per.set(k, []).get(k)).push(s);
     });
+    const l = bks.map(b => ({ chiave: b.id, b, villaId: b.villaId, cliente: (b.cliente || '').trim() || 'Senza nome', from: b.from, to: b.to, spese: per.get(b.id) || [] }))
+      .concat([...old.entries()].map(([k, p]) => ({ chiave: k, b: null, old: true, villaId: p.villaId, cliente: p.cliente, from: p.from, to: p.to, spese: per.get(k) || [] })));
+    const generali = [...gen.entries()].map(([vid, sp]) => ({ chiave: 'gen|' + vid, b: null, gen: true, villaId: vid, cliente: 'Spese generali della villa', spese: sp }));
+    l.concat(generali).forEach(x => x.spese.sort((a, b) => String(a.data).localeCompare(String(b.data))));
+    return { l, generali, conSpese };
+  }
+
+  /* ---------------------------------------------------------------- pagina */
+  function mount(main, ctx, sub) {
+    const { ui, saveUI, esc, data, spese, store, $, $$ } = ctx;
+    ctx.online = store.mode === 'online' && !!store.listenScontrini;
+    const A = azioni(ctx);
+    const villaDi = id => data().villas.find(v => v.id === id) || { id, name: 'Villa ' + id };
+    const cover = id => (ctx.cover && ctx.cover(id)) || '';
+    const media = (vid, extra) => { const v = villaDi(vid), th = cover(vid);
+      return `<div class="vc-media">${th ? `<img src="${esc(th)}" alt="${esc(v.name)}" loading="lazy">` : `<div class="vc-ph"><span>${esc(String(v.name || '?').trim().charAt(0))}</span><small>Nessuna foto</small></div>`}${extra || ''}</div>`; };
+    const pill = x => x.gen ? '<span class="pc-stato gen">Spese generali</span>' : x.old ? '<span class="pc-stato old">Non più in calendario</span>'
+      : `<span class="pc-stato" style="background:${esc(ctx.bookingColor(x.b))};color:${ctx.S.inkFor(ctx.bookingColor(x.b))}">${esc(ctx.statoLabel(x.b.status))}</span>`;
+    const val = x => x.b ? ctx.valori(x.b) : { vendita: null, acquisto: null };
+    const acq = ctx.canAcq();
+    const vuoto = '<span class="pc-nd">—</span>';
+    const root = document.createElement('div'); main.innerHTML = ''; main.appendChild(root); root.className = 'page';
+    if (ctx.onThumbs) ctx.onThumbs(() => render());
+
+    // azioni comuni (delegate sulla pagina)
+    root.addEventListener('click', e => {
+      const t = e.target;
+      const ed = t.closest('[data-edit]'); if (ed) { const s = spese.list.find(x => x.id === ed.dataset.edit); if (s) A.openEdit(s); return; }
+      const fo = t.closest('[data-foto]'); if (fo) { A.openAllegati(fo.dataset.foto); return; }
+      const card = t.closest('[data-pk]'); if (!card) return;
+      const k = card.dataset.pk, V0 = voci(ctx), it = V0.l.concat(V0.generali).find(x => x.chiave === k);
+      const act = t.closest('[data-act]'); const a = act ? act.dataset.act : 'open';
+      if (a === 'spesa' && it) { A.openNuova(it.villaId, it.b ? it.b.id : ''); return; }
+      if (a === 'mod' && it && it.b) { ctx.openBooking({ id: it.b.id }); return; }
+      location.hash = 'prenotazioni-' + encodeURIComponent(k);
+    });
+    root.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches && e.target.matches('.vcard[data-pk]')) e.target.click(); });
+
+    const render = () => { if (!document.body.contains(root)) return; if (sub) dettaglio(); else elenco(); };
+
+    /* ---------- elenco delle prenotazioni ---------- */
+    function elenco() {
+      const V = voci(ctx); const oggi = isoLocale(new Date());
+      const q = (ui.prQ || '').trim().toLowerCase(), vf = ui.prVilla || '', sf = ui.prStato || '';
+      const filtra = x => (!vf || x.villaId === vf) && (!sf || (sf === '_old' ? x.old : x.b && x.b.status === sf)) && (!ui.prSoloSpese || x.spese.length)
+        && (!q || `${x.cliente} ${villaDi(x.villaId).name} ${villaDi(x.villaId).location || ''}`.toLowerCase().includes(q));
+      const lista = V.l.filter(filtra);
+      const prossime = lista.filter(x => String(x.to) >= oggi).sort((a, b) => String(a.from).localeCompare(String(b.from)));
+      const passate = lista.filter(x => String(x.to) < oggi).sort((a, b) => String(b.from).localeCompare(String(a.from)));
+      const generali = V.generali.filter(x => (!vf || x.villaId === vf) && !sf && (!q || villaDi(x.villaId).name.toLowerCase().includes(q))).sort((a, b) => villaDi(a.villaId).name.localeCompare(villaDi(b.villaId).name, 'it'));
+      A.righe = () => lista.concat(generali).flatMap(x => x.spese.map(s => ({ s, villa: villaDi(x.villaId).name, p: x.gen ? null : { cliente: x.cliente, from: x.from, to: x.to } })));
+      const tot = { vendita: 0, acquisto: 0, spese: 0 };
+      lista.forEach(x => { const v = val(x); tot.vendita += v.vendita || 0; tot.acquisto += v.acquisto || 0; tot.spese += somma(x.spese); });
+      generali.forEach(x => { tot.spese += somma(x.spese); });
+      const stati = ctx.stati();
+      const card = x => {
+        const v = val(x), sp = somma(x.spese), villa = villaDi(x.villaId);
+        return `<article class="vcard pcard${x.old ? ' is-old' : ''}${x.gen ? ' is-gen' : ''}" data-pk="${esc(x.chiave)}" tabindex="0">
+          ${media(x.villaId, pill(x) + (villa.location ? `<span class="vc-badge">${esc(villa.location)}</span>` : ''))}
+          <div class="vc-body">
+            <h3 class="vc-name">${esc(villa.name)}</h3>
+            <p class="vc-desc">${x.gen ? 'Spese non legate a una prenotazione' : esc(x.cliente)}</p>
+            ${x.gen ? '' : `<div class="vc-stats2"><div><span>Arrivo</span><b>${esc(ggMese(x.from))}</b></div><div><span>Partenza</span><b>${esc(ggMese(x.to))}</b></div><div><span>Notti</span><b>${nNotti(x.from, x.to)}</b></div></div>`}
+            <hr>
+            <div class="pc-val">
+              ${!x.b ? '' : `<div><span>Vendita</span><b>${v.vendita == null ? vuoto : euro(v.vendita)}</b></div>`}
+              ${!x.b || !acq ? '' : `<div><span>Acquisto previsto</span><b>${v.acquisto == null ? vuoto : euro(v.acquisto)}</b></div>`}
+              <div><span>Spese reali</span><b>${ctx.online ? (V.conSpese ? euro(sp) : '…') : vuoto}</b>${ctx.online && V.conSpese ? `<small>${x.spese.length} ${x.spese.length === 1 ? 'scontrino' : 'scontrini'}</small>` : ''}</div>
+            </div>
+          </div>
+          <footer class="vc-foot no-print">
+            <button type="button" class="btn dark" data-act="open">Riepilogo ↗</button>
+            ${ctx.online ? '<button type="button" class="btn" data-act="spesa">+ Spesa</button>' : ''}
+            ${x.b && ctx.canEdit() ? '<button type="button" class="btn" data-act="mod">Modifica</button>' : ''}
+          </footer>
+        </article>`;
+      };
+      const sez = (tit, l) => l.length ? `<section class="pr-sec"><h2 class="pr-h">${tit} <span>${l.length}</span></h2><div class="vcards">${l.map(card).join('')}</div></section>` : '';
+      const celle = [['Prenotazioni', String(lista.length)], ['Vendita', euro(tot.vendita)]].concat(acq ? [['Acquisto previsto', euro(tot.acquisto)]] : [], ctx.online ? [['Spese reali', V.conSpese ? euro(tot.spese) : '…']] : []);
+      root.innerHTML = `<div class="wrap">
+        <div class="head"><div><h1>Prenotazioni</h1><div class="sub">${ctx.online ? 'Vendita, acquisto previsto e spese reali · scontrini dell\'app Scontrini aggiornati in tempo reale' : 'Le spese si vedono con i dati online'}</div></div>
+          <div class="actions no-print">${ctx.online ? `<button class="btn primary" type="button" id="pr-new">+ Nuova spesa</button>
+            <button class="btn" type="button" id="pr-exp">Esporta spese</button>
+            <button class="btn" type="button" id="pr-assign">Account e assegnazioni</button>` : ''}</div></div>
+        <div class="card sp-filters no-print">
+          <label class="field sp-q"><span>Cerca</span><input type="search" id="pr-q" placeholder="Cliente, villa o zona" value="${esc(ui.prQ || '')}"></label>
+          <label class="field"><span>Villa</span><select id="pr-villa"><option value="">Tutte le ville</option>${A.ville().map(v => `<option value="${esc(v.id)}" ${vf === v.id ? 'selected' : ''}>${esc(v.name)}</option>`).join('')}</select></label>
+          <label class="field"><span>Stato</span><select id="pr-stato"><option value="">Tutti gli stati</option>${stati.map(s => `<option value="${esc(s.key)}" ${sf === s.key ? 'selected' : ''}>${esc(s.label)}</option>`).join('')}${ctx.online ? `<option value="_old" ${sf === '_old' ? 'selected' : ''}>Non più in calendario</option>` : ''}</select></label>
+          ${ctx.online ? `<label class="flag pr-solo"><input type="checkbox" id="pr-solo" ${ui.prSoloSpese ? 'checked' : ''}><span><b>Solo con spese</b></span></label>` : ''}
+        </div>
+        ${spese.error ? `<div class="warn err">Non riesco a leggere gli scontrini: ${esc(spese.error.code === 'permission-denied' ? 'questo account non è autorizzato.' : spese.error.message || spese.error)}</div>` : ''}
+        <div class="sp-summary" style="grid-template-columns:repeat(${celle.length},minmax(0,1fr))">${celle.map(([l, v]) => `<div><b>${v}</b><span>${l}</span></div>`).join('')}</div>
+        ${sez('In corso e prossime', prossime)}${sez('Passate', passate)}${sez('Spese generali delle ville', generali)}
+        ${!prossime.length && !passate.length && !generali.length ? `<div class="empty">${V.l.length ? 'Nessuna prenotazione per questi filtri.' : 'Nessuna prenotazione in calendario.'}</div>` : ''}
+      </div>`;
+      const set = (k, v) => { ui[k] = v; saveUI(); render(); };
+      let t; $('#pr-q', root).addEventListener('input', e => { ui.prQ = e.target.value; saveUI(); clearTimeout(t); t = setTimeout(() => { const pos = e.target.selectionStart; render(); const n = $('#pr-q', root); if (n) { n.focus(); n.setSelectionRange(pos, pos); } }, 150); });
+      $('#pr-villa', root).onchange = e => set('prVilla', e.target.value);
+      $('#pr-stato', root).onchange = e => set('prStato', e.target.value);
+      if ($('#pr-solo', root)) $('#pr-solo', root).onchange = e => set('prSoloSpese', e.target.checked);
+      if ($('#pr-new', root)) $('#pr-new', root).onclick = () => A.openNuova(vf, '');
+      if ($('#pr-exp', root)) $('#pr-exp', root).onclick = () => A.openExport(null);
+      if ($('#pr-assign', root)) $('#pr-assign', root).onclick = () => openAssign(ctx);
+    }
+
+    /* ---------- riepilogo di una prenotazione ---------- */
+    function dettaglio() {
+      const V = voci(ctx); const k = sub;
+      const x = V.l.concat(V.generali).find(y => y.chiave === k) || (V.conSpese || !ctx.online ? null : 'attesa');
+      if (x === 'attesa') { root.innerHTML = '<div class="wrap"><p class="note">Caricamento…</p></div>'; return; }
+      if (!x) { root.innerHTML = `<div class="wrap"><a href="#prenotazioni" class="pr-back">← Tutte le prenotazioni</a><div class="card"><p class="note">Questa prenotazione non c'è più (cancellata o spostata).</p></div></div>`; return; }
+      const villa = villaDi(x.villaId), v = val(x), sp = somma(x.spese);
+      const sc = x.b && ctx.schedaPren ? ctx.schedaPren(x.b.id) : null;
+      A.righe = () => x.spese.map(s => ({ s, villa: villa.name, p: x.gen ? null : { cliente: x.cliente, from: x.from, to: x.to } }));
+      const cella = (l, val0, nota, cls) => `<div class="pr-cell${cls ? ' ' + cls : ''}"><span>${l}</span><b>${val0}</b>${nota ? `<small>${nota}</small>` : ''}</div>`;
+      const E = n => (n == null ? vuoto : euro(n));
+      let celle = '';
+      if (!x.b) celle = cella('Spese reali', ctx.online ? euro(sp) : vuoto, `${x.spese.length} ${x.spese.length === 1 ? 'scontrino' : 'scontrini'}`);
+      else if (acq) {
+        const scost = v.acquisto != null ? sp - v.acquisto : null;
+        celle = cella('Vendita', E(v.vendita), 'affitto + servizi a parte') + cella('Acquisto previsto', E(v.acquisto), 'affitto + servizi a parte')
+          + cella('Acquisto reale', ctx.online ? euro(sp) : vuoto, `somma di ${x.spese.length} ${x.spese.length === 1 ? 'spesa' : 'spese'}`)
+          + cella('Reale rispetto al previsto', scost == null || !ctx.online ? vuoto : segno(scost), scost == null ? '' : scost > 0 ? 'oltre il previsto' : scost < 0 ? 'sotto il previsto' : 'in linea', scost > 0 ? 'neg' : scost < 0 ? 'pos' : '')
+          + cella('Margine previsto', v.vendita != null && v.acquisto != null ? euro(v.vendita - v.acquisto) : vuoto, 'vendita − acquisto previsto')
+          + cella('Margine reale', v.vendita != null && ctx.online ? euro(v.vendita - sp) : vuoto, 'vendita − acquisto reale', v.vendita != null && v.vendita - sp < 0 ? 'neg' : '');
+      } else celle = cella('Vendita', E(v.vendita), 'affitto + servizi a parte') + cella('Spese reali', ctx.online ? euro(sp) : vuoto, `${x.spese.length} ${x.spese.length === 1 ? 'scontrino' : 'scontrini'}`) + cella('Vendita − spese', v.vendita != null && ctx.online ? euro(v.vendita - sp) : vuoto);
+      const cats = {}; x.spese.forEach(s => { const c = s.categoria || 'Altro'; cats[c] = (cats[c] || 0) + (Number(s.importo) || 0); });
+      const info = sc ? sc.righe.filter(([l]) => !/^Prezzo di (vendita|acquisto)/.test(l)) : x.gen ? [['Villa', villa.name], ['Località', villa.location || '']] : [['Villa', villa.name], ['Cliente', x.cliente], ['Check-in', dataIt(x.from)], ['Check-out', dataIt(x.to)], ['Stato', 'Non più in calendario']];
+      root.innerHTML = `<div class="wrap pr-det">
+        <a href="#prenotazioni" class="pr-back no-print">← Tutte le prenotazioni</a>
+        <div class="head"><div><h1>${esc(villa.name)}</h1><div class="sub">${x.gen ? 'Spese generali della villa' : `${esc(x.cliente)} · ${esc(dataBreve(x.from))} → ${esc(dataBreve(x.to))} · ${nNotti(x.from, x.to)} notti`}</div></div>
+          <div class="actions no-print">${ctx.online ? '<button class="btn primary" type="button" id="pd-new">+ Nuova spesa</button>' : ''}
+            <button class="btn" type="button" id="pd-print">Stampa</button>
+            ${ctx.online ? '<button class="btn" type="button" id="pd-exp">Esporta</button>' : ''}
+            ${x.b && ctx.canEdit() ? '<button class="btn" type="button" id="pd-mod">Modifica prenotazione</button>' : ''}</div></div>
+        <div class="pr-top">
+          ${media(x.villaId, pill(x))}
+          <div class="card pr-info"><h2>${x.gen ? 'Villa' : 'Prenotazione'}</h2><dl class="pr-kv">${info.map(([l, val0]) => `<dt>${esc(l)}</dt><dd>${esc(val0)}</dd>`).join('')}</dl></div>
+        </div>
+        <div class="card pr-valori"><h2>Valori</h2><div class="pr-grid" style="grid-template-columns:repeat(${Math.min(3, (celle.match(/class="pr-cell/g) || []).length)},minmax(0,1fr))">${celle}</div>
+          ${x.b && v.vendita == null ? '<p class="note">Prezzo di vendita non inserito nella prenotazione.</p>' : ''}${!x.gen && acq && x.b && v.acquisto == null ? '<p class="note">Prezzo di acquisto non inserito nella prenotazione.</p>' : ''}</div>
+        ${sc && sc.servizi.length ? `<div class="card"><h2>Servizi</h2><div class="tbl-wrap"><table class="prices pr-srv"><thead><tr><th>Servizio</th><th>Modalità</th>${sc.acq ? '<th class="r">Acquisto</th>' : ''}<th class="r">Vendita</th><th>Note</th></tr></thead><tbody>
+          ${sc.servizi.map(r => `<tr>${r.map((c, i) => `<td${(sc.acq ? [2, 3] : [2]).includes(i) ? ' class="r"' : ''}>${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>` : ''}
+        <div class="card pr-spese">
+          <div class="pr-sp-head"><h2>Spese <span>${x.spese.length}</span></h2>${ctx.online ? `<b>${euro(sp)}</b>` : ''}</div>
+          ${!ctx.online ? '<p class="note">Le spese si vedono con i dati online.</p>' : !V.conSpese ? '<p class="note">Caricamento scontrini…</p>'
+            : x.spese.length ? `<div class="sp-cats">${Object.entries(cats).sort((a, b) => b[1] - a[1]).map(([c, t]) => `<span>${esc(c)} <b>${euro(t)}</b></span>`).join('')}</div>${x.spese.map(A.rigaSpesa).join('')}`
+            : '<p class="note">Nessuna spesa inserita per questa prenotazione.</p>'}
+        </div>
+      </div>`;
+      if ($('#pd-new', root)) $('#pd-new', root).onclick = () => A.openNuova(x.villaId, x.b ? x.b.id : '');
+      $('#pd-print', root).onclick = () => window.print();
+      if ($('#pd-exp', root)) $('#pd-exp', root).onclick = () => A.openExport({ villa: x.villaId, pid: x.gen ? '__gen' : x.old ? x.chiave.split('|').slice(2).join('|') : x.b.id });
+      if ($('#pd-mod', root)) $('#pd-mod', root).onclick = () => ctx.openBooking({ id: x.b.id });
+    }
 
     render();
     return { render };
   }
 
-  /* finestra "Account e assegnazioni" (app Scontrini), aperta dalla pagina Spese o da Impostazioni → Account */
+  /* finestra "Account e assegnazioni" (app Scontrini), aperta dalla pagina Prenotazioni o da Impostazioni → Account */
   let selAcc = '';
   function openAssign(ctx, email) {
     const { data, store, esc, $, $$ } = ctx;
