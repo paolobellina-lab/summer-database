@@ -1077,3 +1077,23 @@ dialog.dlg-promo { width: min(680px, calc(100vw - 32px)); }
   .pcard { break-inside: avoid; }
 }
 .pr-cell:last-child { border-right: 0; }
+
+/* numeri e testi che non devono uscire dalle celle (riepilogo, schede, valori) */
+.sp-summary b, .sp-summary span, .pc-val b, .pc-val span, .pr-cell b, .pr-cell span { overflow-wrap: anywhere; min-width: 0; }
+.sp-summary b { font-size: clamp(19px, 2.3vw, 28px); }
+.pc-val { grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); }
+.pc-val b { white-space: normal; font-size: clamp(16px, 1.5vw, 19px); }
+.pr-cell b { font-size: clamp(19px, 2.2vw, 26px); }
+@media (max-width: 760px) {
+  .sp-summary { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .sp-summary > div { padding: 12px 14px; border-bottom: 1px solid var(--line); }
+  .sp-summary > div:nth-child(2n) { border-right: 0; }
+  .sp-summary > div:nth-last-child(-n+2):nth-child(odd), .sp-summary > div:last-child { border-bottom: 0; }
+  .sp-summary b { font-size: 20px; }
+  .sp-summary span { letter-spacing: .08em; }
+}
+/* elenco prenotazioni nella scheda villa: su schermi stretti va a capo invece di uscire dal riquadro */
+@media (max-width: 600px) {
+  .bitem { flex-wrap: wrap; row-gap: 4px; }
+  .bitem .who { flex-basis: 100%; }
+}
