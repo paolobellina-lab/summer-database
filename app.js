@@ -304,7 +304,8 @@ window.SDBStore.ready.then(function () {
 
   // contesto della pagina Prenotazioni (spese.js)
   const ctxPren = () => ({ ui, saveUI, esc, data, spese, store, $, $$, toast, schedaPren, compressImage, canAcq, canEdit, isFull, S,
-    stati, statoLabel, bookingColor, valori: valoriPren, openBooking, cover: id => (thumbs.map[id] || {}).thumb || '', onThumbs: f => { villasRedraw = f; } });
+    stati, statoLabel, bookingColor, valori: valoriPren, openBooking,
+    nuovaPren: villaId => { const v = villaById(villaId) || sortedVillas()[0]; if (!v) { toast('Prima inserisci una villa'); return; } openBooking(Object.assign({ villaId: v.id }, julyWeek(v))); }, cover: id => (thumbs.map[id] || {}).thumb || '', onThumbs: f => { villasRedraw = f; } });
   /* ---------- router ---------- */
   function route() {
     let h = (location.hash || '#disponibilita').slice(1);

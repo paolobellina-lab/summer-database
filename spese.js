@@ -426,8 +426,8 @@
       const sez = (tit, l) => l.length ? `<section class="pr-sec"><h2 class="pr-h">${tit} <span>${l.length}</span></h2><div class="vcards">${l.map(card).join('')}</div></section>` : '';
       const celle = [['Prenotazioni', String(lista.length)], ['Vendita', euro(tot.vendita)]].concat(acq ? [['Acquisto previsto', euro(tot.acquisto)]] : [], ctx.online ? [['Spese reali', V.conSpese ? euro(tot.spese) : '…']] : []);
       root.innerHTML = `<div class="wrap">
-        <div class="head"><div><h1>Prenotazioni</h1><div class="sub">${ctx.online ? 'Vendita, acquisto previsto e spese reali · scontrini dell\'app Scontrini aggiornati in tempo reale' : 'Le spese si vedono con i dati online'}</div></div>
-          <div class="actions no-print">${ctx.online ? `<button class="btn primary" type="button" id="pr-new">+ Nuova spesa</button>
+        <div class="head"><div><h1>Prenotazioni</h1><div class="sub">Gli stessi periodi del calendario Disponibilità${ctx.online ? ' · vendita, acquisto previsto e spese reali (scontrini aggiornati in tempo reale)' : ' · le spese si vedono con i dati online'}</div></div>
+          <div class="actions no-print">${ctx.canEdit() ? '<button class="btn primary" type="button" id="pr-book">+ Nuova prenotazione</button>' : ''}${ctx.online ? `<button class="btn${ctx.canEdit() ? '' : ' primary'}" type="button" id="pr-new">+ Nuova spesa</button>
             <button class="btn" type="button" id="pr-exp">Esporta spese</button>
             <button class="btn" type="button" id="pr-assign">Account e assegnazioni</button>` : ''}</div></div>
         <div class="card sp-filters no-print">
@@ -447,6 +447,8 @@
       $('#pr-stato', root).onchange = e => set('prStato', e.target.value);
       if ($('#pr-solo', root)) $('#pr-solo', root).onchange = e => set('prSoloSpese', e.target.checked);
       if ($('#pr-new', root)) $('#pr-new', root).onclick = () => A.openNuova(vf, '');
+      // stessa finestra del calendario Disponibilità: la prenotazione compare in tutte e due le pagine
+      if ($('#pr-book', root)) $('#pr-book', root).onclick = () => ctx.nuovaPren(vf);
       if ($('#pr-exp', root)) $('#pr-exp', root).onclick = () => A.openExport(null);
       if ($('#pr-assign', root)) $('#pr-assign', root).onclick = () => openAssign(ctx);
     }
