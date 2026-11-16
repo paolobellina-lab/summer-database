@@ -152,17 +152,13 @@
       <div id="off-storico" ${o.tab === 'storico' ? '' : 'hidden'}></div>
       <div id="off-contatti" ${o.tab === 'contatti' ? '' : 'hidden'}></div>
       <div id="off-editor" ${['storico', 'contatti'].includes(o.tab) ? 'hidden' : ''}>
-      <section class="card off-osp-card"><h2>1 · Ospiti</h2>
-        <div class="off-osp-row"><label class="field f-num"><span>Numero di ospiti</span><input id="off-osp" type="number" min="1" step="1" inputmode="numeric" value="${esc(o.f.osp || '')}" placeholder="—"></label>
-          <p class="note" id="off-osp-note">Se lo scrivi, nell'elenco delle ville restano solo quelle con almeno questi posti.</p></div>
-      </section>
-      <section class="card"><h2>2 · Periodo</h2>
+      <section class="card"><h2>1 · Periodo</h2>
         <div class="seg off-tar" id="off-tar">${S.TARIFFE.map(t => `<button type="button" data-t="${t.key}" class="${o.tariff === t.key ? 'on' : ''}">${t.label}</button>`).join('')}</div>
         <div class="off-pernav"><button type="button" class="btn" id="off-prev" aria-label="Periodo precedente">‹</button><div class="off-persel" id="off-persel"></div><button type="button" class="btn" id="off-next" aria-label="Periodo successivo">›</button></div>
         <div class="off-cal" id="off-cal"></div>
         <p class="note">Le ville con giorno di cambio o periodi diversi mostrano le loro date esatte.</p>
       </section>
-      <section class="card"><h2>3 · Ville <span class="off-count" id="off-count"></span></h2>
+      <section class="card"><h2>2 · Ville <span class="off-count" id="off-count"></span></h2>
         <div class="off-tools"><label class="flag off-all" title="Seleziona o deseleziona tutte le ville dell'elenco"><input type="checkbox" id="off-all"><span><b>Tutte</b></span></label><input type="search" id="off-q" placeholder="Cerca villa o località" value="${esc(o.q)}">
           <label class="flag off-free"><input type="checkbox" id="off-free" ${o.soloLibere ? 'checked' : ''}><span><b>Solo ville libere</b></span></label>
           <button type="button" class="btn off-ftog" id="off-ftog" aria-expanded="${o.fOpen ? 'true' : 'false'}"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4-2v-4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>Filtri<span class="off-fn" id="off-fn"></span></button></div>
@@ -179,7 +175,7 @@
         </div>
         <div id="off-list" class="off-list"></div>
       </section>
-      <section class="card"><h2>4 · Servizi e prezzi</h2>
+      <section class="card"><h2>3 · Servizi e prezzi</h2>
         <div class="field"><span>Servizi</span><div class="tbl-wrap"><table class="prices off-srv"><thead><tr><th>Servizio</th><th>Nell'offerta</th><th>Prezzo €</th></tr></thead><tbody id="off-srv"></tbody></table></div>
           <small class="note">Spunta i servizi da proporre. <b>Predefinito</b>: incluso nelle ville che lo hanno tra i "Servizi compresi nel prezzo" della scheda, a parte (con il prezzo sommato) nelle altre. <b>Includi tutti</b>: incluso per tutte le ville. <b>A parte tutti</b>: si somma al prezzo di ogni villa. Nella mail il cliente vede i servizi sempre come <b>compresi</b> e un solo prezzo, già con i servizi a parte sommati; un servizio a parte senza prezzo non compare. Con il prezzo vuoto ogni villa usa il prezzo della sua scheda (Listino prezzi → Servizi non compresi), o quello di Impostazioni se la scheda non lo ha; un prezzo scritto qui vale per tutte le ville di questa offerta (0 = senza prezzo).</small></div>
         <div class="field"><span>Le tariffe includono</span><div class="off-incl" id="off-incl"></div>
@@ -187,7 +183,7 @@
           <small class="note">L'elenco e le voci spuntate di norma si cambiano in Impostazioni → Servizi e inclusioni.</small></div>
         <div class="field"><span>Riepilogo prezzi per villa</span><div class="tbl-wrap"><table class="prices off-riep"><thead><tr><th>Villa</th><th>Affitto</th><th>Servizi a parte</th><th>Totale</th></tr></thead><tbody id="off-riep"></tbody></table></div></div>
       </section>
-      <section class="card"><h2>5 · Offerta</h2>
+      <section class="card"><h2>4 · Offerta</h2>
         <div class="row off-row">
           <label class="field"><span>Cliente</span><input id="off-cli" value="${esc(o.cliente)}" placeholder="es. Mr Smith"></label>
           <label class="field"><span>Email del cliente</span><input id="off-mail" type="text" inputmode="email" autocomplete="off" value="${esc(o.email)}" placeholder="facoltativa"></label>
@@ -267,11 +263,6 @@
         .filter(v => { if (typeof da !== 'number' && typeof a !== 'number') return true; const pr = listinoOf(v); return typeof pr === 'number' && (typeof da !== 'number' || pr >= da) && (typeof a !== 'number' || pr <= a); }).map(v => ({ v, s: stato(v), p: perOf(v), pr: listinoOf(v) }))
         .filter(x => !o.soloLibere || x.s === 'libera' || o.ville.includes(x.v.id));
       visibili = list.map(x => x.v.id);
-      const ospN = $('#off-osp-note');
-      if (ospN) { const n = Number(f.osp) || 0; const pochi = n ? ville().filter(v => o.ville.includes(v.id) && nr(v.guests) < n) : [];
-        ospN.innerHTML = !n ? "Se lo scrivi, nell'elenco delle ville restano solo quelle con almeno questi posti."
-          : `Ville con almeno <b>${n}</b> posti: <b>${list.length}</b>.` + (pochi.length ? ` <span class="off-osp-warn">${pochi.length === 1 ? '1 villa già scelta ne ha' : pochi.length + ' ville già scelte ne hanno'} meno (${pochi.map(v => esc(v.name)).join(', ')}): <a href="#" id="off-osp-togli">toglile dall'offerta</a></span>` : '');
-        const tg = $('#off-osp-togli'); if (tg) tg.onclick = e => { e.preventDefault(); const ids = pochi.map(v => v.id); o.ville = o.ville.filter(id => !ids.includes(id)); drawList(); drawTexts(); save(); }; }
       const nSel = visibili.filter(id => o.ville.includes(id)).length, all = $('#off-all');
       all.checked = !!visibili.length && nSel === visibili.length; all.indeterminate = nSel > 0 && nSel < visibili.length; all.disabled = !visibili.length;
       $('#off-list').innerHTML = list.length ? list.map(({ v, s, p, pr }) => {
@@ -380,12 +371,9 @@
     $('#off-pers-t').addEventListener('click', () => { o.persOpen = !o.persOpen; $('#off-pers').hidden = !o.persOpen; $('#off-pers-t').setAttribute('aria-expanded', o.persOpen ? 'true' : 'false'); saveUI(); });
     schedPrev();
     $('#off-ftog').addEventListener('click', () => { o.fOpen = !o.fOpen; $('#off-filters').hidden = !o.fOpen; $('#off-ftog').setAttribute('aria-expanded', o.fOpen ? 'true' : 'false'); save(); });
-    // numero di ospiti (sezione 1): è lo stesso filtro "Ospiti min" della barra Filtri
-    $('#off-osp').addEventListener('input', e => { o.f.osp = e.target.value.trim(); $('#off-f-osp').value = o.f.osp; drawList(); save(); });
-    $('#off-f-osp').addEventListener('input', e => { $('#off-osp').value = e.target.value.trim(); });
     [['off-f-loc', 'loc'], ['off-f-mare', 'mare'], ['off-f-fav', 'fav'], ['off-f-osp', 'osp'], ['off-f-cam', 'cam'], ['off-f-da', 'da'], ['off-f-a', 'a']].forEach(([id, k]) => $('#' + id).addEventListener('input', e => { o.f[k] = e.target.value.trim(); drawList(); save(); }));
     $('#off-f-pisc').addEventListener('change', e => { o.f.pisc = e.target.checked; drawList(); save(); });
-    $('#off-f-reset').addEventListener('click', () => { o.f = {}; ['off-f-loc', 'off-f-mare', 'off-f-fav', 'off-f-osp', 'off-f-cam', 'off-f-da', 'off-f-a', 'off-osp'].forEach(id => { $('#' + id).value = ''; }); $('#off-f-pisc').checked = false; drawList(); save(); });
+    $('#off-f-reset').addEventListener('click', () => { o.f = {}; ['off-f-loc', 'off-f-mare', 'off-f-fav', 'off-f-osp', 'off-f-cam', 'off-f-da', 'off-f-a'].forEach(id => { $('#' + id).value = ''; }); $('#off-f-pisc').checked = false; drawList(); save(); });
     $('#off-q').addEventListener('input', e => { o.q = e.target.value; drawList(); save(); });
     $('#off-free').addEventListener('change', e => { o.soloLibere = e.target.checked; drawList(); save(); });
     $('#off-list').addEventListener('change', e => {

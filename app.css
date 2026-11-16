@@ -1024,8 +1024,3 @@ dialog.dlg-promo { width: min(680px, calc(100vw - 32px)); }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .off-esito, :root:not([data-theme="light"]) .off-es-b { filter: brightness(.85) saturate(.9); } }
 :root[data-theme="dark"] .off-esito, :root[data-theme="dark"] .off-es-b { filter: brightness(.85) saturate(.9); }
 .promo-r > .seg { flex: none; }
-
-.off-osp-row { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
-.off-osp-row .field { width: 160px; }
-.off-osp-row .note { margin: 0 0 8px; flex: 1; min-width: 220px; }
-.off-osp-warn { color: #8a5a00; }
