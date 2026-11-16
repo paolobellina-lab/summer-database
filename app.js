@@ -830,6 +830,7 @@ window.SDBStore.ready.then(function () {
         <label class="field vl-sort"><span>Ordina</span><select id="vl-sort">${sortOpts.map(([k, l]) => `<option value="${k}" ${ui.vsort === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
       </div>
       <div class="fav-bar" id="vl-lists"></div>
+      <div class="fav-bar" id="vl-share" hidden></div>
       <div class="loc-chips" id="vl-locs">
         <button type="button" data-l="" class="${!ui.vloc ? 'on' : ''}">Tutte le zone</button>
         ${locs.map((l, i) => `<button type="button" data-l="${esc(l)}" class="${ui.vloc === l ? 'on' : ''}" style="--tone:var(${LOC_TONES[i % 6]})"><i></i>${esc(l)} <em>${data().villas.filter(v => String(v.location || '').trim().toUpperCase() === l).length}</em></button>`).join('')}
@@ -866,10 +867,27 @@ window.SDBStore.ready.then(function () {
         $('#fl-no').onclick = () => { edit.hidden = true; };
       };
     };
+    // gruppi di condivisione (profili utente senza accesso completo, solo amministratori): filtra le ville condivise con un profilo, o con nessuno
+    const shareProf = () => { const pm = data().profili || {}; return Object.keys(pm).filter(k => !pm[k].completo).sort((a, b) => String(pm[a].nome).localeCompare(String(pm[b].nome), 'it')).map(k => ({ id: k, nome: pm[k].nome || 'Profilo', ville: pm[k].ville || [] })); };
+    const drawShare = () => {
+      const box = $('#vl-share'); const ps = isAdmin() ? shareProf() : [];
+      if (!ps.length) { box.hidden = true; ui.vshare = ''; return; }
+      if (ui.vshare && ui.vshare !== '-' && !ps.some(p => p.id === ui.vshare)) ui.vshare = '';
+      const ids = new Set(data().villas.map(v => v.id)); const condivise = new Set(ps.flatMap(p => p.ville));
+      const nessuna = data().villas.filter(v => !condivise.has(v.id)).length;
+      box.hidden = false;
+      box.innerHTML = `<span class="fav-lbl">Gruppi di condivisione</span>
+        <button type="button" data-sh="" class="fav-chip ${!ui.vshare ? 'on' : ''}">Tutte le ville</button>
+        ${ps.map(p => `<button type="button" data-sh="${esc(p.id)}" class="fav-chip ${ui.vshare === p.id ? 'on' : ''}">${esc(p.nome)} <em>${p.ville.filter(id => ids.has(id)).length}</em></button>`).join('')}
+        <button type="button" data-sh="-" class="fav-chip ${ui.vshare === '-' ? 'on' : ''}" title="Ville che non vede nessun profilo (solo gli amministratori e chi ha accesso completo)">Non condivise <em>${nessuna}</em></button>`;
+    };
     const draw = () => {
       const q = $('#vl-q').value.trim().toLowerCase();
       const cur = favLists().find(l => l.id === ui.vlist);
-      let list = sortedVillas().filter(v => (!q || `${v.name} ${v.location} ${v.proprietario} ${v.nomeReale}`.toLowerCase().includes(q)) && (!ui.vloc || String(v.location || '').trim().toUpperCase() === ui.vloc) && (!cur || (cur.ville || []).includes(v.id)))
+      const sp = ui.vshare ? shareProf() : null; const spCur = sp && ui.vshare !== '-' ? sp.find(p => p.id === ui.vshare) : null;
+      const spTutte = sp && ui.vshare === '-' ? new Set(sp.flatMap(p => p.ville)) : null;
+      let list = sortedVillas().filter(v => (!q || `${v.name} ${v.location} ${v.proprietario} ${v.nomeReale}`.toLowerCase().includes(q)) && (!ui.vloc || String(v.location || '').trim().toUpperCase() === ui.vloc) && (!cur || (cur.ville || []).includes(v.id))
+        && (!spCur || spCur.ville.includes(v.id)) && (!spTutte || !spTutte.has(v.id)))
         .map(v => ({ v, s: villaStats(v) }));
       const minP = x => { const n = x.s.prices.map(p => p.pr).filter(p => typeof p === 'number'); return n.length ? Math.min(...n) : null; };
       const maxP = x => { const n = x.s.prices.map(p => p.pr).filter(p => typeof p === 'number'); return n.length ? Math.max(...n) : null; };
@@ -914,12 +932,13 @@ window.SDBStore.ready.then(function () {
         </article>`;
       }).join('') : `<div class="empty">${cur ? 'Questo elenco è vuoto: tocca il cuore su una villa per aggiungerla.' : 'Nessuna villa trovata.'}</div>`;
     };
-    drawLists(); draw();
+    drawLists(); drawShare(); draw();
     villasRedraw = () => { drawLists(); draw(); };
     let t; $('#vl-q').addEventListener('input', e => { ui.q = e.target.value; saveUI(); clearTimeout(t); t = setTimeout(draw, 100); });
     $('#vl-sort').addEventListener('change', e => { ui.vsort = e.target.value; saveUI(); draw(); });
     $('#vl-locs').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; ui.vloc = b.dataset.l; saveUI(); $$('#vl-locs button').forEach(x => x.classList.toggle('on', x === b)); draw(); });
     $('#vl-lists').addEventListener('click', e => { const b = e.target.closest('[data-fl]'); if (!b) return; ui.vlist = b.dataset.fl; saveUI(); drawLists(); draw(); });
+    $('#vl-share').addEventListener('click', e => { const b = e.target.closest('[data-sh]'); if (!b) return; ui.vshare = b.dataset.sh; saveUI(); drawShare(); draw(); });
     const go = e => {
       const c = e.target.closest('.vcard'); if (!c) return;
       const act = e.target.closest('[data-act]'); const v = villaById(c.dataset.id);
