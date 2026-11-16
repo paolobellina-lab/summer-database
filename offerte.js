@@ -72,7 +72,8 @@
     if (!o.srv || typeof o.srv !== 'object') o.srv = {};
     // servizi dell'offerta: quelli delle prenotazioni (Impostazioni → Servizi e inclusioni), con prezzo di vendita modificabile qui
     const SRV_EN = { pulizia: 'Final cleaning', cuoco: 'Private chef', transfer: 'Transfer' };
-    const srvList = () => [['pulizia', 'Pulizia finale'], ['cuoco', 'Cuoco'], ['transfer', 'Transfer']].map(([key, label]) => ({ key, label }))
+    // servizi di base (rinominabili o tolti in Impostazioni: settings.serviziBase) + quelli aggiunti
+    const srvList = () => [['pulizia', 'Pulizia finale'], ['cuoco', 'Cuoco'], ['transfer', 'Transfer']].filter(([key]) => !((st.serviziBase || {})[key] || {}).off).map(([key, label]) => ({ key, label: String(((st.serviziBase || {})[key] || {}).label || '').trim() || label }))
       .concat(((st.servizi) || []).filter(x => x && x.key).map(x => ({ key: x.key, label: x.label })));
     const srvDi = k => { const d = (st.prezziServizi || {})[k] || {}; const x = o.srv[k] || {};
       const modo = ['pred', 'inc', 'parte'].includes(x.modo) ? x.modo : x.incluso === true ? 'inc' : x.incluso === false ? 'parte' : 'pred';

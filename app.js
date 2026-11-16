@@ -71,14 +71,17 @@ window.SDBStore.ready.then(function () {
   }
   const EXTRAS = [['pulizia', 'Pulizia finale'], ['cuoco', 'Cuoco'], ['transfer', 'Transfer']];
   /* Servizi: i 3 di base (campi pulizia/cuoco/transfer della prenotazione) più quelli aggiunti in
-     Impostazioni → Aspetto predefiniti (settings.servizi), salvati nella prenotazione in "servizi: [chiave]". */
-  const servizi = cfgIn => EXTRAS.map(([k, l]) => ({ key: k, label: l, base: true })).concat((Array.isArray(cfgIn) ? cfgIn : ((data().settings || {}).servizi || [])).filter(x => x && x.key).map(x => ({ key: x.key, label: x.label, base: false })));
+     Impostazioni → Servizi e inclusioni (settings.servizi), salvati nella prenotazione in "servizi: [chiave]".
+     I 3 di base si possono rinominare o togliere: settings.serviziBase = { chiave: { label, off } } (il campo nella prenotazione resta).
+     tutti = anche quelli tolti (per le prenotazioni che li avevano già). */
+  const servizi = (cfgIn, baseIn, tutti) => { const bc = baseIn || (data().settings || {}).serviziBase || {};
+    return EXTRAS.map(([k, l]) => ({ key: k, label: String((bc[k] || {}).label || '').trim() || l, base: true, off: !!(bc[k] || {}).off })).filter(x => tutti || !x.off).concat((Array.isArray(cfgIn) ? cfgIn : ((data().settings || {}).servizi || [])).filter(x => x && x.key).map(x => ({ key: x.key, label: x.label, base: false }))); };
   const hasSrv = (b, x) => x.base ? !!b[x.key] : (Array.isArray(b.servizi) && b.servizi.includes(x.key));
-  const srvLabels = b => servizi().filter(x => hasSrv(b, x)).map(x => x.label);
+  const srvLabels = b => servizi(null, null, true).filter(x => hasSrv(b, x)).map(x => x.label);
   /* Dettaglio dei servizi nella prenotazione: serviziDett[chiave] = { incluso, acquisto, vendita, note }.
      "incluso" = compreso nel prezzo di vendita dell'affitto; altrimenti ha prezzi propri, sommati al totale. */
   const srvDet = (b, k) => Object.assign({ incluso: true, acquisto: null, vendita: null, note: '' }, (b.serviziDett || {})[k] || {});
-  const srvTot = b => { let v = 0, a = 0; servizi().forEach(x => { if (!hasSrv(b, x)) return; const d = srvDet(b, x.key); if (d.incluso) return; if (typeof d.vendita === 'number') v += d.vendita; if (typeof d.acquisto === 'number') a += d.acquisto; }); return { vendita: v, acquisto: a }; };
+  const srvTot = b => { let v = 0, a = 0; servizi(null, null, true).forEach(x => { if (!hasSrv(b, x)) return; const d = srvDet(b, x.key); if (d.incluso) return; if (typeof d.vendita === 'number') v += d.vendita; if (typeof d.acquisto === 'number') a += d.acquisto; }); return { vendita: v, acquisto: a }; };
   const isMobile = () => window.matchMedia('(max-width: 760px)').matches;
 
   /* ---------- preferenze di vista (solo su questo dispositivo) ---------- */
@@ -270,7 +273,7 @@ window.SDBStore.ready.then(function () {
     if (acq) righe.push(['Prezzo di acquisto concordato', typeof b.prezzoAcquisto === 'number' ? S.money(b.prezzoAcquisto) : '—']);
     if (assegn.length) righe.push(['Assegnata a (app Scontrini)', assegn.join(', ')]);
     if (b.note) righe.push(['Note', b.note]);
-    const srvRighe = servizi().filter(x => hasSrv(b, x)).map(x => { const d = srvDet(b, x.key); return [x.label, d.incluso ? 'Incluso nel prezzo' : 'A parte'].concat(acq ? [d.incluso || typeof d.acquisto !== 'number' ? '' : S.money(d.acquisto)] : [], [d.incluso || typeof d.vendita !== 'number' ? '' : S.money(d.vendita), d.note || '']); });
+    const srvRighe = servizi(null, null, true).filter(x => hasSrv(b, x)).map(x => { const d = srvDet(b, x.key); return [x.label, d.incluso ? 'Incluso nel prezzo' : 'A parte'].concat(acq ? [d.incluso || typeof d.acquisto !== 'number' ? '' : S.money(d.acquisto)] : [], [d.incluso || typeof d.vendita !== 'number' ? '' : S.money(d.vendita), d.note || '']); });
     const sv = srvTot(b);
     const totVendita = (typeof b.prezzoVendita === 'number' ? b.prezzoVendita : 0) + sv.vendita;
     const totAcquisto = acq ? (typeof b.prezzoAcquisto === 'number' ? b.prezzoAcquisto : 0) + sv.acquisto : null;
@@ -645,7 +648,7 @@ window.SDBStore.ready.then(function () {
       </section>
       <section class="dsec sec-srv"><h4>Servizi</h4>
       <div class="srv-list">
-        ${servizi().map(x => { const d = srvDet(b, x.key); const on = hasSrv(b, x); return `<div class="srv-item${on ? ' on' : ''}" data-sk="${esc(x.key)}">
+        ${servizi(null, null, true).filter(x => !x.off || hasSrv(b, x)).map(x => { const d = srvDet(b, x.key); const on = hasSrv(b, x); return `<div class="srv-item${on ? ' on' : ''}" data-sk="${esc(x.key)}">
           <label class="flag"><input type="checkbox" class="srv-cb" ${x.base ? `id="b-${x.key}"` : `data-srv="${esc(x.key)}"`} ${on ? 'checked' : ''}><span><b>${esc(x.label)}</b></span></label>
           <div class="srv-det"${on ? '' : ' hidden'}>
             <div class="seg small srv-mode"><button type="button" data-inc="1" class="${d.incluso ? 'on' : ''}">Incluso nel prezzo</button><button type="button" data-inc="0" class="${d.incluso ? '' : 'on'}">A parte</button></div>
@@ -687,7 +690,7 @@ window.SDBStore.ready.then(function () {
     $('#b-sw').addEventListener('click', e => { const s = e.target.closest('.sw[data-c]'); if (!s) return; color = s.dataset.c; colorTouched = true; paint(); });
     $('#b-color').addEventListener('input', e => { color = e.target.value; colorTouched = true; paint(); });
     $('#b-status').addEventListener('change', e => { if (!colorTouched) { color = statoColor(e.target.value); paint(); } });
-    const read = () => ({ villaId: $('#b-villa').value, status: $('#b-status').value, from: $('#b-from').value, to: $('#b-to').value, cliente: $('#b-cliente').value.trim(), note: $('#b-note').value.trim(), color: colorTouched ? color : null, earlyIn: $('#b-early').checked, lateOut: $('#b-late').checked, prezzoVendita: money('#b-sale'), prezzoAcquisto: money('#b-buy'), pulizia: $('#b-pulizia').checked, cuoco: $('#b-cuoco').checked, transfer: $('#b-transfer').checked, serviziDett: readSrv(), servizi: $$('#bform [data-srv]').filter(c => c.checked).map(c => c.dataset.srv).concat((b.servizi || []).filter(k => !servizi().some(x => x.key === k))) });
+    const read = () => ({ villaId: $('#b-villa').value, status: $('#b-status').value, from: $('#b-from').value, to: $('#b-to').value, cliente: $('#b-cliente').value.trim(), note: $('#b-note').value.trim(), color: colorTouched ? color : null, earlyIn: $('#b-early').checked, lateOut: $('#b-late').checked, prezzoVendita: money('#b-sale'), prezzoAcquisto: money('#b-buy'), pulizia: $('#b-pulizia') ? $('#b-pulizia').checked : !!b.pulizia, cuoco: $('#b-cuoco') ? $('#b-cuoco').checked : !!b.cuoco, transfer: $('#b-transfer') ? $('#b-transfer').checked : !!b.transfer, serviziDett: readSrv(), servizi: $$('#bform [data-srv]').filter(c => c.checked).map(c => c.dataset.srv).concat((b.servizi || []).filter(k => !servizi().some(x => x.key === k))) });
     function money(sel) { const v = S.parseMoney($(sel).value); return typeof v === 'number' ? v : null; }
     const num = el => { const v = S.parseMoney(el.value); return typeof v === 'number' ? v : null; };
     // dettagli dei servizi: tengo anche quelli di servizi non spuntati o non più in elenco, così non si perdono
@@ -1337,7 +1340,7 @@ window.SDBStore.ready.then(function () {
         <div class="loc-new"><input id="loc-add-in" placeholder="Nuova località"><button type="button" class="btn small" id="loc-add">Aggiungi</button></div>
       </section>`)}
       ${pg('servizi', `<section class="card"><h2>Servizi delle prenotazioni</h2>
-        <p class="note">Sono le caselle della sezione Servizi nella finestra della prenotazione. Qui scegli per ognuno se di norma è <b>incluso</b> nel prezzo dell'affitto o <b>a parte</b>, e i prezzi predefiniti: quando spunti il servizio in una prenotazione si compilano da soli, e lì puoi sempre cambiarli. Pulizia finale, cuoco e transfer sono di base; gli altri si rinominano e si tolgono se nessuna prenotazione li usa.${canAcq() ? ' I prezzi di acquisto li vede solo chi vede gli acquisti.' : ''}</p>
+        <p class="note">Sono le caselle della sezione Servizi nella finestra della prenotazione. Qui scegli per ognuno se di norma è <b>incluso</b> nel prezzo dell'affitto o <b>a parte</b>, e i prezzi predefiniti: quando spunti il servizio in una prenotazione si compilano da soli, e lì puoi sempre cambiarli. Tutti si rinominano. I servizi aggiunti si tolgono se nessuna prenotazione li usa; pulizia finale, cuoco e transfer si possono togliere sempre (le prenotazioni che li avevano li tengono) e rimettere quando vuoi.${canAcq() ? ' I prezzi di acquisto li vede solo chi vede gli acquisti.' : ''}</p>
         <div class="tbl-wrap"><table class="prices srv-tbl"><thead><tr><th>Servizio</th><th>Di norma</th>${canAcq() ? '<th>Acquisto €</th>' : ''}<th>Vendita €</th><th>Usato</th><th></th></tr></thead><tbody id="srv-list"></tbody></table></div>
         <form class="loc-new" id="srv-add" autocomplete="off"><input id="srv-add-n" placeholder="Nuovo servizio (es. Baby sitter)"><button class="btn small">Aggiungi servizio</button></form>
       </section>
@@ -1583,14 +1586,15 @@ window.SDBStore.ready.then(function () {
     let acqSrv = JSON.parse(JSON.stringify(data().serviziAcquisto || {})); let tAcq = null;
     const fmtP = x => typeof x === 'number' ? fmtNum(x) : '';
     const drawSrv = () => {
-      const list = servizi(st.servizi);
+      const list = servizi(st.servizi, st.serviziBase || {}); const tolti = servizi(st.servizi, st.serviziBase || {}, true).filter(x => x.off);
       $('#srv-list').innerHTML = list.map(x => { const n = x.base ? srvBaseUsed(x.key) : srvUsed(x.key); const pz = prezziSrv()[x.key] || {}; const inc = pz.incluso !== false; return `<tr class="srv-tr" data-sk="${esc(x.key)}">
-        <td>${x.base ? `<b class="srv-n">${esc(x.label)}</b> <span class="note">di base</span>` : `<input data-sl value="${esc(x.label)}" aria-label="Nome del servizio">`}</td>
+        <td><input data-sl value="${esc(x.label)}" aria-label="Nome del servizio"></td>
         <td><div class="seg small" data-pi><button type="button" data-i="1" class="${inc ? 'on' : ''}">Incluso</button><button type="button" data-i="0" class="${inc ? '' : 'on'}">A parte</button></div></td>
         ${canAcq() ? `<td><input data-pa inputmode="numeric" value="${esc(fmtP(acqSrv[x.key]))}" placeholder="—" aria-label="Acquisto predefinito"></td>` : ''}
         <td><input data-pv inputmode="numeric" value="${esc(fmtP(pz.vendita))}" placeholder="—" aria-label="Vendita predefinita"></td>
         <td class="note">${n} ${n === 1 ? 'prenot.' : 'prenot.'}</td>
-        <td class="loc-act">${!x.base && !n ? '<button type="button" class="btn small danger" data-sd>Togli</button>' : ''}</td></tr>`; }).join('');
+        <td class="loc-act">${x.base || !n ? '<button type="button" class="btn small danger" data-sd>Togli</button>' : ''}</td></tr>`; }).join('')
+        + (tolti.length ? `<tr class="srv-tolti"><td colspan="6" class="note">Tolti: ${tolti.map(x => `${esc(x.label)} <button type="button" class="btn small" data-sr="${esc(x.key)}">Rimetti</button>`).join(' ')}</td></tr>` : '');
     };
     $('#srv-list').addEventListener('input', e => { const row = e.target.closest('[data-sk]'); if (!row) return; const k = row.dataset.sk;
       if (e.target.matches('[data-pv]')) { const v = S.parseMoney(e.target.value); prezziSrv()[k] = Object.assign({}, prezziSrv()[k], { vendita: typeof v === 'number' ? v : null }); save(); }
@@ -1605,7 +1609,7 @@ window.SDBStore.ready.then(function () {
       $('#inc-list').innerHTML = S.inclusioniDi(st).map((x, i, l) => `<div class="inc-row" data-ii="${esc(x.id)}">
         <label class="inc-on" title="Spuntata di norma nelle nuove offerte"><input type="checkbox" data-ion ${x.on !== false ? 'checked' : ''}></label>
         <input data-iit value="${esc(x.it || '')}" placeholder="Italiano" aria-label="Voce in italiano"><input data-ien value="${esc(x.en || '')}" placeholder="English" aria-label="Voce in inglese">
-        <select data-isrv aria-label="Servizio collegato" title="Se la colleghi a un servizio, nell'offerta la voce si attiva solo quando quel servizio è spuntato come incluso"><option value="">Sempre disponibile</option>${servizi(st.servizi).map(z => `<option value="${esc(z.key)}" ${x.servizio === z.key ? 'selected' : ''}>Servizio: ${esc(z.label)}</option>`).join('')}</select>
+        <select data-isrv aria-label="Servizio collegato" title="Se la colleghi a un servizio, nell'offerta la voce si attiva solo quando quel servizio è spuntato come incluso"><option value="">Sempre disponibile</option>${servizi(st.servizi, st.serviziBase || {}).map(z => `<option value="${esc(z.key)}" ${x.servizio === z.key ? 'selected' : ''}>Servizio: ${esc(z.label)}</option>`).join('')}</select>
         <span class="inc-act"><button type="button" class="btn small" data-imv="-1" ${i ? '' : 'disabled'} aria-label="Sposta su">↑</button><button type="button" class="btn small" data-imv="1" ${i < l.length - 1 ? '' : 'disabled'} aria-label="Sposta giù">↓</button><button type="button" class="btn small danger" data-idel>Togli</button></span></div>`).join('') || '<p class="note">Nessuna voce.</p>';
     };
     drawInc();
@@ -1621,13 +1625,19 @@ window.SDBStore.ready.then(function () {
     const srvCustom = () => JSON.parse(JSON.stringify(st.servizi || (settings().servizi || [])));
     drawSrv();
     $('#srv-list').addEventListener('input', e => { const row = e.target.closest('[data-sk]'); if (!row || !e.target.matches('[data-sl]')) return; const v = e.target.value.trim(); if (!v) return;
+      if (EXTRAS.some(([k]) => k === row.dataset.sk)) { const bc = JSON.parse(JSON.stringify(st.serviziBase || {})); bc[row.dataset.sk] = Object.assign({}, bc[row.dataset.sk], { label: v }); st.serviziBase = bc; save(); return; }
       const l = srvCustom(); const x = l.find(y => y.key === row.dataset.sk); if (x) { x.label = v; st.servizi = l; save(); } });
     $('#srv-list').addEventListener('change', e => { const row = e.target.closest('[data-sk]'); if (row && e.target.matches('[data-sl]') && !e.target.value.trim()) drawSrv(); });
-    $('#srv-list').addEventListener('click', e => { const row = e.target.closest('[data-sk]'); if (!row || !e.target.closest('[data-sd]')) return;
-      st.servizi = srvCustom().filter(y => y.key !== row.dataset.sk); save(); drawSrv(); toast('Servizio tolto'); });
+    $('#srv-list').addEventListener('click', e => {
+      const r = e.target.closest('[data-sr]'); if (r) { const bc = JSON.parse(JSON.stringify(st.serviziBase || {})); bc[r.dataset.sr] = Object.assign({}, bc[r.dataset.sr], { off: false }); st.serviziBase = bc; save(); drawSrv(); drawInc(); toast('Servizio rimesso'); return; }
+      const row = e.target.closest('[data-sk]'); if (!row || !e.target.closest('[data-sd]')) return; const k = row.dataset.sk;
+      // i 3 di base non si cancellano: si nascondono (il campo resta nelle prenotazioni che lo avevano già)
+      if (EXTRAS.some(([z]) => z === k)) { const bc = JSON.parse(JSON.stringify(st.serviziBase || {})); bc[k] = Object.assign({}, bc[k], { off: true }); st.serviziBase = bc; }
+      else st.servizi = srvCustom().filter(y => y.key !== k);
+      save(); drawSrv(); drawInc(); toast('Servizio tolto'); });
     $('#srv-add').addEventListener('submit', e => {
       e.preventDefault(); const label = $('#srv-add-n').value.trim(); if (!label) { $('#srv-add-n').focus(); return; }
-      if (servizi(st.servizi).some(x => x.label.toLowerCase() === label.toLowerCase())) { toast('Esiste già questo servizio'); return; }
+      if (servizi(st.servizi, st.serviziBase || {}, true).some(x => x.label.toLowerCase() === label.toLowerCase())) { toast('Esiste già questo servizio (se è tra i tolti, rimettilo)'); return; }
       const slug = label.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24) || 'servizio';
       const l = srvCustom(); let key = slug; let n = 2; while (l.some(x => x.key === key) || EXTRAS.some(([k]) => k === key)) key = slug + '-' + n++;
       l.push({ key, label }); st.servizi = l; save(); drawSrv(); $('#srv-add-n').value = ''; toast(`Aggiunto il servizio ${label}`);
