@@ -558,13 +558,20 @@
           ${!list.length ? '<div class="warn">Nessun account abilitato all\'app Scontrini. Abilitalo in Impostazioni → Account autorizzati (app "Scontrini") e comparirà qui.</div>' : ''}
           ${acc ? `<div class="as-head"><div><b>${esc(acc.nome || acc.email)}</b><small>${esc(acc.email)}${acc.abilitato ? '' : ' · non più abilitato all\'app Scontrini'}</small></div>${acc.abilitato ? ((acc.ville || []).length || (acc.prenotazioni || []).length ? '<button type="button" class="btn small" id="as-rm">Togli tutte le spunte</button>' : '') : '<button type="button" class="btn small danger" id="as-rm">Togli dall\'elenco</button>'}</div>
           <input type="search" id="as-q" placeholder="Cerca villa o cliente" value="${esc(q)}">
-          <div class="as-list">${vl.map(v => {
+          ${(() => {
+            // due blocchi: ville con qualcosa di assegnato (tutta la villa o alcune prenotazioni) e, sotto, quelle da assegnare
+            const riga = v => {
             const bs = bookings.filter(b => b.villaId === v.id && b.status !== 'richiesta').sort((x, y) => String(y.from).localeCompare(String(x.from)));
             const all = vSet.has(v.id); const nb = bs.filter(b => bSet.has(b.id)).length;
             return `<details class="as-villa${all || nb ? ' has' : ''}${bs.length ? ' can-open' : ''}" ${q || nb ? 'open' : ''}><summary><label class="as-check" onclick="event.stopPropagation()"><input type="checkbox" data-av="${esc(v.id)}" ${all ? 'checked' : ''}> <b>${esc(v.name)}</b></label><span>${all ? 'tutta la villa' : nb ? nb + (nb === 1 ? ' prenotazione' : ' prenotazioni') + ' su ' + bs.length : bs.length ? bs.length + (bs.length === 1 ? ' prenotazione' : ' prenotazioni') : 'nessuna prenotazione'}</span></summary>
               ${bs.length ? `<div class="as-bks">${bs.map(b => `<label class="as-check"><input type="checkbox" data-ab="${esc(b.id)}" ${all || bSet.has(b.id) ? 'checked' : ''} ${all ? 'disabled' : ''}> ${esc((b.cliente || '').trim() || 'Senza nome')} · ${dataBreve(b.from)} → ${dataBreve(b.to)}</label>`).join('')}</div>` : ''}
             </details>`;
-          }).join('')}</div>` : ''}
+          };
+            const conta = v => vSet.has(v.id) || bookings.some(b => b.villaId === v.id && bSet.has(b.id));
+            const si = vl.filter(conta), no = vl.filter(v => !conta(v));
+            return `<h4 class="as-tit">Assegnate <span>${si.length}</span></h4><div class="as-list as-si">${si.map(riga).join('') || '<p class="note">Nessuna villa o prenotazione assegnata.</p>'}</div>
+              <h4 class="as-tit">Da assegnare <span>${no.length}</span></h4><div class="as-list as-no">${no.map(riga).join('') || '<p class="note">Tutte assegnate.</p>'}</div>`;
+          })()}` : ''}
           <div class="foot"><button type="button" class="btn primary" id="as-ok">Fatto</button></div></div>`;
         // la prima spunta crea da sola la riga dell'account in meta/assegnazioni
         const upd = fn => { const l = JSON.parse(JSON.stringify(accs())); let a = l.find(x => x.email === selAcc);
