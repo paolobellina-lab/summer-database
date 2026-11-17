@@ -567,10 +567,18 @@
               ${bs.length ? `<div class="as-bks">${bs.map(b => `<label class="as-check"><input type="checkbox" data-ab="${esc(b.id)}" ${all || bSet.has(b.id) ? 'checked' : ''} ${all ? 'disabled' : ''}> ${esc((b.cliente || '').trim() || 'Senza nome')} · ${dataBreve(b.from)} → ${dataBreve(b.to)}</label>`).join('')}</div>` : ''}
             </details>`;
           };
-            const conta = v => vSet.has(v.id) || bookings.some(b => b.villaId === v.id && bSet.has(b.id));
-            const si = vl.filter(conta), no = vl.filter(v => !conta(v));
-            return `<h4 class="as-tit">Assegnate <span>${si.length}</span></h4><div class="as-list as-si">${si.map(riga).join('') || '<p class="note">Nessuna villa o prenotazione assegnata.</p>'}</div>
-              <h4 class="as-tit">Da assegnare <span>${no.length}</span></h4><div class="as-list as-no">${no.map(riga).join('') || '<p class="note">Tutte assegnate.</p>'}</div>`;
+            // sopra: una riga per ogni assegnazione (villa intera o singola prenotazione), togliendo la spunta si toglie;
+            // sotto: tutte le ville, con le loro prenotazioni, per assegnare
+            const vNome = id => (data().villas.find(v => v.id === id) || {}).name || id;
+            const okQ = (vid, cli) => !q || String(vNome(vid)).toLowerCase().includes(q) || String(cli || '').toLowerCase().includes(q);
+            const intere = [...vSet].filter(id => okQ(id, '')).sort((x, y) => String(vNome(x)).localeCompare(String(vNome(y)), 'it', { numeric: true }));
+            const singole = bookings.filter(b => bSet.has(b.id) && !vSet.has(b.villaId) && okQ(b.villaId, b.cliente))
+              .sort((x, y) => String(vNome(x.villaId)).localeCompare(String(vNome(y.villaId)), 'it', { numeric: true }) || String(x.from).localeCompare(String(y.from)));
+            const nAss2 = intere.length + singole.length;
+            const righe = intere.map(id => `<label class="as-row"><input type="checkbox" data-av="${esc(id)}" checked><b>${esc(vNome(id))}</b><span>tutta la villa</span></label>`).join('')
+              + singole.map(b => `<label class="as-row"><input type="checkbox" data-ab="${esc(b.id)}" checked><b>${esc(vNome(b.villaId))}</b><span>${esc((b.cliente || '').trim() || 'Senza nome')} · ${dataBreve(b.from)} → ${dataBreve(b.to)}</span></label>`).join('');
+            return `<h4 class="as-tit">Assegnate <span>${nAss2}</span></h4><div class="as-list as-si">${righe || '<p class="note">Nessuna villa o prenotazione assegnata.</p>'}</div>
+              <h4 class="as-tit">Da assegnare <span>${vl.length} ville</span></h4><div class="as-list as-no">${vl.map(riga).join('') || '<p class="note">Nessuna villa.</p>'}</div>`;
           })()}` : ''}
           <div class="foot"><button type="button" class="btn primary" id="as-ok">Fatto</button></div></div>`;
         // la prima spunta crea da sola la riga dell'account in meta/assegnazioni
