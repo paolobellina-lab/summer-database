@@ -395,9 +395,11 @@ window.SDBStore.ready.then(function () {
     const priceFilter = (typeof da === 'number') || (typeof a === 'number');
     const bookings = data().bookings;
     hiddenNoPrice = 0;
+    // le ville senza prezzi per la tariffa si vedono se le cerchi per nome o con "mostra anche quelle senza prezzo"
+    const nomeOk = v => q && `${v.name} ${v.nomeReale} ${v.proprietario} ${v.location} ${v.indirizzo}`.toLowerCase().includes(q);
     return sortedVillas().filter(v => {
-      const tv = tariffFor(v, ui.tariff);
-      if (!tv) { hiddenNoPrice++; return false; }
+      let tv = tariffFor(v, ui.tariff);
+      if (!tv) { if (ui.senzaPrezzo || nomeOk(v)) tv = ui.tariff; else { hiddenNoPrice++; return false; } }
       const perV = S.periodsFor(st, v, tv);
       if (q && !(`${v.name} ${v.nomeReale} ${v.proprietario} ${v.location} ${v.indirizzo}`.toLowerCase().includes(q))) return false;
       if (ui.loc && String(v.location || '').trim().toUpperCase() !== ui.loc) return false;
@@ -588,7 +590,10 @@ window.SDBStore.ready.then(function () {
         <div class="hover-col" hidden></div><div class="hover-tag" hidden></div>
       </div>`;
     cal.scrollLeft = keepX; cal.scrollTop = keepY;
-    $('#count').textContent = `${vs.length} di ${data().villas.length} ville` + (hiddenNoPrice ? ` · ${hiddenNoPrice} senza prezzo ${ui.tariff === 'settimanale' ? 'settimanale' : S.TARIFFE.find(t => t.key === ui.tariff).label.toLowerCase() + ' né settimanale'} non mostrate` : '');
+    const nNo = data().villas.filter(v => !tariffFor(v, ui.tariff)).length;
+    $('#count').innerHTML = esc(`${vs.length} di ${data().villas.length} ville`) + (hiddenNoPrice ? esc(` · ${hiddenNoPrice} senza prezzo ${ui.tariff === 'settimanale' ? 'settimanale' : S.TARIFFE.find(t => t.key === ui.tariff).label.toLowerCase() + ' né settimanale'} non mostrate`) + ' · <a href="#" id="count-np">mostrale</a>'
+      : ui.senzaPrezzo && nNo ? ` · <a href="#" id="count-np">${nNo === 1 ? 'nascondi quella senza prezzo' : `nascondi le ${nNo} senza prezzo`}</a>` : '');
+    const cnp = $('#count-np'); if (cnp) cnp.onclick = e => { e.preventDefault(); ui.senzaPrezzo = !ui.senzaPrezzo; saveUI(); drawCalendar(); };
     const er = $('#empty-reset'); if (er) er.addEventListener('click', () => $('#f-reset').click());
     bindCalendar(cal, { W, start, nDays, nameW });
   }
