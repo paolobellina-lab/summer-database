@@ -34,6 +34,19 @@ window.SDBStore.ready.then(function () {
   const ND_COLOR = '#8a8f94';
   const bookingColor = b => b._nd ? ND_COLOR : isDefaultColor(b) ? statoColor(b.status) : b.color;
   // periodi ND del listino trasformati in "prenotazioni simulate" grigie (non salvate, calcolate dal listino)
+  /* Periodo pagato al proprietario (bookings.pagatoDal / pagatoAl, solo se diverso da quello del cliente):
+     notti pagate ma senza nessun affitto della villa (stati che non sono "richiesta"), raggruppate in intervalli. */
+  function pagatiLiberi(b, bookings) {
+    if (!b || !b.pagatoDal || !b.pagatoAl || b.pagatoAl <= b.pagatoDal) return [];
+    const altri = (bookings || data().bookings).filter(o => o.id !== b.id && o.villaId === b.villaId && o.status !== 'richiesta').concat(b.status === 'richiesta' ? [] : [b]);
+    const out = []; let cur = null;
+    for (let d = b.pagatoDal; d < b.pagatoAl; d = S.addDays(d, 1)) {
+      const libera = !altri.some(o => o.from <= d && d < o.to);
+      if (libera) { if (cur && cur.to === d) cur.to = S.addDays(d, 1); else { cur = { from: d, to: S.addDays(d, 1) }; out.push(cur); } }
+    }
+    return out;
+  }
+  const nottiDi = l => l.reduce((t, r) => t + S.diffDays(r.from, r.to), 0);
   function ndSpans(v, tariff) {
     const per = S.periodsFor(settings(), v, tariff); const out = [];
     per.forEach((p, i) => {
@@ -272,6 +285,9 @@ window.SDBStore.ready.then(function () {
     ];
     if (acq) righe.push(['Prezzo di acquisto concordato', typeof b.prezzoAcquisto === 'number' ? S.money(b.prezzoAcquisto) : '—']);
     if (typeof b.deposito === 'number') righe.push(['Deposito di sicurezza', S.money(b.deposito)]);
+    if (b.pagatoDal && b.pagatoAl) { const lib = pagatiLiberi(b);
+      righe.push(['Pagata al proprietario', `${S.dmy(b.pagatoDal)} → ${S.dmy(b.pagatoAl)} · ${S.diffDays(b.pagatoDal, b.pagatoAl)} notti`]);
+      righe.push(['Notti pagate libere', lib.length ? `${nottiDi(lib)}: ${lib.map(r => S.dm(r.from) + ' → ' + S.dm(r.to)).join(', ')}` : 'nessuna']); }
     if (assegn.length) righe.push(['Assegnata a (app Scontrini)', assegn.join(', ')]);
     if (b.note) righe.push(['Note', b.note]);
     const srvRighe = servizi(null, null, true).filter(x => hasSrv(b, x)).map(x => { const d = srvDet(b, x.key); return [x.label, d.incluso ? 'Incluso nel prezzo' : 'A parte'].concat(acq ? [d.incluso || typeof d.acquisto !== 'number' ? '' : S.money(d.acquisto)] : [], [d.incluso || typeof d.vendita !== 'number' ? '' : S.money(d.vendita), d.note || '']); });
@@ -309,7 +325,7 @@ window.SDBStore.ready.then(function () {
 
   // contesto della pagina Prenotazioni (spese.js)
   const ctxPren = () => ({ ui, saveUI, esc, data, spese, store, $, $$, toast, schedaPren, compressImage, canAcq, canEdit, isFull, S,
-    stati, statoLabel, bookingColor, valori: valoriPren, openBooking,
+    stati, statoLabel, bookingColor, valori: valoriPren, openBooking, pagatiLiberi: b => nottiDi(pagatiLiberi(b)),
     nuovaPren: villaId => { const v = villaById(villaId) || sortedVillas()[0]; if (!v) { toast('Prima inserisci una villa'); return; } openBooking(Object.assign({ villaId: v.id }, julyWeek(v))); }, cover: id => (thumbs.map[id] || {}).thumb || '', onThumbs: f => { villasRedraw = f; } });
   /* ---------- router ---------- */
   function route() {
@@ -526,6 +542,13 @@ window.SDBStore.ready.then(function () {
         const tip = [statoLabel(b.status), S.dm(b.from) + ' → ' + S.dm(b.to), b.cliente, typeof b.prezzoVendita === 'number' ? 'Vendita ' + S.money(b.prezzoVendita) : '', typeof b.prezzoAcquisto === 'number' ? 'Acquisto ' + S.money(b.prezzoAcquisto) : '', b.earlyIn ? 'Early check-in' : '', b.lateOut ? 'Late check-out' : ''].concat(extras).filter(Boolean).join(' · ');
         return `<div class="bar" data-b="${esc(b.id)}" style="left:${l}px;width:${w}px;background:${esc(col)};color:${S.inkFor(col)}" title="${esc(tip)}"><span class="who">${esc(txt)}</span>${tot ? `<span class="tot">${esc(tot)}</span>` : ''}</div>`;
       }).join('');
+      // notti pagate al proprietario ma libere: fascia arancione (un clic sopra apre una prenotazione nuova, come la riga)
+      const pagL = data().bookings.filter(b0 => b0.villaId === v.id && b0.pagatoDal).flatMap(b0 => pagatiLiberi(b0).map(r => Object.assign({ b0 }, r))).map(r => {
+        const l = Math.max(X(r.from) + W / 2, 0), rr = Math.min(X(r.to) + W / 2, width);
+        if (rr <= 0 || l >= width) return '';
+        const nn = S.diffDays(r.from, r.to);
+        return `<div class="pagfree" style="left:${l}px;width:${rr - l}px" title="Pagata al proprietario ma libera · ${S.dm(r.from)} → ${S.dm(r.to)} (${nn} ${nn === 1 ? 'notte' : 'notti'}) · ${esc(r.b0.cliente || statoLabel(r.b0.status))}">${rr - l > 70 ? '<span>pagata · libera</span>' : ''}</div>`;
+      }).join('');
       const nds = ndSpans(v, tv).map(s => {
         const l = Math.max(X(s.from) + W / 2, 0), r = Math.min(X(s.to) + W / 2, width);
         if (r <= 0 || l >= width) return '';
@@ -545,7 +568,7 @@ window.SDBStore.ready.then(function () {
       const sub = [fallback ? 'solo settimanale' : '', v.location, v.guests || v.pax ? (v.guests || v.pax) + ' osp.' : '', v.totalBedrooms ? v.totalBedrooms + ' cam.' : ''].filter(Boolean).join(' · ');
       return `<div class="vrow" data-v="${esc(v.id)}">
         <div class="vname" data-open="${esc(v.id)}" title="Apri scheda ${esc(v.name)}"><b>${esc(v.name)}</b><small>${esc(sub || ' ')}</small></div>
-        <div class="track" style="${trackBg}">${mLines}<div class="lane-a">${nds}${bars}${pills}</div></div>
+        <div class="track" style="${trackBg}">${mLines}<div class="lane-a">${pagL}${nds}${bars}${pills}</div></div>
       </div>`;
     }).join('');
 
@@ -660,6 +683,14 @@ window.SDBStore.ready.then(function () {
         <label class="flag"><input type="checkbox" id="b-early" ${b.earlyIn ? 'checked' : ''}><span><b>Early check-in</b><small>Il giorno di arrivo resta tutto a questo affitto</small></span></label>
         <label class="flag"><input type="checkbox" id="b-late" ${b.lateOut ? 'checked' : ''}><span><b>Late check-out</b><small>Il giorno di partenza resta tutto a questo affitto</small></span></label>
       </div>
+      <label class="flag b-pag-flag"><input type="checkbox" id="b-pag" ${b.pagatoDal ? 'checked' : ''}><span><b>Giorni pagati al proprietario diversi</b><small>Se paghi la villa al proprietario per più giorni di quelli prenotati dal cliente</small></span></label>
+      <div id="b-pag-box" ${b.pagatoDal ? '' : 'hidden'}>
+        <div class="row">
+          <label class="field"><span>Pagata dal</span><input type="date" id="b-pag-from" value="${esc(b.pagatoDal || b.from || '')}"></label>
+          <label class="field"><span>Pagata fino al</span><input type="date" id="b-pag-to" value="${esc(b.pagatoAl || b.to || '')}"></label>
+        </div>
+        <div id="b-pag-info"></div>
+      </div>
       </section>
       <section class="dsec sec-cli"><h4>Cliente e prezzo</h4>
       <label class="field"><span>Cliente</span><input id="b-cliente" value="${esc(b.cliente)}" placeholder="Cognome cliente"></label>
@@ -719,7 +750,8 @@ window.SDBStore.ready.then(function () {
     $('#b-sw').addEventListener('click', e => { const s = e.target.closest('.sw[data-c]'); if (!s) return; color = s.dataset.c; colorTouched = true; paint(); });
     $('#b-color').addEventListener('input', e => { color = e.target.value; colorTouched = true; paint(); });
     $('#b-status').addEventListener('change', e => { if (!colorTouched) { color = statoColor(e.target.value); paint(); } });
-    const read = () => ({ villaId: $('#b-villa').value, status: $('#b-status').value, from: $('#b-from').value, to: $('#b-to').value, cliente: $('#b-cliente').value.trim(), note: $('#b-note').value.trim(), color: colorTouched ? color : null, earlyIn: $('#b-early').checked, lateOut: $('#b-late').checked, prezzoVendita: money('#b-sale'), prezzoAcquisto: money('#b-buy'), deposito: money('#b-dep'), pulizia: $('#b-pulizia') ? $('#b-pulizia').checked : !!b.pulizia, cuoco: $('#b-cuoco') ? $('#b-cuoco').checked : !!b.cuoco, transfer: $('#b-transfer') ? $('#b-transfer').checked : !!b.transfer, serviziDett: readSrv(), servizi: $$('#bform [data-srv]').filter(c => c.checked).map(c => c.dataset.srv).concat((b.servizi || []).filter(k => !servizi().some(x => x.key === k))) });
+    const read = () => ({ villaId: $('#b-villa').value, status: $('#b-status').value, from: $('#b-from').value, to: $('#b-to').value, cliente: $('#b-cliente').value.trim(), note: $('#b-note').value.trim(), color: colorTouched ? color : null, earlyIn: $('#b-early').checked, lateOut: $('#b-late').checked,
+      pagatoDal: $('#b-pag').checked && $('#b-pag-from').value ? $('#b-pag-from').value : null, pagatoAl: $('#b-pag').checked && $('#b-pag-to').value ? $('#b-pag-to').value : null, prezzoVendita: money('#b-sale'), prezzoAcquisto: money('#b-buy'), deposito: money('#b-dep'), pulizia: $('#b-pulizia') ? $('#b-pulizia').checked : !!b.pulizia, cuoco: $('#b-cuoco') ? $('#b-cuoco').checked : !!b.cuoco, transfer: $('#b-transfer') ? $('#b-transfer').checked : !!b.transfer, serviziDett: readSrv(), servizi: $$('#bform [data-srv]').filter(c => c.checked).map(c => c.dataset.srv).concat((b.servizi || []).filter(k => !servizi().some(x => x.key === k))) });
     function money(sel) { const v = S.parseMoney($(sel).value); return typeof v === 'number' ? v : null; }
     const num = el => { const v = S.parseMoney(el.value); return typeof v === 'number' ? v : null; };
     // dettagli dei servizi: tengo anche quelli di servizi non spuntati o non più in elenco, così non si perdono
@@ -759,7 +791,17 @@ window.SDBStore.ready.then(function () {
         if (o.to === x.from && (x.earlyIn || o.lateOut)) swapBad.push(`${S.dmy(x.from)}: ${x.earlyIn ? 'questo affitto ha l\'early check-in' : ''}${x.earlyIn && o.lateOut ? ' e ' : ''}${o.lateOut ? desc(o) + ' ha il late check-out' : ''}`);
         if (o.from === x.to && (x.lateOut || o.earlyIn)) swapBad.push(`${S.dmy(x.to)}: ${x.lateOut ? 'questo affitto ha il late check-out' : ''}${x.lateOut && o.earlyIn ? ' e ' : ''}${o.earlyIn ? desc(o) + ' ha l\'early check-in' : ''}`);
       });
-      blocked = clash.length > 0 || swapBad.length > 0;
+      // giorni pagati al proprietario: quante notti, e quali restano libere (pagate ma senza affitto)
+      let pagBad = false;
+      $('#b-pag-box').hidden = !$('#b-pag').checked;
+      if ($('#b-pag').checked) {
+        const pn = x.pagatoDal && x.pagatoAl ? S.diffDays(x.pagatoDal, x.pagatoAl) : 0;
+        if (pn <= 0) { pagBad = true; $('#b-pag-info').innerHTML = '<div class="warn err">La fine del periodo pagato deve essere dopo l\'inizio.</div>'; }
+        else { const lib = pagatiLiberi(Object.assign({ id: b.id }, x));
+          $('#b-pag-info').innerHTML = `<p class="note">Pagate al proprietario <b>${pn} notti</b> · prenotate dal cliente <b>${Math.max(0, n)} notti</b>.</p>`
+            + (lib.length ? `<div class="warn"><b>${nottiDi(lib)} ${nottiDi(lib) === 1 ? 'notte pagata e libera' : 'notti pagate e libere'}:</b> ${lib.map(r => S.dm(r.from) + ' → ' + S.dm(r.to)).join(', ')}. Nel calendario sono evidenziate in arancione.</div>` : '<div class="warn ok">Tutte le notti pagate sono occupate.</div>'); }
+      }
+      blocked = clash.length > 0 || swapBad.length > 0 || pagBad;
       $('#b-warn').innerHTML = clash.length
         ? `<div class="warn err"><b>Non disponibile.</b> Oltre al giorno di cambio coincidono altri giorni con ${clash.map(desc).join(', ')}.</div>`
         : swapBad.length ? `<div class="warn err"><b>Giorno di cambio non disponibile.</b> ${swapBad.join('; ')}.</div>`
@@ -785,6 +827,8 @@ window.SDBStore.ready.then(function () {
       const sb = $('#b-save'); if (sb) sb.disabled = !(n > 0) || blocked;
       paint();
     };
+    // attivando i giorni pagati si parte dalle date del cliente
+    $('#b-pag').addEventListener('change', e => { if (e.target.checked) { if (!$('#b-pag-from').value) $('#b-pag-from').value = $('#b-from').value; if (!$('#b-pag-to').value) $('#b-pag-to').value = $('#b-to').value; } });
     f.addEventListener('input', check); f.addEventListener('change', check); check();
     if (existing && store.mode === 'online' && window.SDBSpese && canSee('prenotazioni')) {
       const drawSp = () => {

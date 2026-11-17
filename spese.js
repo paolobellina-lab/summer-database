@@ -417,6 +417,7 @@
           <div class="vc-body">
             <h3 class="vc-name">${esc(villa.name)}</h3>
             <p class="vc-desc">${x.gen ? 'Spese non legate a una prenotazione' : esc(x.cliente)}</p>
+            ${x.b && ctx.pagatiLiberi && ctx.pagatiLiberi(x.b) ? `<span class="pc-pag" title="Notti pagate al proprietario ma senza affitto">${ctx.pagatiLiberi(x.b)} ${ctx.pagatiLiberi(x.b) === 1 ? 'notte pagata libera' : 'notti pagate libere'}</span>` : ''}
             ${x.gen ? '' : `<div class="vc-stats2"><div><span>Arrivo</span><b>${esc(ggMese(x.from))}</b></div><div><span>Partenza</span><b>${esc(ggMese(x.to))}</b></div><div><span>Notti</span><b>${nNotti(x.from, x.to)}</b></div></div>`}
             <hr>
             <div class="pc-val">
