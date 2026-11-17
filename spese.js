@@ -422,7 +422,8 @@
             <hr>
             <div class="pc-val">
               ${!x.b ? '' : `<div><span>Vendita</span><b>${v.vendita == null ? vuoto : euro(v.vendita)}</b></div>`}
-              ${!x.b || !acq ? '' : `<div><span>Acquisto previsto</span><b>${v.acquisto == null ? vuoto : euro(v.acquisto)}</b></div>`}
+              ${!x.b || !acq ? '' : (g0 => g0 && g0.root.id !== x.b.id ? `<div><span>Acquisto previsto</span><b class="pc-nd">nel gruppo</b><small>acquisto unico</small></div>`
+                : `<div><span>Acquisto previsto</span><b>${v.acquisto == null ? vuoto : euro(v.acquisto)}</b>${g0 ? `<small>unico per ${g0.membri.length} prenotazioni</small>` : ''}</div>`)(ctx.gruppoAcq && ctx.gruppoAcq(x.b))}
               <div><span>Spese reali</span><b>${ctx.online ? (V.conSpese ? euro(sp) : '…') : vuoto}</b>${ctx.online && V.conSpese ? `<small>${x.spese.length} ${x.spese.length === 1 ? 'scontrino' : 'scontrini'}</small>` : ''}</div>
             </div>
           </div>
@@ -433,7 +434,17 @@
           </footer>
         </article>`;
       };
-      const sez = (tit, l) => l.length ? `<section class="pr-sec"><h2 class="pr-h">${tit} <span>${l.length}</span></h2><div class="vcards">${l.map(card).join('')}</div></section>` : '';
+      /* prenotazioni con acquisto unico dal proprietario: nello stesso riquadro, una scheda per prenotazione (vendita e spese separate) */
+      const blocchi = l => { const out = [], fatti = new Set();
+        l.forEach(x => { if (fatti.has(x.chiave)) return; const g0 = x.b && ctx.gruppoAcq ? ctx.gruppoAcq(x.b) : null;
+          if (!g0) { out.push(card(x)); return; }
+          const ids = g0.membri.map(m => m.id); const vis0 = l.filter(y => y.b && ids.includes(y.b.id)); vis0.forEach(y => fatti.add(y.chiave));
+          const vr = ctx.valori(g0.root), ven = g0.membri.reduce((t, m) => t + (ctx.valori(m).vendita || 0), 0), spG = vis0.reduce((t, y) => t + somma(y.spese), 0);
+          out.push(`<div class="pr-group"><div class="pr-group-h"><b>Acquisto unico dal proprietario</b><span>${esc(villaDi(g0.root.villaId).name)} · ${g0.membri.length} prenotazioni · pagata ${esc(ggMese(g0.root.pagatoDal || g0.root.from))} → ${esc(ggMese(g0.root.pagatoAl || g0.root.to))}</span>
+            <span class="pr-group-v">Vendita ${euro(ven)}${acq ? ` · Acquisto ${vr.acquisto == null ? '—' : euro(vr.acquisto)}` : ''}${ctx.online && V.conSpese ? ` · Spese ${euro(spG)}` : ''}</span></div>
+            <div class="vcards">${vis0.map(card).join('')}</div></div>`); });
+        return out.join(''); };
+      const sez = (tit, l) => l.length ? `<section class="pr-sec"><h2 class="pr-h">${tit} <span>${l.length}</span></h2><div class="vcards">${blocchi(l)}</div></section>` : '';
       const celle = [['Prenotazioni', String(lista.length)], ['Vendita', euro(tot.vendita)]].concat(acq ? [['Acquisto previsto', euro(tot.acquisto)]] : [], ctx.online ? [['Spese reali', V.conSpese ? euro(tot.spese) : '…']] : []);
       root.innerHTML = `<div class="wrap">
         <div class="head"><div><h1>Prenotazioni</h1><div class="sub">Gli stessi periodi del calendario Disponibilità${ctx.online ? ' · vendita, acquisto previsto e spese reali (scontrini aggiornati in tempo reale)' : ' · le spese si vedono con i dati online'}</div></div>
@@ -472,13 +483,33 @@
       const villa = villaDi(x.villaId), v = val(x), sp = somma(x.spese);
       // deposito di sicurezza: ricevuto (nella prenotazione) − restituito (note spese "Restituzione deposito sicurezza")
       const dep = v.deposito, rest = sommaRest(x.spese), haDep = dep != null || rest > 0, tratt = (dep || 0) - rest;
+      const cella = (l, val0, nota, cls) => `<div class="pr-cell${cls ? ' ' + cls : ''}"><span>${l}</span><b>${val0}</b>${nota ? `<small>${nota}</small>` : ''}</div>`;
+      const grp = x.b && ctx.gruppoAcq ? ctx.gruppoAcq(x.b) : null;
+      // riquadro del gruppo: ogni prenotazione con vendita e spese, l'acquisto contato una volta sola, margini del gruppo
+      let grpHtml = '';
+      if (grp) {
+        const righeG = grp.membri.map(m => { const it = V.l.find(y => y.b && y.b.id === m.id); const vm = ctx.valori(m), sm = it ? somma(it.spese) : 0, dm = it ? sommaRest(it.spese) : 0;
+          return { m, vm, sm, tr: (typeof m.deposito === 'number' ? m.deposito : 0) - dm }; });
+        const tv = righeG.reduce((t, r) => t + (r.vm.vendita || 0), 0), ts = righeG.reduce((t, r) => t + r.sm, 0), tt = righeG.reduce((t, r) => t + r.tr, 0);
+        const ta = ctx.valori(grp.root).acquisto;
+        grpHtml = `<div class="card pr-grp"><h2>Acquisto unico dal proprietario</h2>
+          <p class="note">Pagata al proprietario ${esc(dataBreve(grp.root.pagatoDal || grp.root.from))} → ${esc(dataBreve(grp.root.pagatoAl || grp.root.to))}. L'acquisto si conta una volta sola; vendita e spese restano di ogni prenotazione.</p>
+          <div class="tbl-wrap"><table class="prices"><thead><tr><th>Prenotazione</th><th>Date</th><th class="r">Vendita</th>${ctx.online ? '<th class="r">Spese reali</th>' : ''}</tr></thead><tbody>
+          ${righeG.map(r => `<tr${r.m.id === x.b.id ? ' class="on"' : ''}><td><a href="#prenotazioni-${encodeURIComponent(r.m.id)}">${esc((r.m.cliente || '').trim() || 'Senza nome')}</a>${r.m.id === grp.root.id ? ' <small class="note">(acquisto)</small>' : ''}</td><td>${esc(dataBreve(r.m.from))} → ${esc(dataBreve(r.m.to))}</td><td class="r">${r.vm.vendita == null ? '—' : euro(r.vm.vendita)}</td>${ctx.online ? `<td class="r">${euro(r.sm)}</td>` : ''}</tr>`).join('')}
+          </tbody><tfoot><tr><td colspan="2"><b>Totale gruppo</b></td><td class="r"><b>${euro(tv)}</b></td>${ctx.online ? `<td class="r"><b>${euro(ts)}</b></td>` : ''}</tr></tfoot></table></div>
+          ${acq ? `<div class="pr-grid" style="grid-template-columns:repeat(3,minmax(0,1fr));margin-top:12px">${cella('Acquisto previsto', ta == null ? vuoto : euro(ta), 'una volta sola')}${cella('Margine previsto', ta == null ? vuoto : euro(tv - ta), 'vendite − acquisto')}${cella('Margine reale', ctx.online ? euro(tv + tt - ts) : vuoto, 'vendite' + (tt ? ' + depositi trattenuti' : '') + ' − spese reali', tv + tt - ts < 0 ? 'neg' : '')}</div>` : ''}</div>`;
+      }
       const sc = x.b && ctx.schedaPren ? ctx.schedaPren(x.b.id) : null;
       A.righe = () => x.spese.map(s => ({ s, villa: villa.name, p: x.gen ? null : { cliente: x.cliente, from: x.from, to: x.to } }));
-      const cella = (l, val0, nota, cls) => `<div class="pr-cell${cls ? ' ' + cls : ''}"><span>${l}</span><b>${val0}</b>${nota ? `<small>${nota}</small>` : ''}</div>`;
       const E = n => (n == null ? vuoto : euro(n));
       let celle = '';
       if (!x.b) celle = cella('Spese reali', ctx.online ? euro(sp) : vuoto, `${x.spese.length} ${x.spese.length === 1 ? 'scontrino' : 'scontrini'}`);
-      else if (acq) {
+      else if (grp) {
+        // acquisto unico: qui solo i valori di questa prenotazione; l'acquisto e i margini sono nel riquadro del gruppo
+        celle = cella('Vendita', E(v.vendita), 'affitto + servizi a parte')
+          + (acq ? cella('Acquisto previsto', grp.root.id === x.b.id ? E(v.acquisto) : '<span class="pc-nd">nel gruppo</span>', grp.root.id === x.b.id ? `unico per ${grp.membri.length} prenotazioni` : 'acquisto unico con ' + esc(grp.root.cliente || '')) : '')
+          + cella(acq ? 'Acquisto reale' : 'Spese reali', ctx.online ? euro(sp) : vuoto, (n => `somma di ${n} ${n === 1 ? 'spesa' : 'spese'}`)(x.spese.filter(z => !isRest(z)).length));
+      } else if (acq) {
         const scost = v.acquisto != null ? sp - v.acquisto : null;
         celle = cella('Vendita', E(v.vendita), 'affitto + servizi a parte') + cella('Acquisto previsto', E(v.acquisto), 'affitto + servizi a parte')
           + cella('Acquisto reale', ctx.online ? euro(sp) : vuoto, (n => `somma di ${n} ${n === 1 ? 'spesa' : 'spese'}`)(x.spese.filter(z => !isRest(z)).length))
@@ -501,6 +532,7 @@
         </div>
         <div class="card pr-valori"><h2>Valori</h2><div class="pr-grid" style="grid-template-columns:repeat(${Math.min(3, (celle.match(/class="pr-cell/g) || []).length)},minmax(0,1fr))">${celle}</div>
           ${x.b && v.vendita == null ? '<p class="note">Prezzo di vendita non inserito nella prenotazione.</p>' : ''}${!x.gen && acq && x.b && v.acquisto == null ? '<p class="note">Prezzo di acquisto non inserito nella prenotazione.</p>' : ''}</div>
+        ${grpHtml}
         ${!x.gen && haDep ? `<div class="card pr-dep"><h2>Deposito di sicurezza</h2><div class="pr-grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
           ${cella('Ricevuto dal cliente', dep == null ? vuoto : euro(dep), x.b ? 'dalla prenotazione' : '')}${cella('Restituito', rest ? '−' + euro(rest) : euro(0), 'note spese "Restituzione deposito"')}${cella('Trattenuto', euro(tratt), tratt > 0 ? 'resta a copertura dei danni' : '', tratt < 0 ? 'neg' : '')}</div>
           <p class="note">La restituzione riduce quanto ricevuto dal cliente: non è una spesa della villa e non entra nell'acquisto reale. I danni si inseriscono come spesa "Danni villa".</p></div>` : ''}

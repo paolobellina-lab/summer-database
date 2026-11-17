@@ -47,6 +47,12 @@ window.SDBStore.ready.then(function () {
     return out;
   }
   const nottiDi = l => l.reduce((t, r) => t + S.diffDays(r.from, r.to), 0);
+  /* Acquisto unico dal proprietario: una prenotazione inserita sui giorni pagati e liberi di un'altra ha bookings.acquistoDi = id
+     di quella principale (stessa villa). Il gruppo = principale + collegate; l'acquisto conta una volta sola (quello della principale). */
+  const radiceAcq = b => { const r = b && b.acquistoDi ? data().bookings.find(x => x.id === b.acquistoDi && x.villaId === b.villaId) : null; return r || b; };
+  const gruppoAcq = b => { if (!b) return null; const r = radiceAcq(b);
+    const m = data().bookings.filter(x => x.id === r.id || (x.acquistoDi === r.id && x.villaId === r.villaId)).sort((x, y) => String(x.from).localeCompare(String(y.from)));
+    return m.length > 1 ? { root: r, membri: m } : null; };
   function ndSpans(v, tariff) {
     const per = S.periodsFor(settings(), v, tariff); const out = [];
     per.forEach((p, i) => {
@@ -325,7 +331,7 @@ window.SDBStore.ready.then(function () {
 
   // contesto della pagina Prenotazioni (spese.js)
   const ctxPren = () => ({ ui, saveUI, esc, data, spese, store, $, $$, toast, schedaPren, compressImage, canAcq, canEdit, isFull, S,
-    stati, statoLabel, bookingColor, valori: valoriPren, openBooking, pagatiLiberi: b => nottiDi(pagatiLiberi(b)),
+    stati, statoLabel, bookingColor, valori: valoriPren, openBooking, gruppoAcq, pagatiLiberi: b => nottiDi(pagatiLiberi(b)),
     nuovaPren: villaId => { const v = villaById(villaId) || sortedVillas()[0]; if (!v) { toast('Prima inserisci una villa'); return; } openBooking(Object.assign({ villaId: v.id }, julyWeek(v))); }, cover: id => (thumbs.map[id] || {}).thumb || '', onThumbs: f => { villasRedraw = f; } });
   /* ---------- router ---------- */
   function route() {
@@ -547,7 +553,7 @@ window.SDBStore.ready.then(function () {
         const l = Math.max(X(r.from) + W / 2, 0), rr = Math.min(X(r.to) + W / 2, width);
         if (rr <= 0 || l >= width) return '';
         const nn = S.diffDays(r.from, r.to);
-        return `<div class="pagfree" style="left:${l}px;width:${rr - l}px" title="Pagata al proprietario ma libera · ${S.dm(r.from)} → ${S.dm(r.to)} (${nn} ${nn === 1 ? 'notte' : 'notti'}) · ${esc(r.b0.cliente || statoLabel(r.b0.status))}">${rr - l > 70 ? '<span>pagata · libera</span>' : ''}</div>`;
+        return `<div class="pagfree" data-pf-b="${esc(r.b0.id)}" data-pf-from="${r.from}" data-pf-to="${r.to}" style="left:${l}px;width:${rr - l}px" title="Clic per inserire una prenotazione su questi giorni (acquisto unico con ${esc(r.b0.cliente || statoLabel(r.b0.status))}) · Pagata al proprietario ma libera · ${S.dm(r.from)} → ${S.dm(r.to)} (${nn} ${nn === 1 ? 'notte' : 'notti'}) · ${esc(r.b0.cliente || statoLabel(r.b0.status))}">${rr - l > 70 ? '<span>pagata · libera</span>' : ''}</div>`;
       }).join('');
       const nds = ndSpans(v, tv).map(s => {
         const l = Math.max(X(s.from) + W / 2, 0), r = Math.min(X(s.to) + W / 2, width);
@@ -609,7 +615,8 @@ window.SDBStore.ready.then(function () {
     inner.addEventListener('pointerdown', e => {
       const lane = e.target.closest('.lane-a'); if (!lane || e.target.closest('.bar') || e.target.closest('.pill:not(.on)') || e.button !== 0) return;
       const d0 = dayAt(lane, e.clientX);
-      drag = { lane, d0, d1: d0, villa: lane.closest('.vrow').dataset.v, type: e.pointerType, x: e.clientX, y: e.clientY, el: null };
+      const pf = e.target.closest('.pagfree');
+      drag = { lane, d0, d1: d0, villa: lane.closest('.vrow').dataset.v, type: e.pointerType, x: e.clientX, y: e.clientY, el: null, pf: pf ? { b: pf.dataset.pfB, from: pf.dataset.pfFrom, to: pf.dataset.pfTo } : null };
     });
     inner.addEventListener('pointermove', e => {
       // mirino con la data
@@ -640,6 +647,8 @@ window.SDBStore.ready.then(function () {
       if (d.el) d.el.remove();
       if (d.type !== 'mouse' && (Math.abs(e.clientX - d.x) > 8 || Math.abs(e.clientY - d.y) > 8)) return; // era uno scroll
       const a = Math.min(d.d0, d.d1), b = Math.max(d.d0, d.d1);
+      // clic sui giorni pagati e liberi: prenotazione su quei giorni, collegata all'acquisto unico della prenotazione che li ha pagati
+      if (d.pf && b === a) { openBooking({ villaId: d.villa, from: d.pf.from, to: d.pf.to, pre: { acquistoDi: d.pf.b } }); return; }
       // trascinando: le date scelte; con un clic: la settimana che contiene il giorno (da sabato a sabato o da domenica a domenica)
       const per = b > a ? { from: S.addDays(g.start, a), to: S.addDays(g.start, b) } : settimanaDi(villaById(d.villa), S.addDays(g.start, a));
       openBooking({ villaId: d.villa, from: per.from, to: per.to });
@@ -696,8 +705,12 @@ window.SDBStore.ready.then(function () {
       <label class="field"><span>Cliente</span><input id="b-cliente" value="${esc(b.cliente)}" placeholder="Cognome cliente"></label>
       <div class="row">
         <label class="field"><span>Vendita concordata €</span><input id="b-sale" inputmode="numeric" value="${typeof b.prezzoVendita === 'number' ? esc(fmtNum(b.prezzoVendita)) : ''}"></label>
-        <label class="field"${canAcq() ? '' : ' hidden'}><span>Acquisto concordato €</span><input id="b-buy" inputmode="numeric" value="${typeof b.prezzoAcquisto === 'number' ? esc(fmtNum(b.prezzoAcquisto)) : ''}"></label>
+        <label class="field"${canAcq() ? '' : ' hidden'}><span>Acquisto concordato €</span><input id="b-buy" inputmode="numeric" value="${typeof b.prezzoAcquisto === 'number' && !b.acquistoDi ? esc(fmtNum(b.prezzoAcquisto)) : ''}"${b.acquistoDi ? ' disabled placeholder="compreso nell\'acquisto unico"' : ''}></label>
       </div>
+      ${(() => { const rt = b.acquistoDi ? data().bookings.find(x => x.id === b.acquistoDi) : null; const coll = existing ? data().bookings.filter(x => x.acquistoDi === b.id) : [];
+        const dsc = x => `${esc(x.cliente || statoLabel(x.status))} ${S.dm(x.from)} → ${S.dm(x.to)}`;
+        return rt ? `<div class="warn b-acq-un" id="b-acq-un"><b>Acquisto unico dal proprietario</b> con ${dsc(rt)}: l'acquisto si conta una volta sola, in quella prenotazione. Vendita e spese di questa restano separate. <button type="button" class="btn small" id="b-acq-off">Scollega</button></div>`
+          : coll.length ? `<div class="warn b-acq-un"><b>Acquisto unico dal proprietario</b> anche per: ${coll.map(dsc).join(', ')}. L'acquisto di questa prenotazione vale per tutte.</div>` : ''; })()}
       <div class="row">
         <label class="field"><span>Deposito di sicurezza €</span><input id="b-dep" inputmode="numeric" value="${typeof b.deposito === 'number' ? esc(fmtNum(b.deposito)) : ''}" placeholder="ricevuto dal cliente"></label>
         <div class="field b-dep-note"><span>&nbsp;</span><small class="note">La restituzione si registra come nota spesa "Restituzione deposito sicurezza".</small></div>
@@ -750,7 +763,9 @@ window.SDBStore.ready.then(function () {
     $('#b-sw').addEventListener('click', e => { const s = e.target.closest('.sw[data-c]'); if (!s) return; color = s.dataset.c; colorTouched = true; paint(); });
     $('#b-color').addEventListener('input', e => { color = e.target.value; colorTouched = true; paint(); });
     $('#b-status').addEventListener('change', e => { if (!colorTouched) { color = statoColor(e.target.value); paint(); } });
+    let acqDi = b.acquistoDi || null;
     const read = () => ({ villaId: $('#b-villa').value, status: $('#b-status').value, from: $('#b-from').value, to: $('#b-to').value, cliente: $('#b-cliente').value.trim(), note: $('#b-note').value.trim(), color: colorTouched ? color : null, earlyIn: $('#b-early').checked, lateOut: $('#b-late').checked,
+      acquistoDi: acqDi,
       pagatoDal: $('#b-pag').checked && $('#b-pag-from').value ? $('#b-pag-from').value : null, pagatoAl: $('#b-pag').checked && $('#b-pag-to').value ? $('#b-pag-to').value : null, prezzoVendita: money('#b-sale'), prezzoAcquisto: money('#b-buy'), deposito: money('#b-dep'), pulizia: $('#b-pulizia') ? $('#b-pulizia').checked : !!b.pulizia, cuoco: $('#b-cuoco') ? $('#b-cuoco').checked : !!b.cuoco, transfer: $('#b-transfer') ? $('#b-transfer').checked : !!b.transfer, serviziDett: readSrv(), servizi: $$('#bform [data-srv]').filter(c => c.checked).map(c => c.dataset.srv).concat((b.servizi || []).filter(k => !servizi().some(x => x.key === k))) });
     function money(sel) { const v = S.parseMoney($(sel).value); return typeof v === 'number' ? v : null; }
     const num = el => { const v = S.parseMoney(el.value); return typeof v === 'number' ? v : null; };
@@ -827,6 +842,7 @@ window.SDBStore.ready.then(function () {
       const sb = $('#b-save'); if (sb) sb.disabled = !(n > 0) || blocked;
       paint();
     };
+    if ($('#b-acq-off')) $('#b-acq-off').onclick = () => { acqDi = null; $('#b-acq-un').outerHTML = '<div class="warn">Scollegata: salva per confermare. Ora puoi scrivere un acquisto proprio.</div>'; const bb = $('#b-buy'); bb.disabled = false; bb.placeholder = ''; check(); };
     // attivando i giorni pagati si parte dalle date del cliente
     $('#b-pag').addEventListener('change', e => { if (e.target.checked) { if (!$('#b-pag-from').value) $('#b-pag-from').value = $('#b-from').value; if (!$('#b-pag-to').value) $('#b-pag-to').value = $('#b-to').value; } });
     f.addEventListener('input', check); f.addEventListener('change', check); check();
@@ -857,6 +873,9 @@ window.SDBStore.ready.then(function () {
     });
     const del = $('#b-del');
     if (del) del.addEventListener('click', () => {
+      // la principale di un acquisto unico non si elimina finché ci sono prenotazioni collegate
+      const coll = data().bookings.filter(x => x.acquistoDi === b.id);
+      if (coll.length) { $('#b-confirm').innerHTML = `<div class="warn err">Questa prenotazione ha l'acquisto unico dal proprietario anche per ${coll.map(x => esc(x.cliente || statoLabel(x.status)) + ' ' + S.dm(x.from) + ' → ' + S.dm(x.to)).join(', ')}. Prima scollega o elimina ${coll.length === 1 ? 'quella prenotazione' : 'quelle prenotazioni'}.</div>`; return; }
       // una prenotazione con scontrini non si cancella: prima si spostano gli scontrini su un'altra prenotazione o si eliminano
       if (store.mode === 'online' && window.SDBSpese && store.listenScontrini) {
         const msg = h => { $('#b-confirm').innerHTML = `<div class="warn err">${h}</div>`; };
