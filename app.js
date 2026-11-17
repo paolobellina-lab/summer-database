@@ -617,14 +617,23 @@ window.SDBStore.ready.then(function () {
       if (d.el) d.el.remove();
       if (d.type !== 'mouse' && (Math.abs(e.clientX - d.x) > 8 || Math.abs(e.clientY - d.y) > 8)) return; // era uno scroll
       const a = Math.min(d.d0, d.d1), b = Math.max(d.d0, d.d1);
-      const from = S.addDays(g.start, a), to = b > a ? S.addDays(g.start, b) : S.addDays(from, 7);
-      openBooking({ villaId: d.villa, from, to });
+      // trascinando: le date scelte; con un clic: la settimana che contiene il giorno (da sabato a sabato o da domenica a domenica)
+      const per = b > a ? { from: S.addDays(g.start, a), to: S.addDays(g.start, b) } : settimanaDi(villaById(d.villa), S.addDays(g.start, a));
+      openBooking({ villaId: d.villa, from: per.from, to: per.to });
     });
   }
 
   /* =====================================================================
      PRENOTAZIONE (finestra)
      ===================================================================== */
+  // settimana che contiene un giorno: il periodo settimanale del listino, altrimenti dal giorno di cambio della villa
+  // (sabato o domenica, come nella scheda) al successivo, anche per le ville senza prezzi
+  const settimanaDi = (v, day) => {
+    const p = v ? S.periodsFor(settings(), v, 'settimanale').find(x => x.from <= day && day < x.to) : null;
+    if (p) return { from: p.from, to: p.to };
+    const cd = S.cambioDi(settings(), v) === 'sabato' ? 6 : 0, dw = new Date(day + 'T00:00:00Z').getUTCDay();
+    const from = S.addDays(day, -((dw - cd + 7) % 7)); return { from, to: S.addDays(from, 7) };
+  };
   const julyWeek = v => { const wk = S.periodsFor(settings(), v, 'settimanale'); const p = wk.find(x => x.from >= '2027-07-01') || wk[0]; return p ? { from: p.from, to: p.to } : { from: '2027-07-04', to: '2027-07-11' }; };
   const fmtNum = x => new Intl.NumberFormat('it-IT').format(x);
   function openBooking(init) {

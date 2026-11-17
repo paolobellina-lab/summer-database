@@ -53,6 +53,7 @@ Scheda "Storico" nella pagina Offerte (`ui.off.tab`). Ogni "Copia per email" o "
 `report.js` (Impostazioni → Schede incomplete, solo accesso completo): per ogni villa i campi vuoti tra quelli scelti (scelta salvata in `localStorage` `sdb-report-campi`), più Foto (copertina in `villas_thumb`), Brochure (`listAllBrochure`) e Prezzi di acquisto; filtro per campo, ricerca, "Scarica Excel" (CSV).
 
 ## Periodi tariffari
+Nel calendario Disponibilità un **clic** su una riga (anche dove la villa non ha prezzo) apre la prenotazione sulla settimana che contiene il giorno (`settimanaDi` in `app.js`: il periodo settimanale del listino, altrimenti dal giorno di cambio della villa, sabato o domenica, al successivo); **trascinando** si usano le date scelte.
 `S.periodsFor(settings, villa, tariffa)` in `core.js`. Settimanale: segue il giorno di cambio (`settings.cambio` o `villa.cambio`, sabato/domenica). Bisettimanale/mensile/bimensile: `villa.periodi[tariffa]` → `settings.periodiPredefiniti[tariffa]` → date automatiche dell'Excel spostate in base al giorno di cambio. Il numero dei periodi è fisso (i prezzi sono collegati per posizione).
 
 ## Stati e servizi (Impostazioni → Aspetto predefiniti / Servizi e inclusioni)
