@@ -1067,7 +1067,7 @@ window.SDBStore.ready.then(function () {
   }
 
   /* ---------- Vendita: ville con un prezzo di vendita dell'immobile (campo realEstate) ---------- */
-  // "4.200.000", "€ 4,2M", "4.2 mln", "850k" → euro; testo non numerico → null (la villa compare comunque, col testo)
+  // "4.200.000", "€ 4,2M", "4.2 mln", "850k" → euro; testo senza un prezzo ("NO", "-") → null: la villa non è in vendita
   function prezzoImmobile(x) {
     let t = String(x == null ? '' : x).trim().toLowerCase(); if (!t) return null;
     t = t.replace(/€|eur(o)?|\s/g, '');
@@ -1079,7 +1079,8 @@ window.SDBStore.ready.then(function () {
   }
   function viewVendita() {
     if (hiddenField('realEstate')) { main.innerHTML = '<div class="page"><div class="wrap"><div class="card"><p class="note">Il prezzo di vendita delle ville non è visibile per questo account.</p></div></div></div>'; return; }
-    const tutte = sortedVillas().filter(v => String(v.realEstate == null ? '' : v.realEstate).trim()).map(v => ({ v, p: prezzoImmobile(v.realEstate) }));
+    // solo le ville con un prezzo vero: "NO", "-" o altre note nel campo non contano
+    const tutte = sortedVillas().map(v => ({ v, p: prezzoImmobile(v.realEstate) })).filter(x => x.p != null);
     const locs = locations().filter(l => tutte.some(x => String(x.v.location || '').trim().toUpperCase() === l));
     const sortOpts = [['priceDesc', 'Prezzo più alto'], ['priceAsc', 'Prezzo più basso'], ['name', 'Nome A–Z'], ['mq', '€/mq più basso']];
     if (!sortOpts.some(o => o[0] === ui.vdSort)) ui.vdSort = 'priceDesc';
