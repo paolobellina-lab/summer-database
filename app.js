@@ -142,6 +142,7 @@ window.SDBStore.ready.then(function () {
       <nav class="nav" aria-label="Sezioni">
         <a href="#disponibilita" data-r="disponibilita"><span class="l-full">Disponibilità</span><span class="l-short">Calendario</span></a>
         <a href="#ville" data-r="ville">Ville</a>
+        <a href="#vendita" data-r="vendita">Vendita</a>
         <a href="#offerte" data-r="offerte">Offerte</a>
         <a href="#prenotazioni" data-r="prenotazioni"><span class="l-full">Prenotazioni</span><span class="l-short">Prenot.</span></a>
         <a href="#appunti" data-r="appunti">Appunti</a>
@@ -157,7 +158,7 @@ window.SDBStore.ready.then(function () {
   /* Profilo dell'account collegato (store.profile, deciso all'accesso):
      full = vede e modifica tutto; altrimenti acquisto (prezzi di acquisto), modifica (prenotazioni),
      dettaglio (false = prenotazioni solo come ND), pagine visibili, ville condivise. */
-  const PAGES = [['disponibilita', 'Disponibilità'], ['ville', 'Ville'], ['offerte', 'Offerte'], ['prenotazioni', 'Prenotazioni'], ['appunti', 'Appunti'], ['impostazioni', 'Impostazioni']];
+  const PAGES = [['disponibilita', 'Disponibilità'], ['ville', 'Ville'], ['vendita', 'Vendita'], ['offerte', 'Offerte'], ['prenotazioni', 'Prenotazioni'], ['appunti', 'Appunti'], ['impostazioni', 'Impostazioni']];
   const ME = () => store.profile || { full: true, acquisto: true, modifica: true, dettaglio: true, pagine: null, ville: [] };
   const isFull = () => !!ME().full;
   const canAcq = () => isFull() || !!ME().acquisto;
@@ -322,7 +323,7 @@ window.SDBStore.ready.then(function () {
 
   function refreshShell(route) {
     $('#brand-name').textContent = settings().seasonName || 'Summer 2027';
-    $$('.nav a').forEach(a => { a.classList.toggle('on', a.dataset.r === route || (route === 'villa' && a.dataset.r === 'ville')); a.hidden = !canSee(a.dataset.r); });
+    $$('.nav a').forEach(a => { a.classList.toggle('on', a.dataset.r === route || (route === 'villa' && a.dataset.r === 'ville')); a.hidden = !canSee(a.dataset.r) || (a.dataset.r === 'vendita' && hiddenField('realEstate')); });
     const nv = $('.nav'); if (nv) nv.style.setProperty('--n', $$('.nav a').filter(a => !a.hidden).length);
     const sy = $('#sync');
     sy.className = 'sync ' + store.mode;
@@ -352,6 +353,7 @@ window.SDBStore.ready.then(function () {
     if (h.startsWith('prenotazioni-') && window.SDBSpese) { refreshShell('prenotazioni'); spesePage = window.SDBSpese.mount(main, ctxPren(), decodeURIComponent(h.slice(13))); return; }
     refreshShell(h);
     if (h === 'ville') return viewVillas();
+    if (h === 'vendita') return viewVendita();
     if (h === 'prenotazioni' && window.SDBSpese) { spesePage = window.SDBSpese.mount(main, ctxPren(), ''); return; }
     if (h === 'appunti') return viewNotes();
     // promemoria settimanale delle offerte (contatti da classificare, offerte non prese né perse): una volta per apertura dell'app
@@ -1064,6 +1066,94 @@ window.SDBStore.ready.then(function () {
     if ($('#vl-add')) $('#vl-add').addEventListener('click', newVilla);
   }
 
+  /* ---------- Vendita: ville con un prezzo di vendita dell'immobile (campo realEstate) ---------- */
+  // "4.200.000", "€ 4,2M", "4.2 mln", "850k" → euro; testo non numerico → null (la villa compare comunque, col testo)
+  function prezzoImmobile(x) {
+    let t = String(x == null ? '' : x).trim().toLowerCase(); if (!t) return null;
+    t = t.replace(/€|eur(o)?|\s/g, '');
+    let mult = 1;
+    const m = t.match(/^(.*?)(milioni|milione|mln|mio|m|k|mila)$/);
+    if (m) { t = m[1]; mult = /^k|mila/.test(m[2]) ? 1e3 : 1e6; }
+    if (mult > 1) t = t.replace(',', '.'); else t = t.replace(/[.,](?=\d{3}(\D|$))/g, '').replace(',', '.');
+    const n = Number(t); return isFinite(n) && n > 0 ? Math.round(n * mult) : null;
+  }
+  function viewVendita() {
+    if (hiddenField('realEstate')) { main.innerHTML = '<div class="page"><div class="wrap"><div class="card"><p class="note">Il prezzo di vendita delle ville non è visibile per questo account.</p></div></div></div>'; return; }
+    const tutte = sortedVillas().filter(v => String(v.realEstate == null ? '' : v.realEstate).trim()).map(v => ({ v, p: prezzoImmobile(v.realEstate) }));
+    const locs = locations().filter(l => tutte.some(x => String(x.v.location || '').trim().toUpperCase() === l));
+    const sortOpts = [['priceDesc', 'Prezzo più alto'], ['priceAsc', 'Prezzo più basso'], ['name', 'Nome A–Z'], ['mq', '€/mq più basso']];
+    if (!sortOpts.some(o => o[0] === ui.vdSort)) ui.vdSort = 'priceDesc';
+    if (ui.vdLoc && !locs.includes(ui.vdLoc)) ui.vdLoc = '';
+    const mq = v => { const n = parseFloat(String(v.indoorSqm || '').replace(/\./g, '').replace(',', '.')); return isFinite(n) && n > 0 ? n : null; };
+    const fmt = n => n >= 1e6 ? (n / 1e6).toLocaleString('it-IT', { maximumFractionDigits: 2 }) + ' mln €' : S.money(n);
+    main.innerHTML = `<div class="page"><div class="wrap">
+      <div class="head"><div><h1>Vendita</h1><div class="sub" id="vd-sub"></div></div></div>
+      <div class="vl-tools vd-tools">
+        <input type="search" id="vd-q" placeholder="Cerca per nome, proprietario, zona" value="${esc(ui.vdQ || '')}">
+        <label class="field"><span>Prezzo da</span><input id="vd-min" inputmode="numeric" placeholder="es. 2M" value="${esc(ui.vdMin || '')}"></label>
+        <label class="field"><span>a</span><input id="vd-max" inputmode="numeric" placeholder="es. 5M" value="${esc(ui.vdMax || '')}"></label>
+        <label class="field vl-sort"><span>Ordina</span><select id="vd-sort">${sortOpts.map(([k, l]) => `<option value="${k}" ${ui.vdSort === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+      </div>
+      ${locs.length > 1 ? `<div class="loc-chips" id="vd-locs">
+        <button type="button" data-l="" class="${!ui.vdLoc ? 'on' : ''}">Tutte le zone</button>
+        ${locs.map(l => `<button type="button" data-l="${esc(l)}" class="${ui.vdLoc === l ? 'on' : ''}" style="--tone:var(${LOC_TONES[locations().indexOf(l) % 6]})"><i></i>${esc(l)} <em>${tutte.filter(x => String(x.v.location || '').trim().toUpperCase() === l).length}</em></button>`).join('')}
+      </div>` : ''}
+      <div class="vcards" id="vd-body"></div>
+    </div></div>`;
+    const body = $('#vd-body');
+    const draw = () => {
+      const q = String(ui.vdQ || '').trim().toLowerCase();
+      const lo = prezzoImmobile(ui.vdMin), hi = prezzoImmobile(ui.vdMax);
+      const list = tutte.filter(({ v, p }) => (!q || `${v.name} ${v.codice} ${v.location} ${hiddenField('proprietario') ? '' : v.proprietario} ${hiddenField('nomeReale') ? '' : v.nomeReale}`.toLowerCase().includes(q))
+        && (!ui.vdLoc || String(v.location || '').trim().toUpperCase() === ui.vdLoc)
+        && (lo == null || (p != null && p >= lo)) && (hi == null || (p != null && p <= hi)));
+      const pmq = x => x.p != null && mq(x.v) ? x.p / mq(x.v) : null;
+      const cmp = {
+        name: (a, b) => byName(a.v, b.v),
+        priceAsc: (a, b) => (a.p ?? 1e15) - (b.p ?? 1e15) || byName(a.v, b.v),
+        priceDesc: (a, b) => (b.p ?? -1) - (a.p ?? -1) || byName(a.v, b.v),
+        mq: (a, b) => (pmq(a) ?? 1e15) - (pmq(b) ?? 1e15) || byName(a.v, b.v)
+      }[ui.vdSort];
+      list.sort(cmp);
+      const nums = list.map(x => x.p).filter(p => p != null);
+      const tot = nums.reduce((a, b) => a + b, 0);
+      $('#vd-sub').textContent = tutte.length
+        ? `${list.length} ${list.length === 1 ? 'villa' : 'ville'} in vendita${ui.vdLoc ? ' a ' + ui.vdLoc : ''}${nums.length ? ` · valore totale ${fmt(tot)} · da ${fmt(Math.min(...nums))} a ${fmt(Math.max(...nums))}` : ''}`
+        : 'Nessuna villa ha ancora un prezzo di vendita';
+      body.innerHTML = list.length ? list.map(({ v, p }) => {
+        const area = v.indoorSqm ? (/mq|m2|m²/i.test(String(v.indoorSqm)) ? v.indoorSqm : v.indoorSqm + ' mq') : '';
+        const statList = [[v.guests || v.pax, 'Ospiti', ICON.ospiti], [v.totalBedrooms || v.guestBedrooms, 'Camere da letto', ICON.camere], [v.bathrooms, 'Bagni', ICON.bagni], [area, 'Area', ICON.area]].filter(([x]) => x !== '' && x != null);
+        const desc = String((!hiddenField('descrizione') && v.descrizione) || (!hiddenField('servizi') && v.servizi) || '').replace(/\s+/g, ' ').trim();
+        const th = thumbs.map[v.id];
+        const badge = [v.location, v.seafront && S.mareLabel(v.seafront)].filter(Boolean).map(x => String(x).trim()).join(', ');
+        const m = mq(v);
+        return `<article class="vcard" data-id="${esc(v.id)}" tabindex="0">
+          <div class="vc-media">
+            ${th && th.thumb ? `<img src="${esc(th.thumb)}" alt="${esc(v.name)}" loading="lazy">` : `<div class="vc-ph"><span>${esc(String(v.name || '?').trim().charAt(0))}</span><small>Nessuna foto</small></div>`}
+            ${badge ? `<span class="vc-badge">${esc(badge)}</span>` : ''}
+          </div>
+          <div class="vc-body">
+            <h3 class="vc-name">${esc(v.name)}${v.codice ? ` <small class="vd-cod">${esc(v.codice)}</small>` : ''}</h3>
+            <p class="vc-desc">${desc ? esc(desc) : (v.proprietario && !hiddenField('proprietario') ? 'Proprietario: ' + esc(v.proprietario) : '')}</p>
+            ${statList.length ? `<div class="vc-stats2">${statList.map(([x, l, ic]) => `<div><span>${l}</span><b>${ic}${esc(x)}</b></div>`).join('')}</div>` : '<div class="vc-missing">Caratteristiche da completare</div>'}
+            <hr>
+            <div class="vc-price2"><span>Prezzo di vendita</span><b>${p != null ? esc(S.money(p)) : esc(v.realEstate)}</b>${p != null && m ? `<small class="vd-mq">${esc(S.money(Math.round(p / m)))} al mq</small>` : ''}</div>
+          </div>
+          <footer class="vc-foot"><button type="button" class="btn dark" data-act="open">Scheda ↗</button></footer>
+        </article>`;
+      }).join('') : `<div class="empty">${tutte.length ? 'Nessuna villa con questi filtri.' : 'Scrivi il prezzo di vendita nel campo "Real estate (prezzo di vendita)" della scheda villa: la villa comparirà qui.'}</div>`;
+    };
+    draw();
+    villasRedraw = draw;
+    let t; $('#vd-q').addEventListener('input', e => { ui.vdQ = e.target.value; saveUI(); clearTimeout(t); t = setTimeout(draw, 100); });
+    ['min', 'max'].forEach(k => $('#vd-' + k).addEventListener('input', e => { ui['vd' + (k === 'min' ? 'Min' : 'Max')] = e.target.value; saveUI(); clearTimeout(t); t = setTimeout(draw, 250); }));
+    $('#vd-sort').addEventListener('change', e => { ui.vdSort = e.target.value; saveUI(); draw(); });
+    const lc = $('#vd-locs'); if (lc) lc.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; ui.vdLoc = b.dataset.l; saveUI(); $$('#vd-locs button').forEach(x => x.classList.toggle('on', x === b)); draw(); });
+    const go = e => { const c = e.target.closest('.vcard'); if (c) location.hash = 'villa-' + c.dataset.id; };
+    body.addEventListener('click', go);
+    body.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.classList.contains('vcard')) go(e); });
+  }
+
   function newVilla() {
     const st = settings();
     const order = Math.max(-1, ...data().villas.map(v => v.order ?? 0)) + 1;
@@ -1077,7 +1167,7 @@ window.SDBStore.ready.then(function () {
      SCHEDA VILLA
      ===================================================================== */
   const FIELDS = {
-    anagrafica: [['name', 'Nome'], ['codice', 'Codice (es. MRN-PRT)'], ['nomeReale', 'Nome reale'], ['proprietario', 'Proprietario'], ['realEstate', 'Real estate'], ['indirizzo', 'Indirizzo'], ['location', 'Location'], ['seafront', 'Seafront – Seaview']],
+    anagrafica: [['name', 'Nome'], ['codice', 'Codice (es. MRN-PRT)'], ['nomeReale', 'Nome reale'], ['proprietario', 'Proprietario'], ['realEstate', 'Real estate (prezzo di vendita)'], ['indirizzo', 'Indirizzo'], ['location', 'Location'], ['seafront', 'Seafront – Seaview']],
     caratteristiche: [['indoorSqm', 'Indoor mq'], ['outdoorSqm', 'Outdoor mq'], ['pax', 'Pax'], ['guests', 'N° ospiti'], ['staff', 'N° staff'], ['totalBedrooms', 'Camere totali'], ['guestBedrooms', 'Camere ospiti'], ['staffBedrooms', 'Camere staff'], ['doubleBedrooms', 'Matrimoniali'], ['twinBedrooms', 'Twin'], ['singleBedrooms', 'Singole'], ['bathrooms', 'Bagni'], ['pool', 'Piscina'], ['gym', 'Palestra'], ['spa', 'Spa'], ['parking', 'Parcheggio'], ['kitchens', 'Cucine']],
     link: [['linkSito', 'Link sito'], ['webBrochure', 'Web brochure'], ['webBrochureAnonima', 'Web brochure anonima'], ['mediaProprietario', 'Media proprietario'], ['googleMaps', 'Google Maps'], ['youtube', 'Video YouTube'], ['vimeo', 'Video Vimeo'], ['psw', 'Password']]
   };
