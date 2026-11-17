@@ -2019,11 +2019,38 @@ window.SDBStore.ready.then(function () {
         msg(`<textarea readonly rows="6" id="s-bk">${esc(txt)}</textarea>`); const ta = $('#s-bk'); ta.focus(); ta.select();
       });
     });
+    /* Prezzi di acquisto mancanti dal primo caricamento dell'Excel (celle scritte come formula, es. =1200*7):
+       file { tipo: 'sdb-prezzi-acquisto', ville: [{ id, name, acquisto: { tariffa: [euro|'ND'|null] } }] }.
+       Riempie solo le caselle di acquisto vuote (non tocca i prezzi già scritti), una villa alla volta. */
+    async function importaPrezziAcquisto(d) {
+      if (!isFull()) { msg('<p class="note">Solo chi ha accesso completo può aggiornare i prezzi di acquisto.</p>'); return; }
+      const mod = [];
+      (d.ville || []).forEach(x => {
+        const v = villaById(x.id); if (!v || !v.pricing) return;
+        const nv = JSON.parse(JSON.stringify(v)); let n = 0, salt = 0;
+        Object.keys(x.acquisto || {}).forEach(t => {
+          const ps = nv.pricing[t]; if (!ps || !Array.isArray(ps.acquisto)) return;
+          (x.acquisto[t] || []).forEach((val, i) => {
+            if (val === null || val === undefined || i >= ps.acquisto.length) return;
+            const cur = ps.acquisto[i];
+            if (cur === null || cur === undefined || cur === '') { ps.acquisto[i] = val; n++; } else if (cur !== val) salt++;
+          });
+        });
+        if (n || salt) mod.push({ v: nv, nome: v.name, n, salt });
+      });
+      const nuovi = mod.filter(m => m.n);
+      if (!nuovi.length) { msg('<p class="note">Nessun prezzo da aggiungere: le caselle di acquisto di queste ville sono già compilate.</p>'); return; }
+      const tot = nuovi.reduce((a, m) => a + m.n, 0), saltati = mod.reduce((a, m) => a + m.salt, 0);
+      const ok = await window.SDBConferma(`Aggiungo ${tot} prezzi di acquisto in ${nuovi.length} ville (${nuovi.map(m => m.nome).join(', ')}). Riempio solo le caselle vuote${saltati ? `; ${saltati} caselle già scritte a mano restano come sono` : ''}. I prezzi di vendita si ricalcolano con spese, margine e arrotondamento di ogni villa.`, { titolo: 'Prezzi di acquisto dall\'Excel', ok: 'Aggiungi i prezzi' });
+      if (!ok) return;
+      nuovi.forEach(m => store.upsertVilla(m.v));
+      msg(`<p class="note">Aggiunti ${tot} prezzi di acquisto in ${nuovi.length} ville.</p>`); toast('Prezzi di acquisto aggiornati');
+    }
     $('#s-import').addEventListener('change', e => {
       const f = e.target.files[0]; if (!f) return;
       const r = new FileReader();
       r.onload = () => {
-        let d; try { d = JSON.parse(r.result); if (!Array.isArray(d.villas)) throw new Error('formato'); }
+        let d; try { d = JSON.parse(r.result); if (d && d.tipo === 'sdb-prezzi-acquisto') { e.target.value = ''; return importaPrezziAcquisto(d); } if (!Array.isArray(d.villas)) throw new Error('formato'); }
         catch (err) { msg('<p class="note">Questo file non è un backup valido di Summer Database.</p>'); return; }
         msg('<p class="note">Importazione in corso…</p>');
         Promise.resolve(store.mergeAll(d)).then(r => { toast(`Backup importato: ${r.villas} ville e ${r.bookings} periodi aggiunti o aggiornati`); route(); }, err => msg(`<p class="note">Importazione non riuscita: ${esc(err.message || err)}</p>`));
