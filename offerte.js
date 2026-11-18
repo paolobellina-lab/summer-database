@@ -80,7 +80,9 @@
       return { on: !!x.on, modo, prezzo: x.prezzo !== undefined && String(x.prezzo).trim() !== '' ? String(x.prezzo) : '' }; };
     // prezzo di un servizio per una villa: quello scritto qui nell'offerta (uguale per tutte), altrimenti quello della scheda villa, altrimenti Impostazioni
     const prezzoSrv = (v, k) => { const x = (o.srv[k] || {}).prezzo; if (x !== undefined && String(x).trim() !== '') return S.parseMoney(x);
-      const pv = (v && v.prezziServizi || {})[k]; if (typeof pv === 'number') return pv; const d = (st.prezziServizi || {})[k] || {}; return typeof d.vendita === 'number' ? d.vendita : null; };
+      // prezzo della scheda villa o di Impostazioni: se il servizio è settimanale si moltiplica per le settimane del periodo e le volte a settimana
+      const pe = v ? perOf(v) : null, notti = pe && pe.from && pe.to ? S.diffDays(pe.from, pe.to) : 0;
+      const pv = (v && v.prezziServizi || {})[k]; if (typeof pv === 'number') return S.srvPrezzo(st, k, pv, notti); const d = (st.prezziServizi || {})[k] || {}; return typeof d.vendita === 'number' ? S.srvPrezzo(st, k, d.vendita, notti) : null; };
     // stili della mail: due di base + quelli salvati da tutti in meta/settings.stiliMail
     const FONT = [['tahoma,sans-serif', 'Tahoma'], ['Arial,Helvetica,sans-serif', 'Arial'], ['Verdana,Geneva,sans-serif', 'Verdana'], ["'Trebuchet MS',Helvetica,sans-serif", 'Trebuchet'],
       ["Georgia,'Times New Roman',serif", 'Georgia'], ["'Palatino Linotype',Palatino,'Book Antiqua',serif", 'Palatino'], ["Garamond,'EB Garamond',Georgia,serif", 'Garamond'], ["'Times New Roman',Times,serif", 'Times']];

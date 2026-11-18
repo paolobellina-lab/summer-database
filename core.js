@@ -199,5 +199,11 @@
     return null; }
   const mareLabel = s => { const n = mareLivello(s); return n === null ? String(s || '') : MARE.find(m => m[2] === n)[1]; };
   const inclusioniDi = st => (Array.isArray(st && st.inclusioni) ? st.inclusioni : INCLUSIONI).filter(x => x && x.id);
-  window.SDB = { MARE, mareLivello, mareLabel, INCLUSIONI, inclusioniDi, CAMPI_SCHEDA, CAMPI_NASCOSTI_DEFAULT, nascostiDi, periodsFor, autoPeriods, autoPeriodsFor, cambioDi, STATUS_COLOR, PALETTE, inkFor, DAY, MESI, MESI_L, GG, parse, iso, addDays, diffDays, dm, dmy, TARIFFE, STATI, defaultSettings, defaultPeriods, salePrice, priceAt, emptyPricing, money, short, parseMoney, uid };
+  // prezzo di un servizio: a soggiorno (fattore 1) o settimanale (× settimane del soggiorno × volte a settimana)
+  // settings.prezziServizi[k] = { incluso, vendita, unita: 'soggiorno'|'settimana', volte }
+  const srvUnita = (st, k) => { const d = ((st && st.prezziServizi) || {})[k] || {}; const v = Number(d.volte);
+    return { settimanale: d.unita === 'settimana', volte: v > 0 ? v : 1 }; };
+  const srvFattore = (st, k, notti) => { const u = srvUnita(st, k); if (!u.settimanale) return 1; const n = Number(notti) || 0; return n > 0 ? (n / 7) * u.volte : u.volte; };
+  const srvPrezzo = (st, k, base, notti) => typeof base === 'number' ? Math.round(base * srvFattore(st, k, notti)) : null;
+  window.SDB = { srvUnita, srvFattore, srvPrezzo, MARE, mareLivello, mareLabel, INCLUSIONI, inclusioniDi, CAMPI_SCHEDA, CAMPI_NASCOSTI_DEFAULT, nascostiDi, periodsFor, autoPeriods, autoPeriodsFor, cambioDi, STATUS_COLOR, PALETTE, inkFor, DAY, MESI, MESI_L, GG, parse, iso, addDays, diffDays, dm, dmy, TARIFFE, STATI, defaultSettings, defaultPeriods, salePrice, priceAt, emptyPricing, money, short, parseMoney, uid };
 })();

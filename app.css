@@ -1226,3 +1226,11 @@ dialog.dlg-bil { width: min(900px, calc(100vw - 32px)); }
 .pag-opt { display: inline-flex; align-items: center; gap: 8px; padding: 9px 14px; border: 1px solid var(--line, #d9d4c7); border-radius: 8px; background: var(--card, #fffdf7); cursor: pointer; font-weight: 500; }
 .pag-opt input { margin: 0; }
 .pag-opt:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+/* Impostazioni → servizi: prezzo a soggiorno / a settimana × volte */
+.srv-tbl td.srv-un { white-space: nowrap; }
+.srv-tbl td.srv-un .srv-volte { display: flex !important; margin: 4px 0 0 !important; }
+.srv-tbl td.srv-un select { width: auto; min-width: 130px; }
+.srv-tbl td.srv-un .srv-volte { display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; font-size: 13px; color: var(--muted, #6b6b6b); }
+.srv-tbl td.srv-un .srv-volte[hidden] { display: none !important; }
+.srv-tbl td.srv-un .srv-volte input { width: 52px !important; min-width: 0; text-align: center; padding-left: 4px; padding-right: 4px; }
+#bform .srv-calc { margin: 4px 0 8px; }
