@@ -359,7 +359,7 @@
       B.push({ kv: tot });
       B.push({ p: `Esportato il ${new Date().toLocaleString('it-IT')} da ${store.user || ''}. Foto e allegati sono nel file zip scaricato insieme.`, small: true });
       const nome = X.nomeFile(`Spese ${nomeVilla(villaId)} - ${titolo}${sc ? ' ' + sc.from : old ? ' ' + old.from : ''}`) + '.docx';
-      return { nome, blob: new Blob([X.docx(B)], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }), spese: l, cartella: X.nomeFile(titolo + (sc ? ' ' + sc.from : old ? ' ' + old.from : '')) };
+      return { nome, blob: new Blob([X.docx(B)], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }), spese: l, cartella: X.nomeFile(nomeVilla(villaId) + ' ' + titolo + (sc ? ' ' + sc.from : old ? ' ' + old.from : '')) };
     }
     async function zipAllegati(gruppi, onStep) {
       const entries = []; const used = new Set(); let n = 0; const tot = gruppi.reduce((t, g) => t + g.spese.length, 0);
@@ -377,6 +377,11 @@
       const dlg = $('#dlg'); const bookings = data().bookings;
       const righeX = A.righe();
       const villeCon = ville().filter(v => bookings.some(b => b.villaId === v.id && !b._nd) || spese.list.some(s => s.villaId === v.id));
+      // tutte le spese di tutte le ville (senza filtri), con la prenotazione collegata come nell'elenco
+      const righeTutte = () => spese.list.map(s => { const p = trovaPren(s, bookings);
+        return { s, villa: (ville().find(v => v.id === s.villaId) || { name: 'Villa ' + s.villaId }).name, p: p ? { cliente: (p.cliente || '').trim() || 'Senza nome', from: p.from, to: p.to } : null }; })
+        .sort((a, b) => a.villa.localeCompare(b.villa, 'it') || String(a.s.data || '').localeCompare(String(b.s.data || '')));
+      let xTutte = false;
       let modo = 'word'; let villa = pre && pre.villa ? pre.villa : ui.prVilla && villeCon.some(v => v.id === ui.prVilla) ? ui.prVilla : (villeCon[0] || {}).id || '';
       const voci = vid => {
         const l = bookings.filter(b => b.villaId === vid && !b._nd).sort((x, y) => String(y.from).localeCompare(String(x.from))).map(b => ({ id: b.id, label: `${(b.cliente || '').trim() || 'Senza nome'} · ${dataBreve(b.from)} → ${dataBreve(b.to)}` }));
@@ -385,12 +390,17 @@
         return l.concat([...old.values()], gen).map(o => Object.assign(o, { spese: speseDi(vid, o.id, bookings) }));
       };
       const spunta = o => pre && pre.pid ? o.id === pre.pid : o.spese.length > 0;
+      // "Tutte le ville": le voci di ogni villa, con id "villaId::id prenotazione"
+      const vociDi = sel => sel === '__all' ? villeCon.flatMap(vv => voci(vv.id).map(o => Object.assign({}, o, { id: vv.id + '::' + o.id, label: vv.name + ' · ' + o.label }))) : voci(sel);
       const draw = () => {
-        const v = voci(villa);
+        const v = vociDi(villa);
         dlg.innerHTML = `<div class="dlg" id="ex-dlg"><h3>Esporta${pre && pre.pid ? ' questa prenotazione' : ''}</h3>
           <div class="seg ex-seg"><button type="button" data-m="word" class="${modo === 'word' ? 'on' : ''}">Word per prenotazione</button><button type="button" data-m="xls" class="${modo === 'xls' ? 'on' : ''}">Excel – scontrini</button></div>
-          ${modo === 'xls' ? `<p class="note">Un file con ${pre && pre.pid ? 'gli scontrini di questa prenotazione' : 'gli scontrini delle prenotazioni mostrate in questo momento (filtri attuali)'}: <b>${righeX.length}</b> ${righeX.length === 1 ? 'scontrino' : 'scontrini'}. Si apre con Excel.</p>`
-          : `<label class="field"><span>Villa</span><select id="ex-villa">${villeCon.map(x => `<option value="${esc(x.id)}" ${x.id === villa ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></label>
+          ${modo === 'xls' ? (pre && pre.pid ? `<p class="note">Un file con gli scontrini di questa prenotazione: <b>${righeX.length}</b> ${righeX.length === 1 ? 'scontrino' : 'scontrini'}. Si apre con Excel.</p>`
+            : `<div class="ex-list"><label class="flag"><input type="radio" name="ex-x" value="vis" ${xTutte ? '' : 'checked'}><span><b>Le spese mostrate</b><small>prenotazioni mostrate in questo momento (filtri attuali): ${righeX.length} ${righeX.length === 1 ? 'scontrino' : 'scontrini'}</small></span></label>
+              <label class="flag"><input type="radio" name="ex-x" value="tutte" ${xTutte ? 'checked' : ''}><span><b>Tutte le spese di tutte le ville</b><small>senza filtri, comprese spese generali e prenotazioni non più in calendario: ${spese.list.length} ${spese.list.length === 1 ? 'scontrino' : 'scontrini'}</small></span></label></div>
+              <p class="note">Un file che si apre con Excel.</p>`)
+          : `<label class="field"><span>Villa</span><select id="ex-villa">${villeCon.length > 1 ? `<option value="__all" ${villa === '__all' ? 'selected' : ''}>Tutte le ville</option>` : ''}${villeCon.map(x => `<option value="${esc(x.id)}" ${x.id === villa ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></label>
             <div class="ex-head"><span class="note">Un file Word per ogni prenotazione scelta: scheda prenotazione, note spese, vendita, acquisto previsto e reale.</span><button type="button" class="btn small" id="ex-all">Seleziona tutte</button></div>
             <div class="ex-list">${v.length ? v.map(o => `<label class="flag"><input type="checkbox" data-ex="${esc(o.id)}" ${spunta(o) ? 'checked' : ''}><span><b>${esc(o.label)}</b><small>${o.spese.length ? o.spese.length + (o.spese.length === 1 ? ' scontrino · ' : ' scontrini · ') + euro(somma(o.spese)) : 'nessuna nota spese'}</small></span></label>`).join('') : '<p class="note">Nessuna prenotazione per questa villa.</p>'}</div>
             <label class="flag"><input type="checkbox" id="ex-zip" checked><span><b>Scarica anche lo zip con foto e allegati</b><small>Un solo file zip, con una cartella per prenotazione.</small></span></label>`}
@@ -398,20 +408,21 @@
           <div class="foot"><button type="button" class="btn" id="ex-close">Chiudi</button><button type="button" class="btn primary" id="ex-go">Scarica</button></div></div>`;
         $$('.ex-seg button', dlg).forEach(b => b.onclick = () => { modo = b.dataset.m; draw(); });
         $('#ex-close').onclick = () => dlg.close();
+        $$('input[name="ex-x"]', dlg).forEach(r => r.onchange = () => { xTutte = r.value === 'tutte' && r.checked; });
         if ($('#ex-villa')) $('#ex-villa').onchange = e => { villa = e.target.value; pre = null; draw(); };
         if ($('#ex-all')) $('#ex-all').onclick = () => { const cbs = $$('[data-ex]', dlg); const all = cbs.every(c => c.checked); cbs.forEach(c => { c.checked = !all; }); };
         $('#ex-go').onclick = async () => {
-          if (modo === 'xls') { exportCsv(righeX); dlg.close(); return; }
+          if (modo === 'xls') { if (xTutte && !(pre && pre.pid)) exportCsv(righeTutte(), `spese-tutte-le-ville_${isoLocale(new Date())}.csv`); else exportCsv(righeX); dlg.close(); return; }
           const ids = $$('[data-ex]', dlg).filter(c => c.checked).map(c => c.dataset.ex);
           if (!ids.length) { $('#ex-msg').innerHTML = '<div class="warn err">Scegli almeno una prenotazione.</div>'; return; }
           const go = $('#ex-go'); go.disabled = true; const step = t => { const m = $('#ex-msg'); if (m) m.innerHTML = `<p class="note">${esc(t)}</p>`; };
           try {
-            const docs = ids.map(id => wordDoc(villa, id, bookings));
+            const docs = ids.map(id => villa === '__all' ? wordDoc(id.split('::')[0], id.split('::').slice(1).join('::'), bookings) : wordDoc(villa, id, bookings));
             for (let i = 0; i < docs.length; i++) { step(`File Word ${i + 1} di ${docs.length}…`); X.scarica(docs[i].nome, docs[i].blob); await new Promise(r => setTimeout(r, 450)); }
             let nz = 0;
             if ($('#ex-zip') && $('#ex-zip').checked) {
               const entries = await zipAllegati(docs, step); nz = entries.length;
-              if (nz) X.scarica(X.nomeFile(`Allegati ${nomeVilla(villa)} ${isoLocale(new Date())}`) + '.zip', X.zip(entries));
+              if (nz) X.scarica(X.nomeFile(`Allegati ${villa === '__all' ? 'tutte le ville' : nomeVilla(villa)} ${isoLocale(new Date())}`) + '.zip', X.zip(entries));
             }
             step(`Scaricati ${docs.length} file Word${$('#ex-zip') && $('#ex-zip').checked ? (nz ? ` e lo zip con ${nz} ${nz === 1 ? 'allegato' : 'allegati'}` : '; nessuna foto o allegato da mettere nello zip') : ''}.`);
           } catch (x) { $('#ex-msg').innerHTML = `<div class="warn err">Esportazione non riuscita: ${esc(x.message || x)}</div>`; }
