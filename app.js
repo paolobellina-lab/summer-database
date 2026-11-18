@@ -322,8 +322,14 @@ window.SDBStore.ready.then(function () {
       return { email: e, nome: u.nome || a.nome || '', ville: a.ville || [], prenotazioni: a.prenotazioni || [] }; }); };
   const goSpese = (opts) => { if (opts.spPren) { location.hash = 'prenotazioni-' + encodeURIComponent(opts.spPren); return; } Object.assign(ui, { prVilla: opts.spVilla || '', prQ: '', prStato: '' }); saveUI(); location.hash = 'prenotazioni'; };
   // vendita (affitto + servizi a parte) e acquisto previsto (solo per chi vede i prezzi di acquisto) di una prenotazione
-  const valoriPren = b => { const sv = srvTot(b); const hv = typeof b.prezzoVendita === 'number', ha = typeof b.prezzoAcquisto === 'number';
-    return { vendita: hv || sv.vendita ? (hv ? b.prezzoVendita : 0) + sv.vendita : null, acquisto: canAcq() && (ha || sv.acquisto) ? (ha ? b.prezzoAcquisto : 0) + sv.acquisto : null, deposito: typeof b.deposito === 'number' ? b.deposito : null }; };
+  // acquisto unico ripartito a mano: root.ripartizione = { idCollegata: euro }; la principale tiene il resto (totale − collegate)
+  const quotaAcq = b => { const g = gruppoAcq(b); if (!g) return null; const rip = g.root.ripartizione; if (!rip || typeof rip !== 'object') return null;
+    const altri = g.membri.filter(m => m.id !== g.root.id); if (!altri.every(m => typeof rip[m.id] === 'number')) return null;
+    const tot = typeof g.root.prezzoAcquisto === 'number' ? g.root.prezzoAcquisto : 0;
+    return b.id === g.root.id ? tot - altri.reduce((t, m) => t + rip[m.id], 0) : rip[b.id]; };
+  const valoriPren = (b, intero) => { const sv = srvTot(b); const hv = typeof b.prezzoVendita === 'number', ha = typeof b.prezzoAcquisto === 'number';
+    const q = intero || !canAcq() ? null : quotaAcq(b), affA = q != null ? q : ha ? b.prezzoAcquisto : null;
+    return { vendita: hv || sv.vendita ? (hv ? b.prezzoVendita : 0) + sv.vendita : null, acquisto: canAcq() && (affA != null || sv.acquisto) ? (affA || 0) + sv.acquisto : null, affAcq: canAcq() ? affA : null, quota: q != null, deposito: typeof b.deposito === 'number' ? b.deposito : null }; };
   // pulsante "Installa app" (Chrome/Edge su Android, Windows, Mac)
   let installEvt = window.__sdbInstall || null;
   const isInstalled = () => { try { return window.matchMedia('(display-mode: standalone)').matches || window.matchMedia('(display-mode: minimal-ui)').matches || navigator.standalone === true; } catch (_) { return false; } };
@@ -344,7 +350,7 @@ window.SDBStore.ready.then(function () {
 
   // contesto della pagina Prenotazioni (spese.js)
   const ctxPren = () => ({ ui, saveUI, esc, data, spese, store, $, $$, toast, schedaPren, compressImage, canAcq, canEdit, isFull, S, catSpese, hasSrv: (b, k) => hasSrv(b, servizi(null, null, true).find(x => x.key === k) || { key: k }), srvDet,
-    stati, statoLabel, bookingColor, valori: valoriPren, openBooking, gruppoAcq, pagatiLiberi: b => nottiDi(pagatiLiberi(b)),
+    stati, statoLabel, bookingColor, valori: valoriPren, openBooking, gruppoAcq, ridisegna: () => route(), pagatiLiberi: b => nottiDi(pagatiLiberi(b)),
     nuovaPren: villaId => { const v = villaById(villaId) || sortedVillas()[0]; if (!v) { toast('Prima inserisci una villa'); return; } openBooking(Object.assign({ villaId: v.id }, julyWeek(v))); }, cover: id => (thumbs.map[id] || {}).thumb || '', onThumbs: f => { villasRedraw = f; } });
   /* ---------- router ---------- */
   function route() {
