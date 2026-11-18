@@ -780,7 +780,8 @@
             ${x.b && ctx.canEdit() ? '<button class="btn" type="button" id="pd-mod">Modifica prenotazione</button>' : ''}</div></div>
         <div class="pr-top">
           ${media(x.villaId, pill(x))}
-          <div class="card pr-info"><h2>${x.gen ? 'Villa' : 'Prenotazione'}</h2><dl class="pr-kv">${info.map(([l, val0]) => `<dt>${esc(l)}</dt><dd>${esc(val0)}</dd>`).join('')}</dl></div>
+          <div class="card pr-info"><h2>${x.gen ? 'Villa' : 'Prenotazione'}</h2><dl class="pr-kv">${info.map(([l, val0]) => `<dt>${esc(l)}</dt><dd>${esc(val0)}</dd>`).join('')}</dl>
+            ${x.b ? `<label class="flag pr-concl no-print" style="margin-top:12px"><input type="checkbox" id="pd-concl" ${x.b.conteggiConclusi ? 'checked' : ''} ${ctx.canEdit() ? '' : 'disabled'}><span><b>Conteggi conclusi</b><small>Deposito, addebiti e affitto al proprietario chiusi: nell'elenco la scheda risulta "Conteggi conclusi"</small></span></label>` : ''}</div>
         </div>
         ${quad ? '' : `<div class="card pr-valori"><h2>Valori</h2><div class="tbl-wrap"><table class="prices pr-val-t"><thead><tr><th>Voce</th>${tab4 ? '<th class="r">Previsto</th><th class="r">Reale</th><th class="r">Differenza</th>' : '<th class="r">Importo</th>'}</tr></thead><tbody>${celle}</tbody></table></div>
           ${x.b && v.vendita == null ? '<p class="note">Prezzo di vendita non inserito nella prenotazione.</p>' : ''}${!x.gen && acq && x.b && v.acquisto == null ? '<p class="note">Prezzo di acquisto non inserito nella prenotazione.</p>' : ''}</div>`}
@@ -831,6 +832,8 @@
         ['cat', 'ord', 'grp'].forEach(k => $('#sp-' + k, root).addEventListener('change', e => { ui['sp' + k[0].toUpperCase() + k.slice(1)] = e.target.value; saveUI(); disegnaSpese(); })); }
       if ($('#pd-new', root)) $('#pd-new', root).onclick = () => A.openNuova(x.villaId, x.b ? x.b.id : '');
       $('#pd-print', root).onclick = () => window.print();
+      const cc = $('#pd-concl', root); if (cc && x.b) cc.onchange = () => { const b0 = ctx.data().bookings.find(b => b.id === x.b.id); if (!b0) return;
+        ctx.store.upsertBooking(Object.assign(JSON.parse(JSON.stringify(b0)), { conteggiConclusi: cc.checked })); ctx.toast(cc.checked ? 'Conteggi conclusi' : 'Conteggi riaperti'); };
       if (grpBil || grp) { const g = grpBil || grp, tot0 = typeof g.root.prezzoAcquisto === 'number' ? g.root.prezzoAcquisto : null, ins = $$('.bil-in', root), inR = $$('.bil-re', root), totR0 = affGrp(V, g);
         const resto = () => { const s0 = ins.reduce((t, i) => t + (Number(i.value || i.placeholder) || 0), 0), r = tot0 == null ? null : tot0 - s0, el = $('#bil-resto', root);
           if (el) { el.textContent = r == null ? '—' : euro(r); el.style.color = r != null && r < 0 ? 'var(--danger, #c0392b)' : ''; } return r; };

@@ -749,7 +749,6 @@ window.SDBStore.ready.then(function () {
       </div>
       <div class="pricehint" id="b-hint"></div>
       <div id="b-spese"></div>
-      <label class="flag b-concl"><input type="checkbox" id="b-concl" ${b.conteggiConclusi ? 'checked' : ''}><span><b>Conteggi conclusi</b><small>Deposito, addebiti e affitto al proprietario chiusi: nella pagina Prenotazioni la scheda risulta "Conteggi conclusi"</small></span></label>
       ${canSee('prenotazioni') && accScontrini().length ? `<div class="field"><span>Assegnata a (app Scontrini)</span><div class="as-mini">${accScontrini().map(ac => `<label class="as-check"><input type="checkbox" data-bacc="${esc(ac.email)}" ${(ac.prenotazioni || []).includes(b.id) || (ac.ville || []).includes(b.villaId) ? 'checked' : ''} ${(ac.ville || []).includes(b.villaId) ? 'disabled title="Ha già tutta la villa"' : ''}> ${esc(ac.nome || ac.email)}</label>`).join('')}</div></div>` : ''}
       </section>
       </div><div class="bcol"><section class="dsec sec-srv"><h4>Servizi</h4>
@@ -798,7 +797,7 @@ window.SDBStore.ready.then(function () {
     $('#b-status').addEventListener('change', e => { if (!colorTouched) { color = statoColor(e.target.value); paint(); } });
     let acqDi = b.acquistoDi || null;
     const read = () => ({ villaId: $('#b-villa').value, status: $('#b-status').value, from: $('#b-from').value, to: $('#b-to').value, cliente: $('#b-cliente').value.trim(), note: $('#b-note').value.trim(), color: colorTouched ? color : null, earlyIn: $('#b-early').checked, lateOut: $('#b-late').checked,
-      acquistoDi: acqDi, conteggiConclusi: !!($('#b-concl') && $('#b-concl').checked),
+      acquistoDi: acqDi,
       pagatoDal: $('#b-pag').checked && $('#b-status').value !== 'vuoto' && $('#b-pag-from').value ? $('#b-pag-from').value : null, pagatoAl: $('#b-pag').checked && $('#b-status').value !== 'vuoto' && $('#b-pag-to').value ? $('#b-pag-to').value : null, prezzoVendita: money('#b-sale'), prezzoAcquisto: money('#b-buy'), deposito: money('#b-dep'), pulizia: $('#b-pulizia') ? $('#b-pulizia').checked : !!b.pulizia, cuoco: $('#b-cuoco') ? $('#b-cuoco').checked : !!b.cuoco, transfer: $('#b-transfer') ? $('#b-transfer').checked : !!b.transfer, serviziDett: readSrv(), servizi: $$('#bform [data-srv]').filter(c => c.checked).map(c => c.dataset.srv).concat((b.servizi || []).filter(k => !servizi().some(x => x.key === k))) });
     function money(sel) { const v = S.parseMoney($(sel).value); return typeof v === 'number' ? v : null; }
     const num = el => { const v = S.parseMoney(el.value); return typeof v === 'number' ? v : null; };
