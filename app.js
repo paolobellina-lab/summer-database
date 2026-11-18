@@ -99,6 +99,13 @@ window.SDBStore.ready.then(function () {
      tutti = anche quelli tolti (per le prenotazioni che li avevano già). */
   const servizi = (cfgIn, baseIn, tutti) => { const bc = baseIn || (data().settings || {}).serviziBase || {};
     return EXTRAS.map(([k, l]) => ({ key: k, label: String((bc[k] || {}).label || '').trim() || l, base: true, off: !!(bc[k] || {}).off })).filter(x => tutti || !x.off).concat((Array.isArray(cfgIn) ? cfgIn : ((data().settings || {}).servizi || [])).filter(x => x && x.key).map(x => ({ key: x.key, label: x.label, base: false }))); };
+  /* Categorie delle note spese: i servizi (automatiche, legate a quanto offerto nella prenotazione: scontrino.servizio = chiave),
+     le altre modificabili in Impostazioni → Servizi e inclusioni (settings.categorieSpese) e le fisse con regole proprie. */
+  const CAT_LIBERE_DEF = ['Pulizie', 'Manutenzione', 'Lavanderia', 'Spesa e forniture', 'Utenze', 'Giardino e piscina', 'Benvenuto ospiti', 'Commissioni e tasse', 'Altro'];
+  const CAT_FISSE = ['Affitto proprietario', 'Danni villa', 'Restituzione deposito sicurezza'];
+  const catLibere = st => { const l = (st || data().settings || {}).categorieSpese; return Array.isArray(l) ? l.slice() : CAT_LIBERE_DEF.slice(); };
+  const catAgg = st => { const l = (st || data().settings || {}).categorieAggiuntive; return Array.isArray(l) ? l.slice() : []; };
+  const catSpese = () => ({ servizi: servizi(null, null, true).map(x => ({ key: x.key, label: x.label, off: x.off })), libere: catLibere(), fisse: CAT_FISSE.slice(), agg: catAgg() });
   const hasSrv = (b, x) => x.base ? !!b[x.key] : (Array.isArray(b.servizi) && b.servizi.includes(x.key));
   const srvLabels = b => servizi(null, null, true).filter(x => hasSrv(b, x)).map(x => x.label);
   /* Dettaglio dei servizi nella prenotazione: serviziDett[chiave] = { incluso, acquisto, vendita, note }.
@@ -335,7 +342,7 @@ window.SDBStore.ready.then(function () {
   }
 
   // contesto della pagina Prenotazioni (spese.js)
-  const ctxPren = () => ({ ui, saveUI, esc, data, spese, store, $, $$, toast, schedaPren, compressImage, canAcq, canEdit, isFull, S,
+  const ctxPren = () => ({ ui, saveUI, esc, data, spese, store, $, $$, toast, schedaPren, compressImage, canAcq, canEdit, isFull, S, catSpese, hasSrv: (b, k) => hasSrv(b, servizi(null, null, true).find(x => x.key === k) || { key: k }), srvDet,
     stati, statoLabel, bookingColor, valori: valoriPren, openBooking, gruppoAcq, pagatiLiberi: b => nottiDi(pagatiLiberi(b)),
     nuovaPren: villaId => { const v = villaById(villaId) || sortedVillas()[0]; if (!v) { toast('Prima inserisci una villa'); return; } openBooking(Object.assign({ villaId: v.id }, julyWeek(v))); }, cover: id => (thumbs.map[id] || {}).thumb || '', onThumbs: f => { villasRedraw = f; } });
   /* ---------- router ---------- */
@@ -1577,6 +1584,13 @@ window.SDBStore.ready.then(function () {
         <div class="tbl-wrap"><table class="prices srv-tbl"><thead><tr><th>Servizio</th><th>Di norma</th>${canAcq() ? '<th>Acquisto €</th>' : ''}<th>Vendita €</th><th>Usato</th><th></th></tr></thead><tbody id="srv-list"></tbody></table></div>
         <form class="loc-new" id="srv-add" autocomplete="off"><input id="srv-add-n" placeholder="Nuovo servizio (es. Baby sitter)"><button class="btn small">Aggiungi servizio</button></form>
       </section>
+      <section class="card"><h2>Categorie delle spese</h2>
+        <p class="note">Sono le voci del menu Categoria nelle note spese (pagina Prenotazioni). <b>Servizi</b>: si aggiornano da sole con i servizi qui sopra e legano la spesa al servizio offerto nella prenotazione, per confrontarla con il suo acquisto previsto. <b>Altre categorie</b>: le aggiungi e modifichi tu; con <b>Aggiuntiva</b> la spesa è un servizio aggiuntivo (da addebitare al cliente o trattenere dal deposito), senza è una spesa della prenotazione (es. manutenzione). Le <b>fisse</b> hanno regole proprie e non si cambiano. Rinominare o togliere una categoria non cambia gli scontrini già inseriti, che restano con il nome di prima.</p>
+        <div class="cat-grp"><h4>Servizi (automatiche)</h4><div class="cat-chips" id="cat-srv"></div></div>
+        <div class="cat-grp"><h4>Altre categorie</h4><div id="cat-list" class="cat-admin"></div>
+          <form class="loc-new" id="cat-add" autocomplete="off"><input id="cat-add-n" placeholder="Nuova categoria (es. Noleggio barca)"><label class="cat-agg"><input type="checkbox" id="cat-add-agg" checked> Aggiuntiva</label><button class="btn small">Aggiungi categoria</button></form></div>
+        <div class="cat-grp"><h4>Fisse</h4><div class="cat-chips">${CAT_FISSE.map(c => `<span>${esc(c)}</span>`).join('')}</div></div>
+      </section>
       <section class="card"><h2>Inclusioni delle offerte</h2>
         <p class="note">Sono le voci "Le tariffe includono" della mail di offerta, in italiano e in inglese. Quelle con la spunta sono già selezionate in ogni nuova offerta; nell'offerta le puoi togliere o aggiungere una alla volta. Puoi <b>collegare una voce a un servizio</b>: nell'offerta quella voce si attiva solo quando spunti il servizio come incluso (es. "Pulizia finale e lavanderia finale standard" con il servizio Pulizia finale).</p>
         <div id="inc-list" class="inc-admin"></div>
@@ -1856,24 +1870,44 @@ window.SDBStore.ready.then(function () {
     $('#inc-add').addEventListener('submit', e => { e.preventDefault(); const it = $('#inc-add-it').value.trim(), en = $('#inc-add-en').value.trim(); if (!it && !en) { $('#inc-add-it').focus(); return; }
       const l = incList(); l.push({ id: S.uid('i'), it, en, on: true }); st.inclusioni = l; save(); drawInc(); $('#inc-add-it').value = ''; $('#inc-add-en').value = ''; toast('Voce aggiunta'); });
     const srvCustom = () => JSON.parse(JSON.stringify(st.servizi || (settings().servizi || [])));
+    // ---- categorie delle spese (settings.categorieSpese) ----
+    const drawCat = () => {
+      const sv = servizi(st.servizi, st.serviziBase || {});
+      $('#cat-srv').innerHTML = sv.length ? sv.map(x => `<span>${esc(x.label)}</span>`).join('') : '<span class="note">Nessun servizio</span>';
+      const l = catLibere(st);
+      $('#cat-list').innerHTML = l.map((c, i) => `<div class="cat-row" data-ci="${i}"><input data-cn value="${esc(c)}" aria-label="Nome della categoria"><label class="cat-agg" title="Spesa per un servizio aggiuntivo richiesto durante il soggiorno: da addebitare al cliente o trattenere dal deposito"><input type="checkbox" data-cagg ${catAgg(st).includes(c) ? 'checked' : ''}> Aggiuntiva</label><span class="inc-act"><button type="button" class="btn small" data-cmv="-1" ${i ? '' : 'disabled'} aria-label="Sposta su">↑</button><button type="button" class="btn small" data-cmv="1" ${i < l.length - 1 ? '' : 'disabled'} aria-label="Sposta giù">↓</button><button type="button" class="btn small danger" data-cdel>Togli</button></span></div>`).join('') || '<p class="note">Nessuna categoria: aggiungine una.</p>';
+    };
+    const catEsiste = (n, salta) => { const t = n.toLowerCase(); return catLibere(st).some((c, i) => i !== salta && c.toLowerCase() === t) || CAT_FISSE.some(c => c.toLowerCase() === t) || servizi(st.servizi, st.serviziBase || {}, true).some(x => x.label.toLowerCase() === t); };
+    $('#cat-list').addEventListener('change', e => { if (!e.target.matches('[data-cn]')) return; const i = Number(e.target.closest('[data-ci]').dataset.ci); const v = e.target.value.trim(); const l = catLibere(st);
+      if (!v || catEsiste(v, i)) { if (v) toast('Esiste già una categoria o un servizio con questo nome'); drawCat(); return; }
+      const ag = catAgg(st); const was = l[i]; l[i] = v; st.categorieSpese = l; if (ag.includes(was)) st.categorieAggiuntive = ag.map(x => x === was ? v : x); save(); toast('Categoria rinominata'); });
+    $('#cat-list').addEventListener('change', e => { if (!e.target.matches('[data-cagg]')) return; const c = catLibere(st)[Number(e.target.closest('[data-ci]').dataset.ci)]; const ag = catAgg(st).filter(x => x !== c);
+      if (e.target.checked) ag.push(c); st.categorieAggiuntive = ag; save(); toast(e.target.checked ? `${c}: spesa aggiuntiva` : `${c}: spesa della prenotazione`); });
+    $('#cat-list').addEventListener('click', e => { const row = e.target.closest('[data-ci]'); if (!row) return; const i = Number(row.dataset.ci); const l = catLibere(st);
+      const mv = e.target.closest('[data-cmv]'); if (mv) { const j = i + Number(mv.dataset.cmv); if (j < 0 || j >= l.length) return; [l[i], l[j]] = [l[j], l[i]]; st.categorieSpese = l; save(); drawCat(); return; }
+      if (e.target.closest('[data-cdel]')) { const was = l[i]; l.splice(i, 1); st.categorieSpese = l; st.categorieAggiuntive = catAgg(st).filter(x => x !== was); save(); drawCat(); toast('Categoria tolta'); } });
+    $('#cat-add').addEventListener('submit', e => { e.preventDefault(); const v = $('#cat-add-n').value.trim(); if (!v) { $('#cat-add-n').focus(); return; }
+      if (catEsiste(v, -1)) { toast('Esiste già una categoria o un servizio con questo nome'); return; }
+      const l = catLibere(st); l.push(v); st.categorieSpese = l; if ($('#cat-add-agg').checked) st.categorieAggiuntive = catAgg(st).concat(v); save(); drawCat(); $('#cat-add-n').value = ''; toast(`Aggiunta la categoria ${v}`); });
+    drawCat();
     drawSrv();
     $('#srv-list').addEventListener('input', e => { const row = e.target.closest('[data-sk]'); if (!row || !e.target.matches('[data-sl]')) return; const v = e.target.value.trim(); if (!v) return;
       if (EXTRAS.some(([k]) => k === row.dataset.sk)) { const bc = JSON.parse(JSON.stringify(st.serviziBase || {})); bc[row.dataset.sk] = Object.assign({}, bc[row.dataset.sk], { label: v }); st.serviziBase = bc; save(); return; }
       const l = srvCustom(); const x = l.find(y => y.key === row.dataset.sk); if (x) { x.label = v; st.servizi = l; save(); } });
     $('#srv-list').addEventListener('change', e => { const row = e.target.closest('[data-sk]'); if (row && e.target.matches('[data-sl]') && !e.target.value.trim()) drawSrv(); });
     $('#srv-list').addEventListener('click', e => {
-      const r = e.target.closest('[data-sr]'); if (r) { const bc = JSON.parse(JSON.stringify(st.serviziBase || {})); bc[r.dataset.sr] = Object.assign({}, bc[r.dataset.sr], { off: false }); st.serviziBase = bc; save(); drawSrv(); drawInc(); toast('Servizio rimesso'); return; }
+      const r = e.target.closest('[data-sr]'); if (r) { const bc = JSON.parse(JSON.stringify(st.serviziBase || {})); bc[r.dataset.sr] = Object.assign({}, bc[r.dataset.sr], { off: false }); st.serviziBase = bc; save(); drawSrv(); drawInc(); drawCat(); toast('Servizio rimesso'); return; }
       const row = e.target.closest('[data-sk]'); if (!row || !e.target.closest('[data-sd]')) return; const k = row.dataset.sk;
       // i 3 di base non si cancellano: si nascondono (il campo resta nelle prenotazioni che lo avevano già)
       if (EXTRAS.some(([z]) => z === k)) { const bc = JSON.parse(JSON.stringify(st.serviziBase || {})); bc[k] = Object.assign({}, bc[k], { off: true }); st.serviziBase = bc; }
       else st.servizi = srvCustom().filter(y => y.key !== k);
-      save(); drawSrv(); drawInc(); toast('Servizio tolto'); });
+      save(); drawSrv(); drawInc(); drawCat(); toast('Servizio tolto'); });
     $('#srv-add').addEventListener('submit', e => {
       e.preventDefault(); const label = $('#srv-add-n').value.trim(); if (!label) { $('#srv-add-n').focus(); return; }
       if (servizi(st.servizi, st.serviziBase || {}, true).some(x => x.label.toLowerCase() === label.toLowerCase())) { toast('Esiste già questo servizio (se è tra i tolti, rimettilo)'); return; }
       const slug = label.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24) || 'servizio';
       const l = srvCustom(); let key = slug; let n = 2; while (l.some(x => x.key === key) || EXTRAS.some(([k]) => k === key)) key = slug + '-' + n++;
-      l.push({ key, label }); st.servizi = l; save(); drawSrv(); $('#srv-add-n').value = ''; toast(`Aggiunto il servizio ${label}`);
+      l.push({ key, label }); st.servizi = l; save(); drawSrv(); drawCat(); $('#srv-add-n').value = ''; toast(`Aggiunto il servizio ${label}`);
     });
     const drawLocs = () => {
       const list = locList(); const count = l => data().villas.filter(v => normLoc(v.location) === l).length;

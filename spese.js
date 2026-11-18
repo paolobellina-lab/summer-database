@@ -25,11 +25,36 @@
   const isAff = s => s && s.categoria === AFF;
   const sommaAff = l => l.reduce((t, s) => t + (isAff(s) ? Number(s.importo) || 0 : 0), 0);
   // casella "servizio aggiuntivo": Danni villa la spunta, Affitto proprietario la toglie e la nasconde
-  const aggFlag = (sel, cb) => { const c = document.querySelector(sel), k = document.querySelector(cb); if (!c || !k) return; const v = c.value; if (v === 'Danni villa') k.checked = true; if (v === AFF) k.checked = false; k.closest('.flag').hidden = v === AFF; };
-  const CATEGORIE = ['Pulizie', 'Manutenzione', 'Lavanderia', 'Spesa e forniture', 'Utenze', 'Giardino e piscina', 'Benvenuto ospiti', 'Commissioni e tasse', AFF, 'Danni villa', REST_DEP, 'Altro'];
+  /* Categorie (da ctx.catSpese, Impostazioni → Servizi e inclusioni): servizi = automatiche, legate al servizio offerto
+     (scontrino.servizio = chiave; vale anche il solo nome uguale, per gli scontrini dell'app Scontrini); libere = modificabili,
+     con agg = quelle "aggiuntive" (da addebitare al cliente); fisse = Affitto proprietario, Danni villa (aggiuntiva), Restituzione deposito.
+     Offerta o aggiuntiva la decide la categoria (niente più casella); scontrino.aggiuntiva si salva comunque, per l'app Scontrini. */
+  let CATS = { servizi: [], libere: ['Pulizie', 'Manutenzione', 'Lavanderia', 'Spesa e forniture', 'Utenze', 'Giardino e piscina', 'Benvenuto ospiti', 'Commissioni e tasse', 'Altro'], fisse: [AFF, 'Danni villa', REST_DEP], agg: [] };
+  let CTX = null;
+  const setCats = ctx => { if (ctx && ctx.catSpese) { CATS = ctx.catSpese(); CTX = ctx; } };
+  // spesa di un servizio che la prenotazione non ha: è un servizio aggiuntivo (richiesto durante il soggiorno)
+  const srvNonOfferto = (srv, bk) => !!(srv && bk && CTX && CTX.hasSrv && !CTX.hasSrv(bk, srv.key));
+  const bkDi = s => s && s.prenotazioneId && CTX ? CTX.data().bookings.find(b => b.id === s.prenotazioneId && b.villaId === s.villaId) : null;
+  const srvDiSpesa = s => (s && ((s.servizio && CATS.servizi.find(x => x.key === s.servizio)) || CATS.servizi.find(x => x.label === s.categoria))) || null;
+  const aggPerCat = (cat, srv) => cat === 'Danni villa' ? true : cat === AFF || cat === REST_DEP || srv ? false : CATS.agg.includes(cat) ? true : CATS.libere.includes(cat) ? false : null;
+  const tipoCat = (cat, srv) => srv ? 'Servizio offerto: si confronta con l\'acquisto previsto del servizio' : cat === AFF ? 'Pagato al proprietario: si confronta con l\'acquisto concordato' : cat === REST_DEP ? 'Restituito al cliente: riduce il deposito, non è una spesa' : aggPerCat(cat) ? 'Servizio aggiuntivo: da addebitare al cliente o trattenere dal deposito' : 'Spesa della prenotazione (tra le spese dei servizi offerti)';
+  // menu Categoria: <optgroup> servizi (value "srv:chiave") · altre · fisse; cur = scontrino in modifica
+  const catOpts = (esc, cur) => {
+    const sv = srvDiSpesa(cur), sel = sv ? 'srv:' + sv.key : cur ? cur.categoria || '' : '';
+    const op = (v, l) => `<option value="${esc(v)}" ${v === sel ? 'selected' : ''}>${esc(l)}</option>`;
+    const servizi = CATS.servizi.filter(x => !x.off || (sv && sv.key === x.key));
+    const noti = new Set(servizi.map(x => 'srv:' + x.key).concat(CATS.libere, CATS.fisse));
+    return (sel && !noti.has(sel) ? op(sel, sel) : '')
+      + (servizi.length ? `<optgroup label="Servizi offerti">${servizi.map(x => op('srv:' + x.key, x.label)).join('')}</optgroup>` : '')
+      + `<optgroup label="Altre categorie">${CATS.libere.map(c => op(c, c + (CATS.agg.includes(c) ? ' (aggiuntiva)' : ''))).join('')}</optgroup>`
+      + `<optgroup label="Fisse">${CATS.fisse.map(c => op(c, c)).join('')}</optgroup>`;
+  };
+  const catLetta = v => { if (String(v).startsWith('srv:')) { const k = v.slice(4); const x = CATS.servizi.find(y => y.key === k); return { categoria: x ? x.label : k, servizio: k }; } return { categoria: v, servizio: null }; };
+  const catSalva = (v, bk) => { const c = catLetta(v); const sv = c.servizio ? (CATS.servizi.find(y => y.key === c.servizio) || { key: c.servizio }) : null; return Object.assign(c, { aggiuntiva: srvNonOfferto(sv, bk) || aggPerCat(c.categoria, c.servizio) === true }); };
+  const catInfo = (sel, out, bk) => { const c = document.querySelector(sel), o = document.querySelector(out); if (!c || !o) return; const x = catLetta(c.value); const sv = x.servizio ? { key: x.servizio } : null; o.textContent = srvNonOfferto(sv, bk) ? 'Servizio non offerto in questa prenotazione: conta come servizio aggiuntivo, da addebitare al cliente' : tipoCat(x.categoria, x.servizio); };
   /* Spese aggiuntive: richieste durante il soggiorno, da addebitare al cliente o trattenere dal deposito (scontrino.aggiuntiva = true;
      se il campo manca, "Danni villa" conta come aggiuntiva). Le altre sono le spese dei servizi offerti nella prenotazione. */
-  const isAgg = s => !isRest(s) && !isAff(s) && (s.aggiuntiva === true || (s.aggiuntiva === undefined && s.categoria === 'Danni villa'));
+  const isAgg = s => { if (!s || isRest(s) || isAff(s)) return false; const sv = srvDiSpesa(s); if (srvNonOfferto(sv, bkDi(s))) return true; const a = aggPerCat(s.categoria, sv); return a === null ? s.aggiuntiva === true : a; };
   const sommaAgg = l => l.reduce((t, s) => t + (isAgg(s) ? Number(s.importo) || 0 : 0), 0);
   const sommaInc = l => somma(l) - sommaAgg(l) - sommaAff(l);
   const importoTxt = s => (isRest(s) ? '−' : '') + euro(s.importo);
@@ -71,6 +96,7 @@
 
   /* ---------------------------------------------------------------- finestre delle spese (nuova, modifica, allegati, esporta) */
   function azioni(ctx) {
+    setCats(ctx);
     const { ui, esc, data, spese, store, $, $$, toast } = ctx;
     const X = window.SDBExport;
     const ville = () => data().villas.slice().sort((a, b) => String(a.name).localeCompare(String(b.name), 'it', { numeric: true }));
@@ -102,7 +128,6 @@
         return `<option value="">Spese generali della villa</option>` + (cur && cur.nonInCalendario && s.villaId === vid ? `<option value="__keep" selected>${esc(cur.cliente)} · ${dataBreve(cur.from)} → ${dataBreve(cur.to)} (non più in calendario)</option>` : '')
           + list.map(x => `<option value="${esc(x.id)}" ${x.id === curId ? 'selected' : ''}>${esc((x.cliente || '').trim() || 'Senza nome')} · ${dataBreve(x.from)} → ${dataBreve(x.to)}</option>`).join('');
       };
-      const cats = CATEGORIE.includes(s.categoria) || !s.categoria ? CATEGORIE : [s.categoria].concat(CATEGORIE);
       dlg.innerHTML = `<form class="dlg" id="ed-form" autocomplete="off">
         <h3>Modifica scontrino</h3>
         <p class="note">La versione attuale resta nello storico, barrata in rosso, dentro lo stesso scontrino.</p>
@@ -110,9 +135,9 @@
           <div class="row"><label class="field"><span>Importo €</span><input id="ed-imp" inputmode="decimal" value="${esc(String(s.importo ?? '').replace('.', ','))}" required></label>
           <label class="field"><span>Data</span><input type="date" id="ed-data" value="${esc(s.data || '')}" required></label></div></section>
         <section class="dsec sec-srv"><h4>Descrizione</h4>
-          <label class="field"><span>Categoria</span><select id="ed-cat">${cats.map(c => `<option ${c === s.categoria ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></label>
+          <label class="field"><span>Categoria</span><select id="ed-cat">${catOpts(esc, s)}</select><small class="note cat-tipo" id="ed-tipo"></small></label>
           <label class="field"><span>Motivo</span><input id="ed-mot" value="${esc(s.motivo || '')}"></label>
-          <label class="flag"><input type="checkbox" id="ed-agg" ${isAgg(s) ? 'checked' : ''}><span><b>Spesa per servizio aggiuntivo</b><small>Richiesto durante il soggiorno: da addebitare al cliente o trattenere dal deposito. Senza spunta è una spesa dei servizi offerti.</small></span></label></section>
+</section>
         <section class="dsec sec-date"><h4>Villa e prenotazione</h4>
           <label class="field"><span>Villa</span><select id="ed-villa">${ville().map(v => `<option value="${esc(v.id)}" ${v.id === s.villaId ? 'selected' : ''}>${esc(v.name)}</option>`).join('')}</select></label>
           <label class="field"><span>Prenotazione</span><select id="ed-pren">${prenOpts(s.villaId)}</select></label></section>
@@ -122,7 +147,9 @@
           <button type="button" class="btn" id="ed-cancel">Annulla</button>
           <button type="submit" class="btn primary" id="ed-save">Salva</button>
         </div></form>`;
-      $('#ed-cat').addEventListener('change', () => aggFlag('#ed-cat', '#ed-agg')); if ($('#ed-cat').value === AFF) aggFlag('#ed-cat', '#ed-agg');
+      const edBk = () => { const pv = $('#ed-pren').value; return pv === '__keep' ? null : pv ? bookings.find(x => x.id === pv) : null; };
+      const edInfo = () => catInfo('#ed-cat', '#ed-tipo', edBk());
+      $('#ed-cat').addEventListener('change', edInfo); $('#ed-pren').addEventListener('change', edInfo); edInfo();
       $('#ed-villa').addEventListener('change', e => { $('#ed-pren').innerHTML = prenOpts(e.target.value); });
       $('#ed-cancel').onclick = () => dlg.close();
       $('#ed-form').addEventListener('submit', async e => {
@@ -134,8 +161,8 @@
         if (pv === '__keep') { prenotazioneId = s.prenotazioneId || null; prenotazione = s.prenotazione || null; }
         else if (pv) { const bk = bookings.find(x => x.id === pv); prenotazioneId = pv; prenotazione = { cliente: (bk.cliente || '').trim() || 'Prenotazione senza nome', from: bk.from, to: bk.to }; }
         else { prenotazioneId = null; prenotazione = null; }
-        const changes = { importo, data: $('#ed-data').value, categoria: $('#ed-cat').value, motivo: $('#ed-mot').value.trim(), villaId, prenotazioneId, prenotazione, aggiuntiva: $('#ed-agg').checked && $('#ed-cat').value !== AFF };
-        const prevFields = { importo: s.importo, data: s.data, categoria: s.categoria || '', motivo: s.motivo || '', villaId: s.villaId, prenotazioneId: s.prenotazioneId || null, prenotazione: s.prenotazione || null , aggiuntiva: isAgg(s) };
+        const changes = Object.assign({ importo, data: $('#ed-data').value }, catSalva($('#ed-cat').value, prenotazioneId ? bookings.find(x => x.id === prenotazioneId) : null), { motivo: $('#ed-mot').value.trim(), villaId, prenotazioneId, prenotazione });
+        const prevFields = { importo: s.importo, data: s.data, categoria: s.categoria || '', motivo: s.motivo || '', villaId: s.villaId, prenotazioneId: s.prenotazioneId || null, prenotazione: s.prenotazione || null , aggiuntiva: isAgg(s), servizio: s.servizio || null };
         const same = Object.keys(changes).every(k => JSON.stringify(changes[k] ?? null) === JSON.stringify(prevFields[k] ?? null));
         if (same) { dlg.close(); return; }
         const previous = Object.assign({}, prevFields, { autore: s.modificatoDa || s.creatoDa || '', sostituitoDa: store.user || '', sostituitoIl: new Date().toISOString() });
@@ -224,9 +251,8 @@
           <div class="row"><label class="field"><span>Importo €</span><input id="nw-imp" inputmode="decimal" required placeholder="0,00"></label>
           <label class="field"><span>Data</span><input type="date" id="nw-data" value="${isoLocale(new Date())}" required></label></div></section>
         <section class="dsec sec-srv"><h4>Descrizione</h4>
-          <label class="field"><span>Categoria</span><select id="nw-cat">${CATEGORIE.map(c => `<option>${esc(c)}</option>`).join('')}</select></label>
-          <label class="field"><span>Motivo</span><input id="nw-mot" placeholder="es. pulizia finale, lampadina…"></label>
-          <label class="flag"><input type="checkbox" id="nw-agg"><span><b>Spesa per servizio aggiuntivo</b><small>Richiesto durante il soggiorno: da addebitare al cliente o trattenere dal deposito. Senza spunta è una spesa dei servizi offerti.</small></span></label></section>
+          <label class="field"><span>Categoria</span><select id="nw-cat">${catOpts(esc, null)}</select><small class="note cat-tipo" id="nw-tipo"></small></label>
+          <label class="field"><span>Motivo</span><input id="nw-mot" placeholder="es. pulizia finale, lampadina…"></label></section>
         <section class="dsec sec-st"><h4>Foto dello scontrino</h4>
           <div class="nw-photo"><img id="nw-prev" alt="" hidden><span class="note" id="nw-none">Nessuna foto</span>
             <label class="btn small" for="nw-cam">Scatta foto</label><input type="file" id="nw-cam" accept="image/*" capture="environment" hidden>
@@ -234,8 +260,9 @@
           <p class="note">Altri allegati, anche PDF, si aggiungono dopo con il pulsante Allegati.</p></section>
         <div id="nw-msg"></div>
         <div class="foot"><button type="button" class="btn" id="nw-cancel">Annulla</button><button type="submit" class="btn primary" id="nw-save">Salva</button></div></form>`;
-      $('#nw-villa').addEventListener('change', e => { $('#nw-pren').innerHTML = prenOpts(e.target.value, ''); });
-      $('#nw-cat').addEventListener('change', () => aggFlag('#nw-cat', '#nw-agg')); aggFlag('#nw-cat', '#nw-agg');
+      $('#nw-villa').addEventListener('change', e => { $('#nw-pren').innerHTML = prenOpts(e.target.value, ''); nwInfo(); });
+      const nwInfo = () => { const pv = $('#nw-pren').value; catInfo('#nw-cat', '#nw-tipo', pv ? bookings.find(x => x.id === pv) : null); };
+      $('#nw-cat').addEventListener('change', nwInfo); $('#nw-pren').addEventListener('change', nwInfo); nwInfo();
       const onFile = async e => { const f = e.target.files[0]; e.target.value = ''; if (!f) return; try { foto = await ctx.compressImage(f, 1500, 750000); const im = $('#nw-prev'); im.src = foto; im.hidden = false; $('#nw-none').hidden = true; } catch (_) { toast('Non riesco a leggere questa foto'); } };
       $('#nw-cam').addEventListener('change', onFile); $('#nw-gal').addEventListener('change', onFile);
       $('#nw-cancel').onclick = () => dlg.close();
@@ -244,7 +271,7 @@
         const importo = parseImporto($('#nw-imp').value);
         if (!(importo > 0)) { $('#nw-msg').innerHTML = '<div class="warn err">Importo non valido.</div>'; return; }
         const pv = $('#nw-pren').value; const bk = pv ? bookings.find(x => x.id === pv) : null;
-        const dati = { villaId: $('#nw-villa').value, prenotazioneId: bk ? bk.id : null, prenotazione: bk ? { cliente: (bk.cliente || '').trim() || 'Prenotazione senza nome', from: bk.from, to: bk.to } : null, data: $('#nw-data').value, importo, categoria: $('#nw-cat').value, motivo: $('#nw-mot').value.trim() , aggiuntiva: $('#nw-agg').checked };
+        const dati = { villaId: $('#nw-villa').value, prenotazioneId: bk ? bk.id : null, prenotazione: bk ? { cliente: (bk.cliente || '').trim() || 'Prenotazione senza nome', from: bk.from, to: bk.to } : null, data: $('#nw-data').value, importo, motivo: $('#nw-mot').value.trim() }; Object.assign(dati, catSalva($('#nw-cat').value, bk));
         $('#nw-save').disabled = true;
         try { await store.addScontrino(dati, foto); dlg.close(); toast('Spesa salvata: la vede anche l\'app Scontrini'); }
         catch (x) { $('#nw-save').disabled = false; $('#nw-msg').innerHTML = `<div class="warn err">Salvataggio non riuscito: ${esc(x.message || x)}</div>`; }
@@ -410,7 +437,7 @@
     });
     root.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches && e.target.matches('.vcard[data-pk]')) e.target.click(); });
 
-    const render = () => { if (!document.body.contains(root)) return; if (sub) dettaglio(); else elenco(); };
+    const render = () => { if (!document.body.contains(root)) return; setCats(ctx); if (sub) dettaglio(); else elenco(); };
 
     /* ---------- elenco delle prenotazioni ---------- */
     function elenco() {
@@ -575,7 +602,16 @@
           <p class="note">Previsto = valori della prenotazione (acquisto concordato e servizi). Reale = note spese. In linea entro il 5% (almeno 50 €).</p>
           <div class="tbl-wrap"><table class="prices pr-chk-t"><thead><tr><th>Voce</th><th class="r">Previsto</th><th class="r">Reale</th><th class="r">Differenza</th><th>Esito</th></tr></thead><tbody>
           ${riga('Affitto proprietario', grp ? 'acquisto unico: tutto il gruppo' + (grp.root.id !== x.b.id ? ', previsto nella principale' : '') : 'note spese "Affitto proprietario", anche extra', affPrev, affReal, 'da inserire tra le spese')}
-          ${riga('Servizi della prenotazione', srvNomi.length ? esc(srvNomi.join(', ')) : 'spese dei servizi offerti', srvPrev || (srvReal ? 0 : null), srvReal)}
+          ${(() => { // un servizio offerto alla volta: acquisto previsto (a parte) contro le spese con quella categoria
+            const off = CATS.servizi.filter(z => ctx.hasSrv && ctx.hasSrv(x.b, z.key));
+            const di = k => x.spese.filter(z => !isAgg(z) && !isRest(z) && !isAff(z) && (srvDiSpesa(z) || {}).key === k);
+            let legate = 0;
+            const righe = off.map(z => { const d = ctx.srvDet ? ctx.srvDet(x.b, z.key) : {}; const re = somma(di(z.key)); legate += re;
+              return riga(esc(z.label), d.incluso ? 'incluso nel prezzo: nessun acquisto previsto' : 'a parte', d.incluso ? (re ? null : null) : num(d.acquisto), re, 'da inserire tra le spese'); });
+            // spese degli scontrini legati a un servizio che non è nella prenotazione: sono già aggiuntive (non entrano qui)
+            const altre = srvReal - legate;
+            return righe.join('') + (altre || !off.length ? riga('Altre spese della prenotazione', 'categorie non aggiuntive (es. manutenzione)', off.length ? null : (srvPrev || null), altre) : '');
+          })()}
           ${aggReal ? `<tr><td><b>Servizi aggiuntivi</b><small>richiesti durante il soggiorno, da addebitare al cliente</small></td><td class="r">—</td><td class="r">${euro(aggReal)}</td><td class="r">—</td><td><span class="chk chk-warn">non previsti</span></td></tr>` : ''}
           </tbody><tfoot><tr><td><b>Totale (senza aggiuntivi)</b></td><td class="r"><b>${totPrev == null ? '—' : euro(totPrev)}</b></td><td class="r"><b>${euro(totReal)}</b></td><td class="r"><b>${totPrev == null ? '—' : segno(totReal - totPrev)}</b></td><td>${(() => { const [t, c] = esito(totPrev, totReal); return `<span class="chk ${c}">${t}</span>`; })()}</td></tr></tfoot></table></div>
           ${affPrev != null && !affReal ? '<p class="note">L\'affitto pagato al proprietario non è ancora tra le spese: inseriscilo come nota spese "Affitto proprietario" (con eventuali extra) per confrontarlo con l\'acquisto concordato.</p>' : ''}</div>`;

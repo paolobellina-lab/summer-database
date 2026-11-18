@@ -1170,3 +1170,13 @@ dialog.dlg-promo { width: min(680px, calc(100vw - 32px)); }
   #bform .bcol { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 }
 .pr-val-t td.ok { color: #1d6b3a; font-weight: 600; }
+/* categorie delle spese */
+.cat-tipo { display: block; margin-top: 4px; font-size: 12px; color: var(--muted); }
+.cat-grp { margin-top: 14px; }
+.cat-grp h4 { margin: 0 0 8px; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.cat-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.cat-chips span { padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); font-size: 13px; }
+.cat-admin { display: flex; flex-direction: column; gap: 6px; }
+.cat-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.cat-row [data-cn] { flex: 1 1 220px; min-width: 0; }
+.cat-agg { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; white-space: nowrap; }
