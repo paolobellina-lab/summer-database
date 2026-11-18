@@ -39,15 +39,16 @@
   const aggPerCat = (cat, srv) => cat === 'Danni villa' ? true : cat === AFF || cat === REST_DEP || srv ? false : CATS.agg.includes(cat) ? true : CATS.libere.includes(cat) ? false : null;
   const tipoCat = (cat, srv) => srv ? 'Servizio offerto: si confronta con l\'acquisto previsto del servizio' : cat === AFF ? 'Pagato al proprietario: si confronta con l\'acquisto concordato' : cat === REST_DEP ? 'Restituito al cliente: riduce il deposito, non è una spesa' : aggPerCat(cat) ? 'Servizio aggiuntivo: da addebitare al cliente o trattenere dal deposito' : 'Altra spesa della prenotazione: non addebitata al cliente (es. manutenzione)';
   // menu Categoria: <optgroup> servizi (value "srv:chiave") · altre · fisse; cur = scontrino in modifica
-  const catOpts = (esc, cur) => {
+  const catOpts = (esc, cur, bk) => {
     const sv = srvDiSpesa(cur), sel = sv ? 'srv:' + sv.key : cur ? cur.categoria || '' : '';
     const op = (v, l) => `<option value="${esc(v)}" ${v === sel ? 'selected' : ''}>${esc(l)}</option>`;
     const servizi = CATS.servizi.filter(x => !x.off || (sv && sv.key === x.key));
     const noti = new Set(servizi.map(x => 'srv:' + x.key).concat(CATS.libere, CATS.fisse));
     return (sel && !noti.has(sel) ? op(sel, sel) : '')
       // due gruppi soltanto: spese non aggiuntive (servizi, altre categorie senza "Aggiuntiva", affitto, restituzione) e aggiuntive
-      + `<optgroup label="Non aggiuntive">${servizi.map(x => op('srv:' + x.key, x.label)).join('')}${CATS.libere.filter(c => !CATS.agg.includes(c)).map(c => op(c, c)).join('')}${CATS.fisse.filter(c => aggPerCat(c) !== true).map(c => op(c, c)).join('')}</optgroup>`
-      + `<optgroup label="Aggiuntive">${CATS.libere.filter(c => CATS.agg.includes(c)).map(c => op(c, c)).join('')}${CATS.fisse.filter(c => aggPerCat(c) === true).map(c => op(c, c)).join('')}</optgroup>`;
+      // i servizi seguono la prenotazione: spuntati nella prenotazione = non aggiuntivi, non spuntati = aggiuntivi
+      + `<optgroup label="Non aggiuntive">${servizi.filter(x => !srvNonOfferto(x, bk)).map(x => op('srv:' + x.key, x.label)).join('')}${CATS.libere.filter(c => !CATS.agg.includes(c)).map(c => op(c, c)).join('')}${CATS.fisse.filter(c => aggPerCat(c) !== true).map(c => op(c, c)).join('')}</optgroup>`
+      + `<optgroup label="Aggiuntive">${servizi.filter(x => srvNonOfferto(x, bk)).map(x => op('srv:' + x.key, x.label)).join('')}${CATS.libere.filter(c => CATS.agg.includes(c)).map(c => op(c, c)).join('')}${CATS.fisse.filter(c => aggPerCat(c) === true).map(c => op(c, c)).join('')}</optgroup>`;
   };
   const catLetta = v => { if (String(v).startsWith('srv:')) { const k = v.slice(4); const x = CATS.servizi.find(y => y.key === k); return { categoria: x ? x.label : k, servizio: k }; } return { categoria: v, servizio: null }; };
   const catSalva = (v, bk) => { const c = catLetta(v); const sv = c.servizio ? (CATS.servizi.find(y => y.key === c.servizio) || { key: c.servizio }) : null; return Object.assign(c, { aggiuntiva: srvNonOfferto(sv, bk) || aggPerCat(c.categoria, c.servizio) === true }); };
@@ -140,7 +141,7 @@
           <div class="row"><label class="field"><span>Importo €</span><input id="ed-imp" inputmode="decimal" value="${esc(String(s.importo ?? '').replace('.', ','))}" required></label>
           <label class="field"><span>Data</span><input type="date" id="ed-data" value="${esc(s.data || '')}" required></label></div></section>
         <section class="dsec sec-srv"><h4>Descrizione</h4>
-          <label class="field"><span>Categoria</span><select id="ed-cat">${catOpts(esc, s)}</select><small class="note cat-tipo" id="ed-tipo"></small></label>
+          <label class="field"><span>Categoria</span><select id="ed-cat">${catOpts(esc, s, cur && !cur.nonInCalendario ? bookings.find(b => b.id === cur.id) : null)}</select><small class="note cat-tipo" id="ed-tipo"></small></label>
           <label class="field"><span>Motivo</span><input id="ed-mot" value="${esc(s.motivo || '')}"></label>
 </section>
         <section class="dsec sec-date"><h4>Villa e prenotazione</h4>
@@ -154,7 +155,8 @@
         </div></form>`;
       const edBk = () => { const pv = $('#ed-pren').value; return pv === '__keep' ? null : pv ? bookings.find(x => x.id === pv) : null; };
       const edInfo = () => catInfo('#ed-cat', '#ed-tipo', edBk());
-      $('#ed-cat').addEventListener('change', edInfo); $('#ed-pren').addEventListener('change', edInfo); edInfo();
+      const edMenu = () => { const c = catLetta($('#ed-cat').value); $('#ed-cat').innerHTML = catOpts(esc, c, edBk()); edInfo(); };
+      $('#ed-cat').addEventListener('change', edInfo); $('#ed-pren').addEventListener('change', edMenu); edInfo();
       $('#ed-villa').addEventListener('change', e => { $('#ed-pren').innerHTML = prenOpts(e.target.value); });
       $('#ed-cancel').onclick = () => dlg.close();
       $('#ed-form').addEventListener('submit', async e => {
@@ -265,9 +267,11 @@
           <p class="note">Altri allegati, anche PDF, si aggiungono dopo con il pulsante Allegati.</p></section>
         <div id="nw-msg"></div>
         <div class="foot"><button type="button" class="btn" id="nw-cancel">Annulla</button><button type="submit" class="btn primary" id="nw-save">Salva</button></div></form>`;
-      $('#nw-villa').addEventListener('change', e => { $('#nw-pren').innerHTML = prenOpts(e.target.value, ''); nwInfo(); });
-      const nwInfo = () => { const pv = $('#nw-pren').value; catInfo('#nw-cat', '#nw-tipo', pv ? bookings.find(x => x.id === pv) : null); };
-      $('#nw-cat').addEventListener('change', nwInfo); $('#nw-pren').addEventListener('change', nwInfo); nwInfo();
+      $('#nw-villa').addEventListener('change', e => { $('#nw-pren').innerHTML = prenOpts(e.target.value, ''); nwMenu(); });
+      const nwBk = () => { const pv = $('#nw-pren').value; return pv ? bookings.find(x => x.id === pv) : null; };
+      const nwInfo = () => catInfo('#nw-cat', '#nw-tipo', nwBk());
+      const nwMenu = () => { const c = catLetta($('#nw-cat').value); $('#nw-cat').innerHTML = catOpts(esc, c, nwBk()); nwInfo(); };
+      $('#nw-cat').addEventListener('change', nwInfo); $('#nw-pren').addEventListener('change', nwMenu); nwMenu();
       const onFile = async e => { const f = e.target.files[0]; e.target.value = ''; if (!f) return; try { foto = await ctx.compressImage(f, 1500, 750000); const im = $('#nw-prev'); im.src = foto; im.hidden = false; $('#nw-none').hidden = true; } catch (_) { toast('Non riesco a leggere questa foto'); } };
       $('#nw-cam').addEventListener('change', onFile); $('#nw-gal').addEventListener('change', onFile);
       $('#nw-cancel').onclick = () => dlg.close();
