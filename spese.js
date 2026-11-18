@@ -635,6 +635,11 @@
           const r2 = (voce, nota, val, cls) => `<tr${cls ? ` class="${cls}"` : ''}><td>${voce}${nota ? `<small>${nota}</small>` : ''}</td><td class="r">${val}</td></tr>`;
           const prev = righe => `<details class="pr-prev"><summary>Mostra il previsto</summary><div class="tbl-wrap"><table class="prices pr-chk-t"><thead><tr><th>Voce</th><th class="r">Previsto</th><th class="r">Reale</th><th class="r">Differenza</th><th>Esito</th></tr></thead><tbody>${righe}</tbody></table></div></details>`;
           const marR = v.vendita != null ? v.vendita + (haDep ? tratt : 0) + sommaAddP(x.spese) - sp : null;
+          // esito sempre in vista accanto al valore (come nella tabella del previsto, senza il titolo)
+          const chip = (pr, re, daIns) => { if (pr == null) return ''; const [t, c] = esito(pr, re, daIns); return t && t !== '—' ? ` <span class="chk ${c} pr-chip">${t}</span>` : ''; };
+          const chipM = (pr, re) => { if (pr == null || re == null) return ''; const d = re - pr, tol = Math.max(50, Math.abs(pr) * 0.05);
+            const pc = pr ? ` (${d > 0 ? '+' : '−'}${Math.round(Math.abs(d) / Math.abs(pr) * 100)}%)` : '';
+            return Math.abs(d) <= tol ? ' <span class="chk chk-ok pr-chip">in linea</span>' : d > 0 ? ` <span class="chk chk-ok pr-chip">sopra il previsto${pc}</span>` : ` <span class="chk chk-bad pr-chip">sotto il previsto${pc}</span>`; };
           const marP = v.vendita != null && v.acquisto != null ? v.vendita - v.acquisto : null;
           const rigaM = (voce, pr, re, piuAlto) => { const d = pr != null && re != null ? re - pr : null; return `<tr><td><b>${voce}</b></td><td class="r">${pr == null ? '—' : euro(pr)}</td><td class="r">${re == null ? '—' : euro(re)}</td><td class="r">${d == null ? '—' : d === 0 ? 'OK' : segno(d)}</td><td>${d == null ? '' : d === 0 ? '<span class="chk chk-ok">OK</span>' : (piuAlto ? d > 0 : d < 0) ? '<span class="chk chk-ok">meglio del previsto</span>' : '<span class="chk chk-bad">peggio del previsto</span>'}</td></tr>`; };
           // 1. riepilogo
@@ -645,13 +650,13 @@
                 : r2('Deposito di sicurezza trattenuto', `ricevuto ${dep == null ? '—' : euro(dep)}: si conta dopo la nota "Restituzione deposito"`, '—')) : ''),
               (() => { const ap = sommaAddP(x.spese), n = x.spese.filter(isAddP).length, daP = x.spese.filter(z => !isRest(z) && !isAff(z) && !isAddP(z) && (CATS.prop || []).includes(z.categoria)).reduce((t, z) => t + (Number(z.importo) || 0), 0);
                 return r2('Addebito proprietario', n ? `${n} ${n === 1 ? 'nota' : 'note'} "Addebito proprietario"${daP && daP !== ap ? ` · da addebitare ${euro(daP)}` : ''}` : daP ? `da addebitare ${euro(daP)}: registralo con la nota "Addebito proprietario"` : 'note spese "Addebito proprietario"', n ? euro(ap) : '—'); })()
-              + r2('<b>Margine</b>', (haDep ? 'vendita + deposito trattenuto' : 'vendita') + ' + addebito proprietario − spese', marR == null ? vuoto : `<b>${euro(marR)}</b>`, marR != null && marR < 0 ? 'tot neg' : 'tot'))}
+              + r2('<b>Margine</b>', (haDep ? 'vendita + deposito trattenuto' : 'vendita') + ' + addebito proprietario − spese', marR == null ? vuoto : `<b>${euro(marR)}</b>${chipM(marP, marR)}`, marR != null && marR < 0 ? 'tot neg' : 'tot'))}
             ${prev(rigaM('Vendita', v.vendita, v.vendita, true) + rigaM('Spese totali', v.acquisto, sp, false) + rigaM('Margine', marP, marR, true))}
             ${v.vendita == null ? '<p class="note">Prezzo di vendita non inserito nella prenotazione.</p>' : ''}</div>`;
           // 2. affitto al proprietario
           const affN = x.spese.filter(isAff).length;
           const q2 = `<div class="card pr-q"><h2>Affitto al proprietario</h2>${tab(
-              r2('Pagato al proprietario', affN ? `${affN} ${affN === 1 ? 'nota spese' : 'note spese'} "Affitto proprietario", anche extra` : 'nessuna nota spese "Affitto proprietario"', euro(affReal), 'tot'))}
+              r2('Pagato al proprietario', affN ? `${affN} ${affN === 1 ? 'nota spese' : 'note spese'} "Affitto proprietario", anche extra` : 'nessuna nota spese "Affitto proprietario"', euro(affReal) + chip(affPrev, affReal, 'da inserire'), 'tot'))}
             ${prev(riga('Affitto proprietario', 'acquisto concordato nella prenotazione', affPrev, affReal, 'da inserire tra le spese'))}
             ${affPrev != null && !affReal ? '<p class="note">Inserisci l\'affitto pagato come nota spese "Affitto proprietario" (con eventuali extra).</p>' : ''}${affPrev == null ? '<p class="note">Acquisto concordato non inserito nella prenotazione.</p>' : ''}</div>`;
           // 3. spese offerte: servizi della prenotazione + altre spese non aggiuntive, per categoria
@@ -662,7 +667,7 @@
           const q3 = `<div class="card pr-q"><h2>Spese offerte</h2>${(srvR.length || altre.length) ? tab(
               srvR.map(({ z, d, re }) => r2(esc(z.label), d.incluso ? 'servizio offerto, incluso nel prezzo' : 'servizio offerto, a parte', euro(re))).join('')
             + altre.map(([c, t]) => r2(esc(c), 'altra spesa della prenotazione', euro(t))).join(''),
-              r2('<b>Totale spese offerte</b>', '', `<b>${euro(sommaSrv(x.spese) + sommaAltre(x.spese))}</b>`, 'tot')) : '<p class="note">Nessun servizio nella prenotazione e nessuna spesa.</p>'}
+              r2('<b>Totale spese offerte</b>', '', `<b>${euro(sommaSrv(x.spese) + sommaAltre(x.spese))}</b>${chip(srvPrev, sommaSrv(x.spese) + sommaAltre(x.spese))}`, 'tot')) : '<p class="note">Nessun servizio nella prenotazione e nessuna spesa.</p>'}
             ${srvR.length ? prev(srvR.map(({ z, d, re }) => riga(esc(z.label), d.incluso ? 'incluso nel prezzo: nessun acquisto previsto' : 'a parte', d.incluso ? null : num(d.acquisto), re, 'da inserire tra le spese')).join('')
               + altre.map(([c, t]) => riga(esc(c), 'altra spesa della prenotazione', null, t)).join('')
               + riga('Totale spese offerte', '', srvPrev, sommaSrv(x.spese) + sommaAltre(x.spese))) : ''}</div>`;
