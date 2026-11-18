@@ -45,9 +45,9 @@
     const servizi = CATS.servizi.filter(x => !x.off || (sv && sv.key === x.key));
     const noti = new Set(servizi.map(x => 'srv:' + x.key).concat(CATS.libere, CATS.fisse));
     return (sel && !noti.has(sel) ? op(sel, sel) : '')
-      + (servizi.length ? `<optgroup label="Servizi offerti">${servizi.map(x => op('srv:' + x.key, x.label)).join('')}</optgroup>` : '')
-      + `<optgroup label="Altre categorie">${CATS.libere.map(c => op(c, c + (CATS.agg.includes(c) ? ' (aggiuntiva)' : ''))).join('')}</optgroup>`
-      + `<optgroup label="Fisse">${CATS.fisse.map(c => op(c, c)).join('')}</optgroup>`;
+      // due gruppi soltanto: spese non aggiuntive (servizi, altre categorie senza "Aggiuntiva", affitto, restituzione) e aggiuntive
+      + `<optgroup label="Non aggiuntive">${servizi.map(x => op('srv:' + x.key, x.label)).join('')}${CATS.libere.filter(c => !CATS.agg.includes(c)).map(c => op(c, c)).join('')}${CATS.fisse.filter(c => aggPerCat(c) !== true).map(c => op(c, c)).join('')}</optgroup>`
+      + `<optgroup label="Aggiuntive">${CATS.libere.filter(c => CATS.agg.includes(c)).map(c => op(c, c)).join('')}${CATS.fisse.filter(c => aggPerCat(c) === true).map(c => op(c, c)).join('')}</optgroup>`;
   };
   const catLetta = v => { if (String(v).startsWith('srv:')) { const k = v.slice(4); const x = CATS.servizi.find(y => y.key === k); return { categoria: x ? x.label : k, servizio: k }; } return { categoria: v, servizio: null }; };
   const catSalva = (v, bk) => { const c = catLetta(v); const sv = c.servizio ? (CATS.servizi.find(y => y.key === c.servizio) || { key: c.servizio }) : null; return Object.assign(c, { aggiuntiva: srvNonOfferto(sv, bk) || aggPerCat(c.categoria, c.servizio) === true }); };
