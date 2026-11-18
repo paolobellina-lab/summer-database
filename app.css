@@ -1205,3 +1205,6 @@ dialog.dlg-promo { width: min(680px, calc(100vw - 32px)); }
 .pr-quad > .pr-col > .card { margin: 0 !important; }
 .pr-chip { display: block; width: max-content; margin: 4px 0 0 auto; font-weight: 600; }
 .pr-q table.prices td.r { text-align: right; }
+/* riquadri del riepilogo: stessa altezza per riga (Riepilogo = Affitto + A carico del proprietario) */
+.pr-quad { align-items: stretch; }
+.pr-quad > .pr-col > .card:last-child { flex: 1; }
