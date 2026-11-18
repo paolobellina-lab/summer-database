@@ -582,7 +582,7 @@
           + r4('Da addebitare al cliente', haDep ? 'aggiuntivi − deposito trattenuto' : 'spese aggiuntive', null, on ? Math.max(0, sommaAgg(x.spese) - (haDep ? Math.max(0, tratt) : 0)) : null);
       } else celle = rowV('Vendita', E(v.vendita), 'affitto + servizi a parte') + rowV('Spese reali servizi offerti', ctx.online ? euro(sommaSrv(x.spese)) : vuoto, 'servizi della prenotazione') + rowV('Altre spese della prenotazione', ctx.online ? euro(sommaAltre(x.spese)) : vuoto, 'categorie non aggiuntive') + rowV('Spese reali servizi aggiuntivi', ctx.online ? euro(sommaAgg(x.spese)) : vuoto, 'da addebitare o trattenere dal deposito') + rowV(haDep ? 'Vendita + deposito trattenuto − spese' : 'Vendita − spese', v.vendita != null && ctx.online ? euro(v.vendita + (haDep ? tratt : 0) - sp) : vuoto);
       // controllo previsto / reale: i valori della prenotazione sono quelli ipotizzati (tranne la vendita), le note spese quelle reali
-      let chkHtml = '';
+      let chkHtml = '', quad = false;
       if (x.b && acq && ctx.online && V.conSpese) {
         const num = n => typeof n === 'number' ? n : null;
         const rootB = grp ? grp.root : x.b;
@@ -605,7 +605,51 @@
           return `<tr><td><b>${voce}</b>${nota ? `<small>${nota}</small>` : ''}</td><td class="r">${pr == null ? '—' : euro(pr)}</td><td class="r">${euro(re)}</td><td class="r">${d == null || (!re && pr > 0) ? '—' : d === 0 ? 'OK' : segno(d)}</td><td><span class="chk ${c}">${t}</span></td></tr>`; };
         const totPrev = affPrev == null && srvPrev == null ? null : (grp && grp.root.id !== x.b.id ? 0 : affPrev || 0) + (srvPrev || 0);
         const totReal = (grp && grp.root.id !== x.b.id ? 0 : affReal) + srvReal;
-        chkHtml = `<div class="card pr-chk"><h2>Previsto e reale</h2>
+        if (!grp) {
+          // quattro riquadri con il solo reale; il previsto in una finestrella da aprire
+          quad = true;
+          const perCat = f => { const m = {}; x.spese.filter(f).forEach(z => { const c = z.categoria || 'Altro'; m[c] = (m[c] || 0) + (Number(z.importo) || 0); }); return Object.entries(m).sort((a, b) => b[1] - a[1]); };
+          const tab = (righe, piede) => `<div class="tbl-wrap"><table class="prices pr-q-t"><tbody>${righe}</tbody>${piede ? `<tfoot>${piede}</tfoot>` : ''}</table></div>`;
+          const r2 = (voce, nota, val, cls) => `<tr${cls ? ` class="${cls}"` : ''}><td>${voce}${nota ? `<small>${nota}</small>` : ''}</td><td class="r">${val}</td></tr>`;
+          const prev = righe => `<details class="pr-prev"><summary>Mostra il previsto</summary><div class="tbl-wrap"><table class="prices pr-chk-t"><thead><tr><th>Voce</th><th class="r">Previsto</th><th class="r">Reale</th><th class="r">Differenza</th><th>Esito</th></tr></thead><tbody>${righe}</tbody></table></div></details>`;
+          const marR = v.vendita != null ? v.vendita + (haDep ? tratt : 0) - sp : null;
+          const marP = v.vendita != null && v.acquisto != null ? v.vendita - v.acquisto : null;
+          const rigaM = (voce, pr, re, piuAlto) => { const d = pr != null && re != null ? re - pr : null; return `<tr><td><b>${voce}</b></td><td class="r">${pr == null ? '—' : euro(pr)}</td><td class="r">${re == null ? '—' : euro(re)}</td><td class="r">${d == null ? '—' : d === 0 ? 'OK' : segno(d)}</td><td>${d == null ? '' : d === 0 ? '<span class="chk chk-ok">OK</span>' : (piuAlto ? d > 0 : d < 0) ? '<span class="chk chk-ok">meglio del previsto</span>' : '<span class="chk chk-bad">peggio del previsto</span>'}</td></tr>`; };
+          // 1. riepilogo
+          const q1 = `<div class="card pr-q"><h2>Riepilogo</h2>${tab(
+              r2('Vendita', 'affitto + servizi a parte, prezzo al cliente', E(v.vendita))
+            + r2('Spese totali', 'affitto proprietario + spese offerte + aggiuntive', euro(sp))
+            + (haDep ? r2('Deposito di sicurezza trattenuto', `ricevuto ${dep == null ? '—' : euro(dep)} − restituito ${euro(rest)}`, euro(tratt), tratt < 0 ? 'neg' : '') : ''),
+              r2('<b>Margine</b>', haDep ? 'vendita + deposito trattenuto − spese' : 'vendita − spese', marR == null ? vuoto : `<b>${euro(marR)}</b>`, marR != null && marR < 0 ? 'tot neg' : 'tot'))}
+            ${prev(rigaM('Vendita', v.vendita, v.vendita, true) + rigaM('Spese totali', v.acquisto, sp, false) + rigaM('Margine', marP, marR, true))}
+            ${v.vendita == null ? '<p class="note">Prezzo di vendita non inserito nella prenotazione.</p>' : ''}</div>`;
+          // 2. affitto al proprietario
+          const affN = x.spese.filter(isAff).length;
+          const q2 = `<div class="card pr-q"><h2>Affitto al proprietario</h2>${tab(
+              r2('Pagato al proprietario', affN ? `${affN} ${affN === 1 ? 'nota spese' : 'note spese'} "Affitto proprietario", anche extra` : 'nessuna nota spese "Affitto proprietario"', euro(affReal), 'tot'))}
+            ${prev(riga('Affitto proprietario', 'acquisto concordato nella prenotazione', affPrev, affReal, 'da inserire tra le spese'))}
+            ${affPrev != null && !affReal ? '<p class="note">Inserisci l\'affitto pagato come nota spese "Affitto proprietario" (con eventuali extra).</p>' : ''}${affPrev == null ? '<p class="note">Acquisto concordato non inserito nella prenotazione.</p>' : ''}</div>`;
+          // 3. spese offerte: servizi della prenotazione + altre spese non aggiuntive, per categoria
+          const off = CATS.servizi.filter(z => ctx.hasSrv && ctx.hasSrv(x.b, z.key));
+          const di = k => x.spese.filter(z => isSrvOff(z) && (srvDiSpesa(z) || {}).key === k);
+          const srvR = off.map(z => { const d = ctx.srvDet ? ctx.srvDet(x.b, z.key) : {}; return { z, d, re: somma(di(z.key)) }; });
+          const altre = perCat(isAltra);
+          const q3 = `<div class="card pr-q"><h2>Spese offerte</h2>${(srvR.length || altre.length) ? tab(
+              srvR.map(({ z, d, re }) => r2(esc(z.label), d.incluso ? 'servizio offerto, incluso nel prezzo' : 'servizio offerto, a parte', euro(re))).join('')
+            + altre.map(([c, t]) => r2(esc(c), 'altra spesa della prenotazione', euro(t))).join(''),
+              r2('<b>Totale spese offerte</b>', '', `<b>${euro(sommaInc(x.spese))}</b>`, 'tot')) : '<p class="note">Nessun servizio nella prenotazione e nessuna spesa.</p>'}
+            ${srvR.length ? prev(srvR.map(({ z, d, re }) => riga(esc(z.label), d.incluso ? 'incluso nel prezzo: nessun acquisto previsto' : 'a parte', d.incluso ? null : num(d.acquisto), re, 'da inserire tra le spese')).join('')
+              + altre.map(([c, t]) => riga(esc(c), 'altra spesa della prenotazione', null, t)).join('')
+              + riga('Totale spese offerte', '', srvPrev, sommaInc(x.spese))) : ''}</div>`;
+          // 4. spese aggiuntive
+          const agg = perCat(isAgg);
+          const daAdd = Math.max(0, aggReal - (haDep ? Math.max(0, tratt) : 0));
+          const q4 = `<div class="card pr-q"><h2>Spese aggiuntive</h2>${tab(
+              agg.map(([c, t]) => r2(esc(c), 'richiesta durante il soggiorno', euro(t))).join('') || r2('Nessuna spesa aggiuntiva', '', euro(0)),
+              r2('<b>Totale spese aggiuntive</b>', '', `<b>${euro(aggReal)}</b>`, 'tot') + r2('Da addebitare al cliente', haDep ? 'aggiuntive − deposito trattenuto' : 'spese aggiuntive', euro(daAdd)))}</div>`;
+          chkHtml = `<div class="pr-quad">${q1}${q2}${q3}${q4}</div>`;
+        } else {
+          chkHtml = `<div class="card pr-chk"><h2>Previsto e reale</h2>
           <p class="note">Previsto = valori della prenotazione (acquisto concordato e servizi). Reale = note spese. In linea entro il 5% (almeno 50 €).</p>
           <div class="tbl-wrap"><table class="prices pr-chk-t"><thead><tr><th>Voce</th><th class="r">Previsto</th><th class="r">Reale</th><th class="r">Differenza</th><th>Esito</th></tr></thead><tbody>
           ${riga('Affitto proprietario', grp ? 'acquisto unico: tutto il gruppo' + (grp.root.id !== x.b.id ? ', previsto nella principale' : '') : 'note spese "Affitto proprietario", anche extra', affPrev, affReal, 'da inserire tra le spese')}
@@ -625,6 +669,7 @@
             return Object.entries(m).sort((a, b) => b[1] - a[1]).map(([c, t]) => `<tr><td><b>${esc(c)}</b><small>servizio aggiuntivo: da addebitare al cliente</small></td><td class="r">—</td><td class="r">${euro(t)}</td><td class="r">—</td><td><span class="chk chk-warn">non previsto</span></td></tr>`).join(''); })()}
           </tbody><tfoot><tr><td><b>Totale (senza aggiuntivi)</b></td><td class="r"><b>${totPrev == null ? '—' : euro(totPrev)}</b></td><td class="r"><b>${euro(totReal)}</b></td><td class="r"><b>${totPrev == null ? '—' : segno(totReal - totPrev)}</b></td><td>${(() => { const [t, c] = esito(totPrev, totReal); return `<span class="chk ${c}">${t}</span>`; })()}</td></tr></tfoot></table></div>
           ${affPrev != null && !affReal ? '<p class="note">L\'affitto pagato al proprietario non è ancora tra le spese: inseriscilo come nota spese "Affitto proprietario" (con eventuali extra) per confrontarlo con l\'acquisto concordato.</p>' : ''}</div>`;
+        }
       }
       const cats = {}; x.spese.forEach(s => { const c = s.categoria || 'Altro'; cats[c] = (cats[c] || 0) + (isRest(s) ? -1 : 1) * (Number(s.importo) || 0); });
       const info = sc ? sc.righe.filter(([l]) => !/^Prezzo di (vendita|acquisto)/.test(l)) : x.gen ? [['Villa', villa.name], ['Località', villa.location || '']] : [['Villa', villa.name], ['Cliente', x.cliente], ['Check-in', dataIt(x.from)], ['Check-out', dataIt(x.to)], ['Stato', 'Non più in calendario']];
@@ -639,11 +684,11 @@
           ${media(x.villaId, pill(x))}
           <div class="card pr-info"><h2>${x.gen ? 'Villa' : 'Prenotazione'}</h2><dl class="pr-kv">${info.map(([l, val0]) => `<dt>${esc(l)}</dt><dd>${esc(val0)}</dd>`).join('')}</dl></div>
         </div>
-        <div class="card pr-valori"><h2>Valori</h2><div class="tbl-wrap"><table class="prices pr-val-t"><thead><tr><th>Voce</th>${tab4 ? '<th class="r">Previsto</th><th class="r">Reale</th><th class="r">Differenza</th>' : '<th class="r">Importo</th>'}</tr></thead><tbody>${celle}</tbody></table></div>
-          ${x.b && v.vendita == null ? '<p class="note">Prezzo di vendita non inserito nella prenotazione.</p>' : ''}${!x.gen && acq && x.b && v.acquisto == null ? '<p class="note">Prezzo di acquisto non inserito nella prenotazione.</p>' : ''}</div>
+        ${quad ? '' : `<div class="card pr-valori"><h2>Valori</h2><div class="tbl-wrap"><table class="prices pr-val-t"><thead><tr><th>Voce</th>${tab4 ? '<th class="r">Previsto</th><th class="r">Reale</th><th class="r">Differenza</th>' : '<th class="r">Importo</th>'}</tr></thead><tbody>${celle}</tbody></table></div>
+          ${x.b && v.vendita == null ? '<p class="note">Prezzo di vendita non inserito nella prenotazione.</p>' : ''}${!x.gen && acq && x.b && v.acquisto == null ? '<p class="note">Prezzo di acquisto non inserito nella prenotazione.</p>' : ''}</div>`}
         ${chkHtml}
         ${grpHtml}
-        ${!x.gen && haDep ? `<div class="card pr-dep"><h2>Deposito di sicurezza</h2><div class="pr-grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+        ${!x.gen && haDep && !quad ? `<div class="card pr-dep"><h2>Deposito di sicurezza</h2><div class="pr-grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
           ${cella('Ricevuto dal cliente', dep == null ? vuoto : euro(dep), x.b ? 'dalla prenotazione' : '')}${cella('Restituito', rest ? '−' + euro(rest) : euro(0), 'note spese "Restituzione deposito"')}${cella('Trattenuto', euro(tratt), tratt > 0 ? 'resta a copertura dei danni' : '', tratt < 0 ? 'neg' : '')}</div>
           <p class="note">La restituzione riduce quanto ricevuto dal cliente: non è una spesa della villa e non entra nell'acquisto reale. I danni si inseriscono come spesa "Danni villa".</p></div>` : ''}
         ${sc && sc.servizi.length ? `<div class="card"><h2>Servizi</h2><div class="tbl-wrap"><table class="prices pr-srv"><thead><tr><th>Servizio</th><th>Modalità</th>${sc.acq ? '<th class="r">Acquisto</th>' : ''}<th class="r">Vendita</th><th>Note</th></tr></thead><tbody>

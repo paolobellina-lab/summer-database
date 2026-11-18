@@ -1178,3 +1178,21 @@ dialog.dlg-promo { width: min(680px, calc(100vw - 32px)); }
 .cat-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .cat-row [data-cn] { flex: 1 1 220px; min-width: 0; }
 .cat-agg { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; white-space: nowrap; }
+/* Prenotazioni: quattro riquadri del reale, previsto a richiesta */
+.pr-quad { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.pr-quad .card { margin: 0; }
+@media (max-width: 860px) { .pr-quad { grid-template-columns: minmax(0, 1fr); } }
+.pr-q-t td small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+.pr-q-t td.r { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pr-q-t tr.tot td { font-weight: 700; border-top: 2px solid var(--line); }
+.pr-q-t tr.neg td.r { color: var(--danger); }
+.pr-prev { margin-top: 10px; }
+.pr-prev summary { cursor: pointer; font-size: 13px; color: var(--muted); padding: 4px 0; }
+.pr-prev summary:hover { color: var(--fg); }
+.pr-prev[open] summary { margin-bottom: 6px; }
+@media print { .pr-prev:not([open]) { display: none; } }
+.pr-quad { align-items: start; }
+.pr-quad > .card { margin: 0 !important; min-width: 0; }
+.pr-quad .pr-chk-t th, .pr-quad .pr-chk-t td { padding: 6px 5px; font-size: 13px; }
+.pr-quad .pr-chk-t td small { font-size: 11px; }
+.pr-quad .chk { white-space: normal; font-size: 11px; }
