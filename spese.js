@@ -451,6 +451,15 @@
     const pill = x => x.gen ? '<span class="pc-stato gen">Spese generali</span>' : x.old ? '<span class="pc-stato old">Non più in calendario</span>'
       : `<span class="pc-stato" style="background:${esc(ctx.bookingColor(x.b))};color:${ctx.S.inkFor(ctx.bookingColor(x.b))}">${esc(ctx.statoLabel(x.b.status))}</span>`;
     const val = x => x.b ? ctx.valori(x.b) : { vendita: null, acquisto: null };
+    // affitto al proprietario reale (note "Affitto proprietario" di tutto il gruppo, inserite una volta sola) ripartito a mano:
+    // root.ripartizioneReale = { idCollegata: euro }, la principale tiene il resto; vale solo con la ripartizione del previsto (v.quota)
+    const affGrp = (V, g) => g.membri.reduce((t, m) => { const it = V.l.find(y => y.b && y.b.id === m.id); return t + (it ? sommaAff(it.spese) : 0); }, 0);
+    const quotaReale = (V, x) => { if (!x.b || !ctx.gruppoAcq || !val(x).quota) return null; const g = ctx.gruppoAcq(x.b); if (!g) return null;
+      const rip = g.root.ripartizioneReale; if (!rip || typeof rip !== 'object') return null; const altri = g.membri.filter(m => m.id !== g.root.id);
+      if (!altri.every(m => typeof rip[m.id] === 'number')) return null;
+      return x.b.id === g.root.id ? affGrp(V, g) - altri.reduce((t, m) => t + rip[m.id], 0) : rip[x.b.id]; };
+    const affR = (V, x) => { const q = quotaReale(V, x); return q == null ? sommaAff(x.spese) : q; };
+    const spTot = (V, x) => somma(x.spese) - sommaAff(x.spese) + affR(V, x);
     const acq = ctx.canAcq();
     const vuoto = '<span class="pc-nd">—</span>';
     const root = document.createElement('div'); main.innerHTML = ''; main.appendChild(root); root.className = 'page';
@@ -484,11 +493,11 @@
       const generali = V.generali.filter(x => (!vf || x.villaId === vf) && !sf && (!q || villaDi(x.villaId).name.toLowerCase().includes(q))).sort((a, b) => villaDi(a.villaId).name.localeCompare(villaDi(b.villaId).name, 'it'));
       A.righe = () => lista.concat(generali).flatMap(x => x.spese.map(s => ({ s, villa: villaDi(x.villaId).name, p: x.gen ? null : { cliente: x.cliente, from: x.from, to: x.to } })));
       const tot = { vendita: 0, acquisto: 0, spese: 0 };
-      lista.forEach(x => { const v = val(x); tot.vendita += v.vendita || 0; tot.acquisto += v.acquisto || 0; tot.spese += somma(x.spese); });
+      lista.forEach(x => { const v = val(x); tot.vendita += v.vendita || 0; tot.acquisto += v.acquisto || 0; tot.spese += spTot(V, x); });
       generali.forEach(x => { tot.spese += somma(x.spese); });
       const stati = ctx.stati();
       const card = x => {
-        const v = val(x), sp = somma(x.spese), villa = villaDi(x.villaId);
+        const v = val(x), sp = spTot(V, x), villa = villaDi(x.villaId);
         return `<article class="vcard pcard${x.old ? ' is-old' : ''}${x.gen ? ' is-gen' : ''}" data-pk="${esc(x.chiave)}" tabindex="0">
           ${media(x.villaId, pill(x) + (villa.location ? `<span class="vc-badge">${esc(villa.location)}</span>` : ''))}
           <div class="vc-body">
@@ -558,7 +567,7 @@
       const x = V.l.concat(V.generali).find(y => y.chiave === k) || (V.conSpese || !ctx.online ? null : 'attesa');
       if (x === 'attesa') { root.innerHTML = '<div class="wrap"><p class="note">Caricamento…</p></div>'; return; }
       if (!x) { root.innerHTML = `<div class="wrap"><a href="#prenotazioni" class="pr-back">← Tutte le prenotazioni</a><div class="card"><p class="note">Questa prenotazione non c'è più (cancellata o spostata).</p></div></div>`; return; }
-      const villa = villaDi(x.villaId), v = val(x), sp = somma(x.spese);
+      const villa = villaDi(x.villaId), v = val(x), sp = spTot(V, x);
       // deposito di sicurezza: ricevuto (nella prenotazione) − restituito (note spese "Restituzione deposito sicurezza")
       const dep = v.deposito, rest = sommaRest(x.spese), haDep = dep != null || rest > 0, depChiuso = haRest(x.spese), tratt = trattDi(dep, x.spese);
       const cella = (l, val0, nota, cls) => `<div class="pr-cell${cls ? ' ' + cls : ''}"><span>${l}</span><b>${val0}</b>${nota ? `<small>${nota}</small>` : ''}</div>`;
@@ -572,14 +581,15 @@
         const tv = righeG.reduce((t, r) => t + (r.vm.vendita || 0), 0), ts = righeG.reduce((t, r) => t + r.sm, 0), tt = righeG.reduce((t, r) => t + r.tr, 0);
         const ta = ctx.valori(grp.root, true).acquisto, bil = !!v.quota, totAff = typeof grp.root.prezzoAcquisto === 'number' ? grp.root.prezzoAcquisto : null;
         // ripartizione manuale dell'affitto al proprietario tra le prenotazioni del gruppo (la principale tiene il resto)
-        const bilHtml = () => { const rip = grp.root.ripartizione || {};
+        const bilHtml = () => { const rip = grp.root.ripartizione || {}, ripR = grp.root.ripartizioneReale || {}, totRe = affGrp(V, grp);
           const righe = grp.membri.map(m => { const nt = nNotti(m.from, m.to), root0 = m.id === grp.root.id;
             return `<tr><td>${esc((m.cliente || '').trim() || 'Senza nome')}${root0 ? ' <small class="note">(principale: il resto)</small>' : ''}</td><td>${esc(dataBreve(m.from))} → ${esc(dataBreve(m.to))}</td><td class="r">${nt}</td>
-              <td class="r">${root0 ? `<b id="bil-resto">—</b>` : `<input type="number" step="0.01" min="0" class="bil-in" data-id="${esc(m.id)}" data-notti="${nt}" value="${typeof rip[m.id] === 'number' ? rip[m.id] : ''}" style="width:120px;text-align:right">`}</td></tr>`; }).join('');
+              <td class="r">${root0 ? `<b id="bil-resto">—</b>` : `<input type="number" step="0.01" min="0" class="bil-in" data-id="${esc(m.id)}" data-notti="${nt}" value="${typeof rip[m.id] === 'number' ? rip[m.id] : ''}" style="width:120px;text-align:right">`}</td>
+              <td class="r">${root0 ? `<b id="bil-resto-re">—</b>` : `<input type="number" step="0.01" min="0" class="bil-re" data-id="${esc(m.id)}" data-notti="${nt}" value="${typeof ripR[m.id] === 'number' ? ripR[m.id] : ''}" style="width:120px;text-align:right">`}</td></tr>`; }).join('');
           return `<details class="pr-bil"${bil ? '' : ' open'} style="margin-top:14px"><summary><b>Bilancia l'affitto tra le prenotazioni</b>${bil ? ' · ripartito a mano' : ''}</summary>
-            <p class="note">Scrivi quanto dell'affitto al proprietario (${totAff == null ? 'acquisto concordato non inserito' : euro(totAff)}) va a ogni prenotazione collegata: la principale tiene il resto. Con la ripartizione, ogni prenotazione ha il suo acquisto previsto, il suo margine e i quattro riquadri.</p>
-            <div class="tbl-wrap"><table class="prices"><thead><tr><th>Prenotazione</th><th>Date</th><th class="r">Notti</th><th class="r">Affitto proprietario</th></tr></thead><tbody>${righe}</tbody>
-            <tfoot><tr><td colspan="3"><b>Totale</b></td><td class="r"><b>${totAff == null ? '—' : euro(totAff)}</b></td></tr></tfoot></table></div>
+            <p class="note">Scrivi quanto dell'affitto al proprietario (${totAff == null ? 'acquisto concordato non inserito' : euro(totAff)}) va a ogni prenotazione collegata: la principale tiene il resto. Con la ripartizione, ogni prenotazione ha il suo acquisto previsto, il suo margine e i quattro riquadri.<br>Colonna <b>Pagato (reale)</b>: le note "Affitto proprietario" di tutto il gruppo (${euro(totRe)}, inserite una volta sola su una qualsiasi delle prenotazioni) divise a mano allo stesso modo, indipendenti dal previsto: così ogni prenotazione ha il suo previsto e il suo reale.</p>
+            <div class="tbl-wrap"><table class="prices"><thead><tr><th>Prenotazione</th><th>Date</th><th class="r">Notti</th><th class="r">Affitto previsto</th><th class="r">Pagato (reale)</th></tr></thead><tbody>${righe}</tbody>
+            <tfoot><tr><td colspan="3"><b>Totale</b></td><td class="r"><b>${totAff == null ? '—' : euro(totAff)}</b></td><td class="r"><b>${euro(totRe)}</b></td></tr></tfoot></table></div>
             <p class="note" id="bil-msg"></p>
             <div class="actions" style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" type="button" id="bil-notti">Dividi per notti</button><button class="btn primary" type="button" id="bil-save">Salva la ripartizione</button>${grp.root.ripartizione ? '<button class="btn" type="button" id="bil-del">Togli la ripartizione</button>' : ''}</div></details>`; };
         grpHtml = `<div class="card pr-grp"><h2>Acquisto unico dal proprietario</h2>
@@ -613,8 +623,8 @@
         const num0 = n => typeof n === 'number' ? n : null;
         const piuCaro = d => d > 0 ? 'neg' : 'pos', piuAlto = d => d > 0 ? 'pos' : 'neg';
         celle = r4('Vendita', 'affitto + servizi a parte, prezzo al cliente', v.vendita, v.vendita)
-          + r4('Acquisto', on ? `${sommaAff(x.spese) ? `affitto ${euro(sommaAff(x.spese))} · ` : ''}offerti ${euro(sommaSrv(x.spese))} · altre ${euro(sommaAltre(x.spese))} · aggiuntivi ${euro(sommaAgg(x.spese))}` : 'affitto + servizi a parte', v.acquisto, on ? sp : null, '', piuCaro)
-          + r4('di cui affitto proprietario', v.quota ? 'quota dell\'acquisto unico · note spese "Affitto proprietario"' : 'note spese "Affitto proprietario"', num0(v.affAcq), on ? sommaAff(x.spese) : null, 'sub', piuCaro)
+          + r4('Acquisto', on ? `${affR(V, x) ? `affitto ${euro(affR(V, x))} · ` : ''}offerti ${euro(sommaSrv(x.spese))} · altre ${euro(sommaAltre(x.spese))} · aggiuntivi ${euro(sommaAgg(x.spese))}` : 'affitto + servizi a parte', v.acquisto, on ? sp : null, '', piuCaro)
+          + r4('di cui affitto proprietario', v.quota ? 'quota dell\'acquisto unico · note spese "Affitto proprietario"' : 'note spese "Affitto proprietario"', num0(v.affAcq), on ? affR(V, x) : null, 'sub', piuCaro)
           + r4('di cui servizi offerti', 'categorie dei servizi della prenotazione (incluso nel prezzo o a parte)', v.acquisto == null ? null : v.acquisto - (num0(v.affAcq) || 0), on ? sommaSrv(x.spese) : null, 'sub', piuCaro)
           + r4('di cui altre spese della prenotazione', 'categorie non aggiuntive (es. manutenzione)', null, on ? sommaAltre(x.spese) : null, 'sub')
           + r4('di cui servizi aggiuntivi', 'richiesti durante il soggiorno: da addebitare o trattenere dal deposito', null, on ? sommaAgg(x.spese) : null, 'sub')
@@ -629,7 +639,7 @@
         const rootB = grp ? grp.root : x.b;
         const affPrev = grp ? num(rootB.prezzoAcquisto) : num(v.affAcq);
         const spGruppo = grp ? grp.membri.flatMap(m => { const it = V.l.find(y => y.b && y.b.id === m.id); return it ? it.spese : []; }) : x.spese;
-        const affReal = sommaAff(spGruppo);
+        const affReal = grp ? sommaAff(spGruppo) : affR(V, x), qReale = quotaReale(V, x);
         const srvPrev = v.acquisto == null ? null : v.acquisto - (num(v.affAcq) || 0);
         const srvReal = sommaInc(x.spese), aggReal = sommaAgg(x.spese);
         const srvNomi = sc ? sc.servizi.filter(r => sc.acq && r[2]).map(r => r[0]) : [];
@@ -682,8 +692,10 @@
           // 2. affitto al proprietario
           const affN = x.spese.filter(isAff).length;
           const q2 = `<div class="card pr-q"><h2>Affitto al proprietario</h2>${tab(
-              r2('Pagato al proprietario', affN ? `${affN} ${affN === 1 ? 'nota spese' : 'note spese'} "Affitto proprietario", anche extra` : 'nessuna nota spese "Affitto proprietario"', euro(affReal) + chip(affPrev, affReal, 'da inserire'), 'tot'))}
-            ${prev(riga('Affitto proprietario', 'acquisto concordato nella prenotazione', affPrev, affReal, 'da inserire tra le spese'))}
+              r2('Pagato al proprietario', qReale != null ? `quota del pagato per tutto il gruppo (${euro(affGrp(V, grpBil))}), ripartito a mano` : affN ? `${affN} ${affN === 1 ? 'nota spese' : 'note spese'} "Affitto proprietario", anche extra` : 'nessuna nota spese "Affitto proprietario"', euro(affReal) + chip(affPrev, affReal, 'da inserire'), 'tot'))}
+            ${qReale != null ? (() => { const nn = grpBil.membri.flatMap(m => { const it = V.l.find(y => y.b && y.b.id === m.id); return it ? it.spese.filter(isAff).map(z => [m, z]) : []; });
+              return nn.length ? `<p class="note" style="margin:8px 0 2px">Note "Affitto proprietario" del gruppo (inserite una volta sola, valgono per tutte le prenotazioni):</p>${tab(nn.map(([m, z]) => r2(esc(dataBreve(z.data || '')) + (z.motivo ? ' · ' + esc(z.motivo) : ''), m.id === x.b.id ? 'inserita qui' : `inserita su <a href="#prenotazioni-${encodeURIComponent(m.id)}">${esc((m.cliente || '').trim() || 'Senza nome')}</a>`, euro(Number(z.importo) || 0))).join(''))}` : ''; })() : ''}
+            ${prev(riga('Affitto proprietario', v.quota ? 'quota prevista dell\'acquisto unico' : 'acquisto concordato nella prenotazione', affPrev, affReal, 'da inserire tra le spese'))}
             ${affPrev != null && !affReal ? '<p class="note">Inserisci l\'affitto pagato come nota spese "Affitto proprietario" (con eventuali extra).</p>' : ''}${affPrev == null ? '<p class="note">Acquisto concordato non inserito nella prenotazione.</p>' : ''}</div>`;
           // 3. spese offerte: servizi della prenotazione + altre spese non aggiuntive, per categoria
           const off = CATS.servizi.filter(z => ctx.hasSrv && ctx.hasSrv(x.b, z.key));
@@ -804,20 +816,27 @@
         ['cat', 'ord', 'grp'].forEach(k => $('#sp-' + k, root).addEventListener('change', e => { ui['sp' + k[0].toUpperCase() + k.slice(1)] = e.target.value; saveUI(); disegnaSpese(); })); }
       if ($('#pd-new', root)) $('#pd-new', root).onclick = () => A.openNuova(x.villaId, x.b ? x.b.id : '');
       $('#pd-print', root).onclick = () => window.print();
-      if (grpBil || grp) { const g = grpBil || grp, tot0 = typeof g.root.prezzoAcquisto === 'number' ? g.root.prezzoAcquisto : null, ins = $$('.bil-in', root);
+      if (grpBil || grp) { const g = grpBil || grp, tot0 = typeof g.root.prezzoAcquisto === 'number' ? g.root.prezzoAcquisto : null, ins = $$('.bil-in', root), inR = $$('.bil-re', root), totR0 = affGrp(V, g);
         const resto = () => { const s0 = ins.reduce((t, i) => t + (Number(i.value) || 0), 0), r = tot0 == null ? null : tot0 - s0, el = $('#bil-resto', root);
           if (el) { el.textContent = r == null ? '—' : euro(r); el.style.color = r != null && r < 0 ? 'var(--danger, #c0392b)' : ''; } return r; };
-        ins.forEach(i => i.addEventListener('input', resto)); resto();
+        const restoR = () => { const r = totR0 - inR.reduce((t, i) => t + (Number(i.value) || 0), 0), el = $('#bil-resto-re', root);
+          if (el) { el.textContent = euro(r); el.style.color = r < 0 ? 'var(--danger, #c0392b)' : ''; } return r; };
+        ins.forEach(i => i.addEventListener('input', resto)); resto(); inR.forEach(i => i.addEventListener('input', restoR)); restoR();
         const bn = $('#bil-notti', root); if (bn) bn.onclick = () => { if (tot0 == null) { ctx.toast('Prima inserisci l\'acquisto concordato nella prenotazione principale'); return; }
-          const nt = g.membri.reduce((t, m) => t + nNotti(m.from, m.to), 0) || 1; ins.forEach(i => { i.value = Math.round(tot0 * Number(i.dataset.notti) / nt * 100) / 100; }); resto(); };
+          const nt = g.membri.reduce((t, m) => t + nNotti(m.from, m.to), 0) || 1; ins.forEach(i => { i.value = Math.round(tot0 * Number(i.dataset.notti) / nt * 100) / 100; }); resto();
+          if (totR0) { inR.forEach(i => { i.value = Math.round(totR0 * Number(i.dataset.notti) / nt * 100) / 100; }); restoR(); } };
         const bs = $('#bil-save', root); if (bs) bs.onclick = () => { if (tot0 == null) { ctx.toast('Prima inserisci l\'acquisto concordato nella prenotazione principale'); return; }
           if (ins.some(i => i.value === '' || !(Number(i.value) >= 0))) { $('#bil-msg', root).textContent = 'Scrivi un importo per ogni prenotazione collegata (anche 0).'; return; }
           if (resto() < 0) { $('#bil-msg', root).textContent = 'Le quote superano l\'acquisto concordato: alla principale resterebbe un importo negativo.'; return; }
+          const vuotiR = inR.filter(i => i.value === '').length;
+          if (vuotiR && vuotiR < inR.length) { $('#bil-msg', root).textContent = 'Pagato (reale): scrivi un importo per ogni prenotazione collegata, oppure lascia vuota tutta la colonna.'; return; }
+          if (!vuotiR && (inR.some(i => !(Number(i.value) >= 0)) || restoR() < 0)) { $('#bil-msg', root).textContent = 'Pagato (reale): le quote superano le note "Affitto proprietario" del gruppo.'; return; }
           const rip = {}; ins.forEach(i => { rip[i.dataset.id] = Math.round(Number(i.value) * 100) / 100; });
+          let ripR = null; if (inR.length && !vuotiR) { ripR = {}; inR.forEach(i => { ripR[i.dataset.id] = Math.round(Number(i.value) * 100) / 100; }); }
           const b0 = ctx.data().bookings.find(b => b.id === g.root.id); if (!b0) return;
-          ctx.store.upsertBooking(Object.assign(JSON.parse(JSON.stringify(b0)), { ripartizione: rip })); ctx.toast('Ripartizione salvata'); if (ctx.ridisegna) ctx.ridisegna(); };
+          ctx.store.upsertBooking(Object.assign(JSON.parse(JSON.stringify(b0)), { ripartizione: rip, ripartizioneReale: ripR })); ctx.toast('Ripartizione salvata'); if (ctx.ridisegna) ctx.ridisegna(); };
         const bd = $('#bil-del', root); if (bd) bd.onclick = async () => { if (!(await window.SDBConferma('Togliere la ripartizione? L\'acquisto torna unico nella prenotazione principale.', { titolo: 'Ripartizione dell\'affitto', ok: 'Togli' }))) return;
-          const b0 = ctx.data().bookings.find(b => b.id === g.root.id); if (!b0) return; const c = JSON.parse(JSON.stringify(b0)); c.ripartizione = null;
+          const b0 = ctx.data().bookings.find(b => b.id === g.root.id); if (!b0) return; const c = JSON.parse(JSON.stringify(b0)); c.ripartizione = null; c.ripartizioneReale = null;
           ctx.store.upsertBooking(c); ctx.toast('Ripartizione tolta'); if (ctx.ridisegna) ctx.ridisegna(); }; }
       if ($('#pd-exp', root)) $('#pd-exp', root).onclick = () => A.openExport({ villa: x.villaId, pid: x.gen ? '__gen' : x.old ? x.chiave.split('|').slice(2).join('|') : x.b.id });
       if ($('#pd-mod', root)) $('#pd-mod', root).onclick = () => ctx.openBooking({ id: x.b.id });

@@ -171,8 +171,8 @@
     const valOf = (v, k) => k === 'listino' ? (v.pricing ? listinoOf(v) : (v.listino || {})) : (v[k] === undefined || v[k] === null ? '' : v[k]);
     const villaRis = v => { const x = { villaId: v.id }; riservati().forEach(k => { if (v[k] !== undefined) x[k] = v[k]; }); return x; };
     const villaPriv = v => ({ villaId: v.id, pricing: clone(v.pricing || {}) });
-    const bookingPub = b => { const x = clone(b); delete x.prezzoAcquisto; delete x.ripartizione; delete x._nd; if (x.serviziDett) Object.keys(x.serviziDett).forEach(k => { if (x.serviziDett[k]) delete x.serviziDett[k].acquisto; }); return x; };
-    const bookingPriv = b => { const servizi = {}; Object.keys(b.serviziDett || {}).forEach(k => { const d = b.serviziDett[k]; if (d && typeof d.acquisto === 'number') servizi[k] = d.acquisto; }); return { villaId: b.villaId, prezzoAcquisto: typeof b.prezzoAcquisto === 'number' ? b.prezzoAcquisto : null, servizi, ripartizione: b.ripartizione && typeof b.ripartizione === 'object' ? b.ripartizione : null }; };
+    const bookingPub = b => { const x = clone(b); delete x.prezzoAcquisto; delete x.ripartizione; delete x.ripartizioneReale; delete x._nd; if (x.serviziDett) Object.keys(x.serviziDett).forEach(k => { if (x.serviziDett[k]) delete x.serviziDett[k].acquisto; }); return x; };
+    const bookingPriv = b => { const servizi = {}; Object.keys(b.serviziDett || {}).forEach(k => { const d = b.serviziDett[k]; if (d && typeof d.acquisto === 'number') servizi[k] = d.acquisto; }); return { villaId: b.villaId, prezzoAcquisto: typeof b.prezzoAcquisto === 'number' ? b.prezzoAcquisto : null, servizi, ripartizione: b.ripartizione && typeof b.ripartizione === 'object' ? b.ripartizione : null, ripartizioneReale: b.ripartizioneReale && typeof b.ripartizioneReale === 'object' ? b.ripartizioneReale : null }; };
     const blocca = st => { if (st === 'richiesta' || st === 'vuoto') return false; const c = ((state.settings || {}).stati || []).find(x => x && x.key === st); if (c && typeof c.blocks === 'boolean') return c.blocks; const b = S.STATI.find(x => x.key === st); return b ? b.blocks : true; };
     const occOf = villaId => ({ villaId, periodi: Object.values(raw.bookings).filter(b => b.villaId === villaId && blocca(b.status)).sort((a, b) => (a.from < b.from ? -1 : 1)).map(b => ({ from: b.from, to: b.to, earlyIn: !!b.earlyIn, lateOut: !!b.lateOut })) });
     const sameOcc = (a, b) => JSON.stringify((a && a.periodi) || []) === JSON.stringify((b && b.periodi) || []);
@@ -201,9 +201,10 @@
         if (a) {
           if (typeof a.prezzoAcquisto === 'number') x.prezzoAcquisto = a.prezzoAcquisto;
           if (a.ripartizione && typeof a.ripartizione === 'object') x.ripartizione = a.ripartizione;
+          if (a.ripartizioneReale && typeof a.ripartizioneReale === 'object') x.ripartizioneReale = a.ripartizioneReale;
           Object.keys(a.servizi || {}).forEach(k => { x.serviziDett = x.serviziDett || {}; x.serviziDett[k] = Object.assign({}, x.serviziDett[k] || {}, { acquisto: a.servizi[k] }); });
         }
-        if (!canAcq()) { delete x.prezzoAcquisto; delete x.ripartizione; if (x.serviziDett) Object.keys(x.serviziDett).forEach(k => { if (x.serviziDett[k]) delete x.serviziDett[k].acquisto; }); }
+        if (!canAcq()) { delete x.prezzoAcquisto; delete x.ripartizione; delete x.ripartizioneReale; if (x.serviziDett) Object.keys(x.serviziDett).forEach(k => { if (x.serviziDett[k]) delete x.serviziDett[k].acquisto; }); }
         return x;
       });
     }
@@ -244,6 +245,7 @@
         if (!canAcq() && !protetto() && old) {
           if ('prezzoAcquisto' in old) b.prezzoAcquisto = old.prezzoAcquisto;
           if ('ripartizione' in old) b.ripartizione = old.ripartizione;
+          if ('ripartizioneReale' in old) b.ripartizioneReale = old.ripartizioneReale;
           Object.keys(old.serviziDett || {}).forEach(k => { const d = old.serviziDett[k]; if (d && 'acquisto' in d) { b.serviziDett = b.serviziDett || {}; b.serviziDett[k] = Object.assign({}, b.serviziDett[k] || {}, { acquisto: d.acquisto }); } });
         }
         if (protetto()) {
@@ -295,7 +297,7 @@
         const step = t => { if (onStep) onStep(t); };
         const run = async ops => { for (let i = 0; i < ops.length; i += 400) { const b = db.batch(); ops.slice(i, i + 400).forEach(([c, id, val]) => b.set(col(c).doc(id), strip(val))); await b.commit(); } };
         const villas = Object.values(raw.villas).map(v => Object.assign(clone(v), raw.villasAcq[v.id] && !v.pricing ? { pricing: raw.villasAcq[v.id].pricing } : {}));
-        const books = Object.values(raw.bookings).map(b => { const x = clone(b); const a = raw.bookingsAcq[b.id]; if (a && typeof x.prezzoAcquisto !== 'number') x.prezzoAcquisto = a.prezzoAcquisto; if (a && a.ripartizione && !x.ripartizione) x.ripartizione = a.ripartizione; return x; });
+        const books = Object.values(raw.bookings).map(b => { const x = clone(b); const a = raw.bookingsAcq[b.id]; if (a && typeof x.prezzoAcquisto !== 'number') x.prezzoAcquisto = a.prezzoAcquisto; if (a && a.ripartizione && !x.ripartizione) x.ripartizione = a.ripartizione; if (a && a.ripartizioneReale && !x.ripartizioneReale) x.ripartizioneReale = a.ripartizioneReale; return x; });
         step('Copia dei prezzi di acquisto nelle collezioni protette…');
         await run(villas.map(v => ['villas_acquisto', v.id, villaPriv(v)]).concat(books.map(b => ['bookings_acquisto', b.id, bookingPriv(b)])));
         step('Pulizia delle schede ville e delle prenotazioni…');
