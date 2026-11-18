@@ -617,9 +617,12 @@
               return riga(esc(z.label), d.incluso ? 'incluso nel prezzo: nessun acquisto previsto' : 'a parte', d.incluso ? (re ? null : null) : num(d.acquisto), re, 'da inserire tra le spese'); });
             // spese degli scontrini legati a un servizio che non è nella prenotazione: sono già aggiuntive (non entrano qui)
             const altre = srvReal - legate;
-            return righe.join('') + (altre || !off.length ? riga('Altre spese della prenotazione', 'categorie non aggiuntive (es. manutenzione)', off.length ? null : (srvPrev || null), altre) : '');
+            // le altre spese, una riga per categoria (nessun previsto: non sono nella prenotazione)
+            const perCat = f => { const m = {}; x.spese.filter(f).forEach(z => { const c = z.categoria || 'Altro'; m[c] = (m[c] || 0) + (Number(z.importo) || 0); }); return Object.entries(m).sort((a, b) => b[1] - a[1]); };
+            return righe.join('') + perCat(isAltra).map(([c, t]) => riga(esc(c), 'altra spesa della prenotazione', null, t)).join('');
           })()}
-          ${aggReal ? `<tr><td><b>Servizi aggiuntivi</b><small>richiesti durante il soggiorno, da addebitare al cliente</small></td><td class="r">—</td><td class="r">${euro(aggReal)}</td><td class="r">—</td><td><span class="chk chk-warn">non previsti</span></td></tr>` : ''}
+          ${(() => { const m = {}; x.spese.filter(isAgg).forEach(z => { const c = z.categoria || 'Altro'; m[c] = (m[c] || 0) + (Number(z.importo) || 0); });
+            return Object.entries(m).sort((a, b) => b[1] - a[1]).map(([c, t]) => `<tr><td><b>${esc(c)}</b><small>servizio aggiuntivo: da addebitare al cliente</small></td><td class="r">—</td><td class="r">${euro(t)}</td><td class="r">—</td><td><span class="chk chk-warn">non previsto</span></td></tr>`).join(''); })()}
           </tbody><tfoot><tr><td><b>Totale (senza aggiuntivi)</b></td><td class="r"><b>${totPrev == null ? '—' : euro(totPrev)}</b></td><td class="r"><b>${euro(totReal)}</b></td><td class="r"><b>${totPrev == null ? '—' : segno(totReal - totPrev)}</b></td><td>${(() => { const [t, c] = esito(totPrev, totReal); return `<span class="chk ${c}">${t}</span>`; })()}</td></tr></tfoot></table></div>
           ${affPrev != null && !affReal ? '<p class="note">L\'affitto pagato al proprietario non è ancora tra le spese: inseriscilo come nota spese "Affitto proprietario" (con eventuali extra) per confrontarlo con l\'acquisto concordato.</p>' : ''}</div>`;
       }
