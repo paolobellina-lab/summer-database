@@ -677,7 +677,7 @@
           const q4 = `<div class="card pr-q"><h2>Spese aggiuntive</h2>${tab(
               agg.map(([c, t]) => r2(esc(c), 'richiesta durante il soggiorno', euro(t))).join('') || r2('Nessuna spesa aggiuntiva', '', euro(0)),
               r2('<b>Totale da addebitare al cliente</b>', notaAdd(dep, aggReal, euro), `<b>${euro(aggReal)}</b>`, 'tot'))}</div>`;
-          chkHtml = `<div class="pr-quad"><div class="pr-col">${q1}${q3}</div><div class="pr-col">${q2}${q5}${q4}</div></div>`;
+          chkHtml = `<div class="pr-quad">${q1}<div class="pr-col">${q2}${q5}</div>${q3}${q4}</div>`; // riga 1: Riepilogo | Affitto + a carico del proprietario; riga 2: Spese offerte | Spese aggiuntive (stesso lato superiore)
         } else {
           chkHtml = `<div class="card pr-chk"><h2>Previsto e reale</h2>
           <p class="note">Previsto = valori della prenotazione (acquisto concordato e servizi). Reale = note spese. In linea entro il 5% (almeno 50 €).</p>
