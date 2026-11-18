@@ -745,14 +745,44 @@
           <p class="note">La restituzione riduce quanto ricevuto dal cliente: non è una spesa della villa e non entra nell'acquisto reale. I danni si inseriscono come spesa "Danni villa".</p></div>` : ''}
 
         <div class="card pr-spese">
-          <div class="pr-sp-head"><h2>Spese <span>${x.spese.length}</span></h2>${ctx.online ? `<b>${euro(sp)}</b>` : ''}</div>
-          ${!ctx.online ? '<p class="note">Le spese si vedono con i dati online.</p>' : !V.conSpese ? '<p class="note">Caricamento scontrini…</p>'
-            : x.spese.length ? `${(() => { const aff = x.spese.filter(isAff), inc = x.spese.filter(isSrvOff), alt = x.spese.filter(isAltra), prp = x.spese.filter(isPropS), agg = x.spese.filter(isAgg), adp = x.spese.filter(isAddP), adc = x.spese.filter(isAddC), rst = x.spese.filter(isRest);
-              const blk = (t, l, tot) => l.length ? `<h4 class="sp-sub">${t} <span>${l.length}</span>${tot != null ? `<b>${euro(tot)}</b>` : ''}</h4>${l.map(A.rigaSpesa).join('')}` : '';
-              return blk('Affitto proprietario', aff, sommaAff(x.spese)) + blk('Servizi offerti', inc, sommaSrv(x.spese)) + blk('Altre spese della prenotazione', alt, sommaAltre(x.spese)) + blk('A carico del proprietario', prp, sommaPropS(x.spese)) + blk('Servizi aggiuntivi', agg, sommaAgg(x.spese)) + blk('Restituzione deposito', rst, null) + blk('Addebiti al cliente', adc, null) + blk('Addebiti al proprietario', adp, null); })()}`
-            : '<p class="note">Nessuna spesa inserita per questa prenotazione.</p>'}
+          <div class="pr-sp-head"><h2>Spese <span id="sp-n">${x.spese.length}</span></h2>${ctx.online ? `<b id="sp-tot">${euro(sp)}</b>` : ''}</div>
+          ${ctx.online && V.conSpese && x.spese.length ? `<div class="sp-tools">
+            <input type="search" id="sp-q" placeholder="Cerca (descrizione, categoria, importo)" value="${esc(ui.spQ || '')}">
+            <label class="field"><span>Categoria</span><select id="sp-cat"><option value="">Tutte</option>${[...new Set(x.spese.map(z => z.categoria || 'Altro'))].sort((a, b) => a.localeCompare(b, 'it')).map(c => `<option ${ui.spCat === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></label>
+            <label class="field"><span>Ordina</span><select id="sp-ord">${[['dataD', 'Data, più recenti'], ['dataA', 'Data, più vecchie'], ['impD', 'Importo, più alto'], ['impA', 'Importo, più basso'], ['cat', 'Categoria A–Z']].map(([k, l]) => `<option value="${k}" ${(ui.spOrd || 'dataD') === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+            <label class="field"><span>Raggruppa</span><select id="sp-grp">${[['tipo', 'Per tipo'], ['cat', 'Per categoria'], ['no', 'Nessun gruppo']].map(([k, l]) => `<option value="${k}" ${(ui.spGrp || 'tipo') === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+          </div>` : ''}
+          <div id="sp-list">${!ctx.online ? '<p class="note">Le spese si vedono con i dati online.</p>' : !V.conSpese ? '<p class="note">Caricamento scontrini…</p>'
+            : x.spese.length ? '' : '<p class="note">Nessuna spesa inserita per questa prenotazione.</p>'}</div>
         </div>
       </div>`;
+      // elenco spese: filtro, ordine e raggruppamento (ui.spQ, ui.spCat, ui.spOrd, ui.spGrp)
+      const disegnaSpese = () => {
+        const box = $('#sp-list', root); if (!box || !ctx.online || !V.conSpese || !x.spese.length) return;
+        const q = String(ui.spQ || '').trim().toLowerCase();
+        if (ui.spCat && !x.spese.some(z => (z.categoria || 'Altro') === ui.spCat)) ui.spCat = '';
+        let l = x.spese.filter(z => (!ui.spCat || (z.categoria || 'Altro') === ui.spCat)
+          && (!q || `${z.motivo || ''} ${z.categoria || ''} ${z.creatoDa || ''} ${z.importo} ${euro(Number(z.importo) || 0)} ${z.data || ''}`.toLowerCase().includes(q)));
+        const ord = { dataD: (a, b) => String(b.data || '').localeCompare(String(a.data || '')), dataA: (a, b) => String(a.data || '').localeCompare(String(b.data || '')),
+          impD: (a, b) => (Number(b.importo) || 0) - (Number(a.importo) || 0), impA: (a, b) => (Number(a.importo) || 0) - (Number(b.importo) || 0),
+          cat: (a, b) => String(a.categoria || '').localeCompare(String(b.categoria || ''), 'it') || String(b.data || '').localeCompare(String(a.data || '')) }[ui.spOrd || 'dataD'] || null;
+        if (ord) l = l.slice().sort(ord);
+        const blk = (t, ll, tot) => ll.length ? `<h4 class="sp-sub">${t} <span>${ll.length}</span>${tot != null ? `<b>${euro(tot)}</b>` : ''}</h4>${ll.map(A.rigaSpesa).join('')}` : '';
+        const grp = ui.spGrp || 'tipo';
+        let html;
+        if (!l.length) html = '<p class="note">Nessuna spesa con questi filtri.</p>';
+        else if (grp === 'no') html = l.map(A.rigaSpesa).join('');
+        else if (grp === 'cat') { const m = new Map(); l.forEach(z => { const c = z.categoria || 'Altro'; if (!m.has(c)) m.set(c, []); m.get(c).push(z); });
+          html = [...m.entries()].sort((a, b) => a[0].localeCompare(b[0], 'it')).map(([c, ll]) => blk(esc(c), ll, ll.some(z => isRest(z) || isEntr(z)) ? null : somma(ll))).join(''); }
+        else html = blk('Affitto proprietario', l.filter(isAff), sommaAff(l)) + blk('Servizi offerti', l.filter(isSrvOff), sommaSrv(l)) + blk('Altre spese della prenotazione', l.filter(isAltra), sommaAltre(l)) + blk('A carico del proprietario', l.filter(isPropS), sommaPropS(l)) + blk('Servizi aggiuntivi', l.filter(isAgg), sommaAgg(l)) + blk('Restituzione deposito', l.filter(isRest), null) + blk('Addebiti al cliente', l.filter(isAddC), null) + blk('Addebiti al proprietario', l.filter(isAddP), null);
+        box.innerHTML = html;
+        const filtrato = q || ui.spCat;
+        $('#sp-n', root).textContent = filtrato ? `${l.length} di ${x.spese.length}` : x.spese.length;
+        if ($('#sp-tot', root)) $('#sp-tot', root).textContent = euro(filtrato ? somma(l) : sp);
+      };
+      disegnaSpese();
+      if ($('#sp-q', root)) { let tq; $('#sp-q', root).addEventListener('input', e => { ui.spQ = e.target.value; saveUI(); clearTimeout(tq); tq = setTimeout(disegnaSpese, 120); });
+        ['cat', 'ord', 'grp'].forEach(k => $('#sp-' + k, root).addEventListener('change', e => { ui['sp' + k[0].toUpperCase() + k.slice(1)] = e.target.value; saveUI(); disegnaSpese(); })); }
       if ($('#pd-new', root)) $('#pd-new', root).onclick = () => A.openNuova(x.villaId, x.b ? x.b.id : '');
       $('#pd-print', root).onclick = () => window.print();
       if ($('#pd-exp', root)) $('#pd-exp', root).onclick = () => A.openExport({ villa: x.villaId, pid: x.gen ? '__gen' : x.old ? x.chiave.split('|').slice(2).join('|') : x.b.id });
