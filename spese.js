@@ -495,6 +495,22 @@
       lista.forEach(x => { const v = val(x); tot.vendita += v.vendita || 0; tot.acquisto += v.acquisto || 0; tot.spese += spTot(V, x); });
       generali.forEach(x => { tot.spese += somma(x.spese); });
       const stati = ctx.stati();
+      // vendita totale = vendita + deposito trattenuto (dopo la restituzione) + addebiti al cliente e al proprietario
+      const totVend = x => { const v = val(x), dep = v.deposito, tr = haRest(x.spese) ? trattDi(dep, x.spese) : 0, extra = tr + sommaEntr(x.spese);
+        return { tot: v.vendita == null && !extra ? null : (v.vendita || 0) + extra, extra }; };
+      // stato del soggiorno: in arrivo, in corso, partiti, conteggi conclusi (partiti e niente più da chiudere)
+      const daChiudere = x => { const v = val(x), dep = v.deposito, out = [];
+        if (dep && !haRest(x.spese)) out.push('restituzione deposito');
+        const agg = sommaAgg(x.spese), oltre = dep ? sulDeposito(dep, agg).oltre : agg; if (oltre - sommaAddC(x.spese) > 0.5) out.push('addebito cliente');
+        if (sommaPropS(x.spese) - sommaAddP(x.spese) > 0.5) out.push('addebito proprietario');
+        if (acq && v.affAcq && !affR(V, x)) out.push('affitto proprietario');
+        return out; };
+      const soggHtml = x => { const f = x.from, t = x.to; if (!f || !t) return '';
+        if (oggi < f) return '<span class="pc-sogg arr">In arrivo</span>';
+        if (oggi < t) return '<span class="pc-sogg cor">Soggiorno in corso</span>';
+        if (!ctx.online || !V.conSpese) return '<span class="pc-sogg par">Partiti</span>';
+        const dc = daChiudere(x);
+        return dc.length ? `<span class="pc-sogg par" title="Da chiudere: ${esc(dc.join(', '))}">Partiti · da chiudere: ${esc(dc.join(', '))}</span>` : '<span class="pc-sogg fin">Conteggi conclusi</span>'; };
       const card = x => {
         const v = val(x), sp = spTot(V, x), villa = villaDi(x.villaId);
         return `<article class="vcard pcard${x.old ? ' is-old' : ''}${x.gen ? ' is-gen' : ''}" data-pk="${esc(x.chiave)}" tabindex="0">
@@ -505,12 +521,11 @@
             ${x.b && ctx.pagatiLiberi && ctx.pagatiLiberi(x.b) ? `<span class="pc-pag" title="Notti pagate al proprietario ma senza affitto">${ctx.pagatiLiberi(x.b)} ${ctx.pagatiLiberi(x.b) === 1 ? 'notte pagata libera' : 'notti pagate libere'}</span>` : ''}
             ${x.gen ? '' : `<div class="vc-stats2"><div><span>Arrivo</span><b>${esc(ggMese(x.from))}</b></div><div><span>Partenza</span><b>${esc(ggMese(x.to))}</b></div><div><span>Notti</span><b>${nNotti(x.from, x.to)}</b></div></div>`}
             <hr>
+            ${x.b ? soggHtml(x) : ''}
             <div class="pc-val">
-              ${!x.b ? '' : `<div><span>Vendita</span><b>${v.vendita == null ? vuoto : euro(v.vendita)}</b></div>`}
-              ${!x.b || !acq ? '' : (g0 => g0 && v.quota ? `<div><span>Acquisto previsto</span><b>${v.acquisto == null ? vuoto : euro(v.acquisto)}</b><small>quota dell'acquisto unico</small></div>`
-                : g0 && g0.root.id !== x.b.id ? `<div><span>Acquisto previsto</span><b class="pc-nd">nel gruppo</b><small>acquisto unico</small></div>`
-                : `<div><span>Acquisto previsto</span><b>${v.acquisto == null ? vuoto : euro(v.acquisto)}</b>${g0 ? `<small>unico per ${g0.membri.length} prenotazioni</small>` : ''}</div>`)(ctx.gruppoAcq && ctx.gruppoAcq(x.b))}
-              <div><span>Spese reali</span><b>${ctx.online ? (V.conSpese ? euro(sp) : '…') : vuoto}</b>${ctx.online && V.conSpese ? `<small>${sommaAgg(x.spese) ? `di cui aggiuntive ${euro(sommaAgg(x.spese))}` : `${x.spese.length} ${x.spese.length === 1 ? 'scontrino' : 'scontrini'}`}</small>` : ''}</div>
+              ${!x.b ? '' : (() => { const t = totVend(x); return `<div><span>Vendita totale</span><b>${t.tot == null ? vuoto : euro(t.tot)}</b>${t.extra ? `<small>di cui addebiti e trattenute ${euro(t.extra)}</small>` : '<small>affitto + servizi</small>'}</div>`; })()}
+              <div><span>Spese totali</span><b>${ctx.online ? (V.conSpese ? euro(sp) : '…') : vuoto}</b>${ctx.online && V.conSpese ? `<small>${sommaAgg(x.spese) ? `di cui aggiuntive ${euro(sommaAgg(x.spese))}` : `${x.spese.length} ${x.spese.length === 1 ? 'scontrino' : 'scontrini'}`}</small>` : ''}</div>
+              ${!x.b || !ctx.online || !V.conSpese ? '' : (() => { const t = totVend(x); return t.tot == null ? '' : `<div><span>Margine</span><b class="${t.tot - sp < 0 ? 'pc-neg' : ''}">${euro(t.tot - sp)}</b><small>vendita totale − spese</small></div>`; })()}
             </div>
           </div>
           <footer class="vc-foot no-print">
