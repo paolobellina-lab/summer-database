@@ -830,9 +830,9 @@ window.SDBStore.ready.then(function () {
       if (!u.settimanale || !pr || pr.hidden || !it.classList.contains('on')) { el.hidden = true; return; }
       const def = (settings().prezziServizi || {})[k] || {}, defA = (data().serviziAcquisto || {})[k];
       const v = S.srvPrezzo(settings(), k, def.vendita, n), a = canAcq() ? S.srvPrezzo(settings(), k, defA, n) : null;
-      const sett = n > 0 ? String(Math.round(n / 7 * 100) / 100).replace('.', ',') : '1';
+      const sw = S.srvSettimane(n), sett = String(Math.round(sw * 100) / 100).replace('.', ','), dopo = Math.round((sw - 1) * 100) / 100;
       el.hidden = false;
-      el.innerHTML = `Prezzo settimanale: ${sett} sett. × ${String(u.volte).replace('.', ',')} a settimana${n > 0 ? ` (${n} notti)` : ''}${v != null || a != null ? ` = ${a != null ? 'acquisto ' + fmtNum(a) + ' € · ' : ''}${v != null ? 'vendita ' + fmtNum(v) + ' €' : ''} <button type="button" class="btn small" data-scu>Usa questi</button>` : ''}`;
+      el.innerHTML = `Prezzo settimanale: ${sett} sett.${n > 0 ? ` (${n} notti)` : ''} = 1ª settimana${dopo > 0 ? ` + ${String(dopo).replace('.', ',')} × ${String(u.coeff).replace('.', ',')}` : ''}${v != null || a != null ? ` = ${a != null ? 'acquisto ' + fmtNum(a) + ' € · ' : ''}${v != null ? 'vendita ' + fmtNum(v) + ' €' : ''} <button type="button" class="btn small" data-scu>Usa questi</button>` : ''}`;
       const bu = el.querySelector('[data-scu]'); if (bu) bu.onclick = () => { if (v != null) it.querySelector('[data-sv]').value = fmtNum(v); if (a != null && it.querySelector('[data-sa]')) it.querySelector('[data-sa]').value = fmtNum(a); check(); }; }); };
     // regola: check-out e check-in possono cadere nello stesso giorno (massimo 2 affitti in quel giorno);
     // se due affitti condividono anche una sola notte il salvataggio è bloccato.
@@ -1604,7 +1604,7 @@ window.SDBStore.ready.then(function () {
         <div class="loc-new"><input id="loc-add-in" placeholder="Nuova località"><button type="button" class="btn small" id="loc-add">Aggiungi</button></div>
       </section>`)}
       ${pg('servizi', `<section class="card"><h2>Servizi delle prenotazioni</h2>
-        <p class="note">Sono le caselle della sezione Servizi nella finestra della prenotazione. Qui scegli per ognuno se di norma è <b>incluso</b> nel prezzo dell'affitto o <b>a parte</b>, e i prezzi predefiniti: quando spunti il servizio in una prenotazione si compilano da soli, e lì puoi sempre cambiarli. Tutti si rinominano. I servizi aggiunti si tolgono se nessuna prenotazione li usa; pulizia finale, cuoco e transfer si possono togliere sempre (le prenotazioni che li avevano li tengono) e rimettere quando vuoi.${canAcq() ? ' I prezzi di acquisto li vede solo chi vede gli acquisti. <b>Prezzo</b>: a soggiorno (una volta) o a settimana; se è a settimana, scrivi quante volte a settimana (× 1, × 2…): nella prenotazione e nelle offerte il prezzo si moltiplica per le settimane del soggiorno e per questo numero.' : ''}</p>
+        <p class="note">Sono le caselle della sezione Servizi nella finestra della prenotazione. Qui scegli per ognuno se di norma è <b>incluso</b> nel prezzo dell'affitto o <b>a parte</b>, e i prezzi predefiniti: quando spunti il servizio in una prenotazione si compilano da soli, e lì puoi sempre cambiarli. Tutti si rinominano. I servizi aggiunti si tolgono se nessuna prenotazione li usa; pulizia finale, cuoco e transfer si possono togliere sempre (le prenotazioni che li avevano li tengono) e rimettere quando vuoi.${canAcq() ? ' I prezzi di acquisto li vede solo chi vede gli acquisti. <b>Prezzo</b>: <b>a soggiorno</b> = uguale qualunque sia la durata (es. pulizia finale); <b>a settimana</b> = si somma per ogni settimana di permanenza (es. lavanderia). Per i settimanali scegli il coefficiente delle settimane dopo la prima: × 1 = stesso prezzo ogni settimana, × 0,8 = dalla 2ª settimana il 20% in meno (es. cuoco: il trasloco degli utensili e la pulizia della cucina si pagano una volta). Le settimane sono le notti ÷ 7 (almeno 1).' : ''}</p>
         <div class="tbl-wrap"><table class="prices srv-tbl"><thead><tr><th>Servizio</th><th>Di norma</th><th>Prezzo</th>${canAcq() ? '<th>Acquisto €</th>' : ''}<th>Vendita €</th><th>Usato</th><th></th></tr></thead><tbody id="srv-list"></tbody></table></div>
         <form class="loc-new" id="srv-add" autocomplete="off"><input id="srv-add-n" placeholder="Nuovo servizio (es. Baby sitter)"><button class="btn small">Aggiungi servizio</button></form>
       </section>
@@ -1862,7 +1862,7 @@ window.SDBStore.ready.then(function () {
         <td><input data-sl value="${esc(x.label)}" aria-label="Nome del servizio"></td>
         <td><div class="seg small" data-pi><button type="button" data-i="1" class="${inc ? 'on' : ''}">Incluso</button><button type="button" data-i="0" class="${inc ? '' : 'on'}">A parte</button></div></td>
         <td class="srv-un"><select data-pu aria-label="Il prezzo vale"><option value="soggiorno" ${pz.unita === 'settimana' ? '' : 'selected'}>a soggiorno</option><option value="settimana" ${pz.unita === 'settimana' ? 'selected' : ''}>a settimana</option></select>
-          <label class="srv-volte" ${pz.unita === 'settimana' ? '' : 'hidden'} title="Quante volte a settimana: il prezzo si moltiplica per questo numero e per le settimane del soggiorno">× <input data-pq inputmode="decimal" value="${esc(String(Number(pz.volte) > 0 ? pz.volte : 1).replace('.', ','))}" aria-label="Volte a settimana"> a sett.</label></td>
+          <label class="srv-volte" ${pz.unita === 'settimana' ? '' : 'hidden'} title="Coefficiente delle settimane dopo la prima: 1 = stesso prezzo ogni settimana, 0,8 = dalla 2ª settimana il 20% in meno, 0 = la 2ª settimana non costa">dalla 2ª sett. × <input data-pq inputmode="decimal" value="${esc(String(S.srvUnita(st, x.key).coeff).replace('.', ','))}" aria-label="Coefficiente dalla seconda settimana"></label></td>
         ${canAcq() ? `<td><input data-pa inputmode="numeric" value="${esc(fmtP(acqSrv[x.key]))}" placeholder="—" aria-label="Acquisto predefinito"></td>` : ''}
         <td><input data-pv inputmode="numeric" value="${esc(fmtP(pz.vendita))}" placeholder="—" aria-label="Vendita predefinita"></td>
         <td class="note">${n} ${n === 1 ? 'prenot.' : 'prenot.'}</td>
@@ -1871,12 +1871,12 @@ window.SDBStore.ready.then(function () {
     };
     $('#srv-list').addEventListener('input', e => { const row = e.target.closest('[data-sk]'); if (!row) return; const k = row.dataset.sk;
       if (e.target.matches('[data-pv]')) { const v = S.parseMoney(e.target.value); prezziSrv()[k] = Object.assign({}, prezziSrv()[k], { vendita: typeof v === 'number' ? v : null }); save(); }
-      if (e.target.matches('[data-pq]')) { const v = Number(String(e.target.value).replace(',', '.')); if (v > 0) { prezziSrv()[k] = Object.assign({}, prezziSrv()[k], { volte: v }); save(); } }
+      if (e.target.matches('[data-pq]')) { const t = String(e.target.value).trim().replace(',', '.'), v = Number(t); if (t !== '' && v >= 0) { const o0 = Object.assign({}, prezziSrv()[k], { coeff: v }); delete o0.volte; prezziSrv()[k] = o0; save(); } }
       if (e.target.matches('[data-pa]')) { const v = S.parseMoney(e.target.value); if (typeof v === 'number') acqSrv[k] = v; else delete acqSrv[k];
         $('#saved').textContent = 'Modifiche in corso…'; clearTimeout(tAcq); tAcq = setTimeout(() => { Promise.resolve(store.setServiziAcquisto(JSON.parse(JSON.stringify(acqSrv)))).then(() => { $('#saved').textContent = 'Salvato'; }, err => { $('#saved').textContent = ''; toast(err && err.code === 'permission-denied' ? 'Per i prezzi di acquisto predefiniti bisogna pubblicare la nuova regola di Firestore' : 'Errore: ' + (err && err.message || err)); }); }, 500); }
     });
     $('#srv-list').addEventListener('change', e => { if (!e.target.matches('[data-pu]')) return; const row = e.target.closest('[data-sk]'), k = row.dataset.sk, sett = e.target.value === 'settimana';
-      prezziSrv()[k] = Object.assign({}, prezziSrv()[k], { unita: sett ? 'settimana' : 'soggiorno' }); if (sett && !(Number(prezziSrv()[k].volte) > 0)) prezziSrv()[k].volte = 1;
+      prezziSrv()[k] = Object.assign({}, prezziSrv()[k], { unita: sett ? 'settimana' : 'soggiorno' }); if (sett && typeof prezziSrv()[k].coeff !== 'number') prezziSrv()[k].coeff = 1; delete prezziSrv()[k].volte;
       row.querySelector('.srv-volte').hidden = !sett; save(); });
     $('#srv-list').addEventListener('click', e => { const bt = e.target.closest('[data-pi] button'); if (!bt) return; const k = bt.closest('[data-sk]').dataset.sk;
       prezziSrv()[k] = Object.assign({}, prezziSrv()[k], { incluso: bt.dataset.i === '1' }); bt.parentNode.querySelectorAll('button').forEach(z => z.classList.toggle('on', z === bt)); save(); });
