@@ -520,25 +520,33 @@
       const sc = x.b && ctx.schedaPren ? ctx.schedaPren(x.b.id) : null;
       A.righe = () => x.spese.map(s => ({ s, villa: villa.name, p: x.gen ? null : { cliente: x.cliente, from: x.from, to: x.to } }));
       const E = n => (n == null ? vuoto : euro(n));
-      let celle = '';
-      if (!x.b) celle = cella('Spese reali', ctx.online ? euro(sp) : vuoto, `${x.spese.length} ${x.spese.length === 1 ? 'scontrino' : 'scontrini'}`);
+      let celle = '', tab4 = false;
+      const rowV = (l, val0, nota, cls) => `<tr${cls ? ` class="${cls}"` : ''}><td>${l}${nota ? `<small>${nota}</small>` : ''}</td><td class="r">${val0}</td></tr>`;
+      if (!x.b) celle = rowV('Spese reali', ctx.online ? euro(sp) : vuoto, `${x.spese.length} ${x.spese.length === 1 ? 'scontrino' : 'scontrini'}`);
       else if (grp) {
         // acquisto unico: qui solo i valori di questa prenotazione; l'acquisto e i margini sono nel riquadro del gruppo
-        celle = cella('Vendita', E(v.vendita), 'affitto + servizi a parte')
-          + (acq ? cella('Acquisto previsto', grp.root.id === x.b.id ? E(v.acquisto) : '<span class="pc-nd">nel gruppo</span>', grp.root.id === x.b.id ? `unico per ${grp.membri.length} prenotazioni` : 'acquisto unico con ' + esc(grp.root.cliente || '')) : '')
-          + cella('Spese reali servizi inclusi', ctx.online ? euro(sommaInc(x.spese)) : vuoto, 'servizi della prenotazione')
-          + cella('Spese reali servizi aggiuntivi', ctx.online ? euro(sommaAgg(x.spese)) : vuoto, 'da addebitare o trattenere dal deposito');
+        celle = rowV('Vendita', E(v.vendita), 'affitto + servizi a parte')
+          + (acq ? rowV('Acquisto previsto', grp.root.id === x.b.id ? E(v.acquisto) : '<span class="pc-nd">nel gruppo</span>', grp.root.id === x.b.id ? `unico per ${grp.membri.length} prenotazioni` : 'acquisto unico con ' + esc(grp.root.cliente || '')) : '')
+          + rowV('Spese reali servizi inclusi', ctx.online ? euro(sommaInc(x.spese)) : vuoto, 'servizi della prenotazione')
+          + rowV('Spese reali servizi aggiuntivi', ctx.online ? euro(sommaAgg(x.spese)) : vuoto, 'da addebitare o trattenere dal deposito');
       } else if (acq) {
-        const scost = v.acquisto != null ? sp - v.acquisto : null;
-        celle = cella('Vendita', E(v.vendita), 'affitto + servizi a parte') + cella('Acquisto previsto', E(v.acquisto), 'affitto + servizi a parte')
-          + cella('Acquisto reale', ctx.online ? euro(sp) : vuoto, `${sommaAff(x.spese) ? `affitto ${euro(sommaAff(x.spese))} · ` : ''}inclusi ${euro(sommaInc(x.spese))} · aggiuntivi ${euro(sommaAgg(x.spese))}`)
-          + cella('Spese reali servizi inclusi', ctx.online ? euro(sommaInc(x.spese)) : vuoto, 'servizi della prenotazione')
-          + cella('Spese reali servizi aggiuntivi', ctx.online ? euro(sommaAgg(x.spese)) : vuoto, 'da addebitare o trattenere dal deposito')
-          + cella('Reale rispetto al previsto', scost == null || !ctx.online ? vuoto : segno(scost), scost == null ? '' : scost > 0 ? 'oltre il previsto' : scost < 0 ? 'sotto il previsto' : 'in linea', scost > 0 ? 'neg' : scost < 0 ? 'pos' : '')
-          + cella('Margine previsto', v.vendita != null && v.acquisto != null ? euro(v.vendita - v.acquisto) : vuoto, 'vendita − acquisto previsto')
-          + cella('Margine reale', v.vendita != null && ctx.online ? euro(v.vendita + (haDep ? tratt : 0) - sp) : vuoto, haDep ? 'vendita + deposito trattenuto − acquisto reale' : 'vendita − acquisto reale', v.vendita != null && v.vendita + (haDep ? tratt : 0) - sp < 0 ? 'neg' : '')
-          + cella('Da addebitare al cliente', ctx.online ? euro(Math.max(0, sommaAgg(x.spese) - (haDep ? Math.max(0, tratt) : 0))) : vuoto, haDep ? 'aggiuntivi − deposito trattenuto' : 'spese aggiuntive');
-      } else celle = cella('Vendita', E(v.vendita), 'affitto + servizi a parte') + cella('Spese reali servizi inclusi', ctx.online ? euro(sommaInc(x.spese)) : vuoto, 'servizi della prenotazione') + cella('Spese reali servizi aggiuntivi', ctx.online ? euro(sommaAgg(x.spese)) : vuoto, 'da addebitare o trattenere dal deposito') + cella(haDep ? 'Vendita + deposito trattenuto − spese' : 'Vendita − spese', v.vendita != null && ctx.online ? euro(v.vendita + (haDep ? tratt : 0) - sp) : vuoto);
+        // tabella previsto / reale: i valori della prenotazione sono ipotizzati (tranne la vendita), le note spese sono reali
+        tab4 = true;
+        const on = ctx.online, marP = v.vendita != null && v.acquisto != null ? v.vendita - v.acquisto : null;
+        const marR = v.vendita != null && on ? v.vendita + (haDep ? tratt : 0) - sp : null;
+        const r4 = (voce, nota, pr, re, cls, diffCls) => { const d = pr != null && re != null ? re - pr : null;
+          return `<tr${cls ? ` class="${cls}"` : ''}><td>${voce}${nota ? `<small>${nota}</small>` : ''}</td><td class="r">${pr == null ? '—' : euro(pr)}</td><td class="r">${re == null ? (on ? '—' : vuoto) : euro(re)}</td><td class="r${d && diffCls ? ' ' + diffCls(d) : ''}">${d == null || !d ? '—' : segno(d)}</td></tr>`; };
+        const num0 = n => typeof n === 'number' ? n : null;
+        const piuCaro = d => d > 0 ? 'neg' : 'pos', piuAlto = d => d > 0 ? 'pos' : 'neg';
+        celle = r4('Vendita', 'affitto + servizi a parte, prezzo al cliente', v.vendita, v.vendita)
+          + r4('Acquisto', on ? `${sommaAff(x.spese) ? `affitto ${euro(sommaAff(x.spese))} · ` : ''}inclusi ${euro(sommaInc(x.spese))} · aggiuntivi ${euro(sommaAgg(x.spese))}` : 'affitto + servizi a parte', v.acquisto, on ? sp : null, '', piuCaro)
+          + r4('di cui affitto proprietario', 'note spese "Affitto proprietario"', num0(x.b.prezzoAcquisto), on ? sommaAff(x.spese) : null, 'sub')
+          + r4('di cui servizi inclusi', 'spese dei servizi della prenotazione', null, on ? sommaInc(x.spese) : null, 'sub')
+          + r4('di cui servizi aggiuntivi', 'da addebitare o trattenere dal deposito', null, on ? sommaAgg(x.spese) : null, 'sub')
+          + (haDep ? r4('Deposito trattenuto', 'ricevuto − restituito', null, on ? tratt : null) : '')
+          + r4('Margine', haDep ? 'vendita + deposito trattenuto − acquisto' : 'vendita − acquisto', marP, marR, 'tot', piuAlto)
+          + r4('Da addebitare al cliente', haDep ? 'aggiuntivi − deposito trattenuto' : 'spese aggiuntive', null, on ? Math.max(0, sommaAgg(x.spese) - (haDep ? Math.max(0, tratt) : 0)) : null);
+      } else celle = rowV('Vendita', E(v.vendita), 'affitto + servizi a parte') + rowV('Spese reali servizi inclusi', ctx.online ? euro(sommaInc(x.spese)) : vuoto, 'servizi della prenotazione') + rowV('Spese reali servizi aggiuntivi', ctx.online ? euro(sommaAgg(x.spese)) : vuoto, 'da addebitare o trattenere dal deposito') + rowV(haDep ? 'Vendita + deposito trattenuto − spese' : 'Vendita − spese', v.vendita != null && ctx.online ? euro(v.vendita + (haDep ? tratt : 0) - sp) : vuoto);
       // controllo previsto / reale: i valori della prenotazione sono quelli ipotizzati (tranne la vendita), le note spese quelle reali
       let chkHtml = '';
       if (x.b && acq && ctx.online && V.conSpese) {
@@ -585,7 +593,7 @@
           ${media(x.villaId, pill(x))}
           <div class="card pr-info"><h2>${x.gen ? 'Villa' : 'Prenotazione'}</h2><dl class="pr-kv">${info.map(([l, val0]) => `<dt>${esc(l)}</dt><dd>${esc(val0)}</dd>`).join('')}</dl></div>
         </div>
-        <div class="card pr-valori"><h2>Valori</h2><div class="pr-grid" style="grid-template-columns:repeat(${Math.min(3, (celle.match(/class="pr-cell/g) || []).length)},minmax(0,1fr))">${celle}</div>
+        <div class="card pr-valori"><h2>Valori</h2><div class="tbl-wrap"><table class="prices pr-val-t"><thead><tr><th>Voce</th>${tab4 ? '<th class="r">Previsto</th><th class="r">Reale</th><th class="r">Differenza</th>' : '<th class="r">Importo</th>'}</tr></thead><tbody>${celle}</tbody></table></div>
           ${x.b && v.vendita == null ? '<p class="note">Prezzo di vendita non inserito nella prenotazione.</p>' : ''}${!x.gen && acq && x.b && v.acquisto == null ? '<p class="note">Prezzo di acquisto non inserito nella prenotazione.</p>' : ''}</div>
         ${chkHtml}
         ${grpHtml}

@@ -1152,3 +1152,13 @@ dialog.dlg-promo { width: min(680px, calc(100vw - 32px)); }
 .chk-bad { background: rgba(200,40,40,.12); color: var(--danger); }
 .chk-wait { background: var(--line-soft); color: var(--muted); }
 .chk-warn { background: rgba(233,128,28,.14); color: #a8540a; }
+
+/* Prenotazioni: Valori in tabella */
+.pr-val-t td small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+.pr-val-t td.r { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pr-val-t tr.sub td:first-child { padding-left: 26px; }
+.pr-val-t tr.sub td { color: var(--muted); }
+.pr-val-t tr.tot td { font-weight: 700; border-top: 2px solid var(--line); }
+.pr-val-t td.neg { color: var(--danger); }
+.pr-val-t td.pos { color: #1d6b3a; }
+.pr-val-t tr.neg td.r { color: var(--danger); } .pr-val-t tr.pos td.r { color: #1d6b3a; }
