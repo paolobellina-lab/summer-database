@@ -1234,3 +1234,12 @@ dialog.dlg-bil { width: min(900px, calc(100vw - 32px)); }
 .srv-tbl td.srv-un .srv-volte[hidden] { display: none !important; }
 .srv-tbl td.srv-un .srv-volte input { width: 52px !important; min-width: 0; text-align: center; padding-left: 4px; padding-right: 4px; }
 #bform .srv-calc { margin: 4px 0 8px; }
+/* Offerte: riepilogo prezzi modificabile */
+.off-riep input.off-rp { width: 120px; text-align: right; }
+.off-riep .off-rs-c { min-width: 260px; }
+.off-riep .off-rs-l { display: flex; align-items: center; gap: 8px; margin: 2px 0; flex-wrap: wrap; }
+.off-riep .off-rs-l span { flex: 1; min-width: 90px; font-size: 13px; }
+.off-riep .off-rs-l input { width: 100px; text-align: right; }
+.off-riep .off-mod { color: var(--accent-ink, #9a6a1f); display: block; }
+.off-riep .off-rs-l .off-mod { flex-basis: 100%; text-align: right; }
+.off-rep { margin: 12px 0; }

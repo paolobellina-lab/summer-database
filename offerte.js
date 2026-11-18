@@ -70,6 +70,7 @@
     if (!o.note) o.note = {};
     if (!o.f || typeof o.f !== 'object') o.f = {};
     if (!o.srv || typeof o.srv !== 'object') o.srv = {};
+    if (!o.srvVilla || typeof o.srvVilla !== 'object') o.srvVilla = {}; // prezzi dei servizi scritti per una sola villa nel riepilogo: { villaId: { chiave: '1.200' } }
     // servizi dell'offerta: quelli delle prenotazioni (Impostazioni → Servizi e inclusioni), con prezzo di vendita modificabile qui
     const SRV_EN = { pulizia: 'Final cleaning', cuoco: 'Private chef', transfer: 'Transfer' };
     // servizi di base (rinominabili o tolti in Impostazioni: settings.serviziBase) + quelli aggiunti
@@ -79,10 +80,12 @@
       const modo = ['pred', 'inc', 'parte'].includes(x.modo) ? x.modo : x.incluso === true ? 'inc' : x.incluso === false ? 'parte' : 'pred';
       return { on: !!x.on, modo, prezzo: x.prezzo !== undefined && String(x.prezzo).trim() !== '' ? String(x.prezzo) : '' }; };
     // prezzo di un servizio per una villa: quello scritto qui nell'offerta (uguale per tutte), altrimenti quello della scheda villa, altrimenti Impostazioni
-    const prezzoSrv = (v, k) => { const x = (o.srv[k] || {}).prezzo; if (x !== undefined && String(x).trim() !== '') return S.parseMoney(x);
-      // prezzo della scheda villa o di Impostazioni: se il servizio è settimanale si moltiplica per le settimane del periodo e le volte a settimana
-      const pe = v ? perOf(v) : null, notti = pe && pe.from && pe.to ? S.diffDays(pe.from, pe.to) : 0;
+    // prezzo "di base" (senza modifiche nell'offerta): scheda villa, altrimenti Impostazioni; se settimanale, sulle settimane del periodo
+    const prezzoSrvBase = (v, k) => { const pe = v ? perOf(v) : null, notti = pe && pe.from && pe.to ? S.diffDays(pe.from, pe.to) : 0;
       const pv = (v && v.prezziServizi || {})[k]; if (typeof pv === 'number') return S.srvPrezzo(st, k, pv, notti); const d = (st.prezziServizi || {})[k] || {}; return typeof d.vendita === 'number' ? S.srvPrezzo(st, k, d.vendita, notti) : null; };
+    // ordine: prezzo scritto per questa villa nel riepilogo → prezzo scritto per tutte al punto 3 → base
+    const prezzoSrv = (v, k) => { const y = v && (o.srvVilla[v.id] || {})[k]; if (y !== undefined && String(y).trim() !== '') return S.parseMoney(y);
+      const x = (o.srv[k] || {}).prezzo; if (x !== undefined && String(x).trim() !== '') return S.parseMoney(x); return prezzoSrvBase(v, k); };
     // stili della mail: due di base + quelli salvati da tutti in meta/settings.stiliMail
     const FONT = [['tahoma,sans-serif', 'Tahoma'], ['Arial,Helvetica,sans-serif', 'Arial'], ['Verdana,Geneva,sans-serif', 'Verdana'], ["'Trebuchet MS',Helvetica,sans-serif", 'Trebuchet'],
       ["Georgia,'Times New Roman',serif", 'Georgia'], ["'Palatino Linotype',Palatino,'Book Antiqua',serif", 'Palatino'], ["Garamond,'EB Garamond',Georgia,serif", 'Garamond'], ["'Times New Roman',Times,serif", 'Times']];
@@ -252,7 +255,7 @@
       }
       $('#off-cal').innerHTML = html;
     };
-    const setIdx = i => { const ps = baseP(); if (i < 0 || i >= ps.length || i === o.idx) return; o.idx = i; o.prezzi = {}; drawPer(); drawList(); drawTexts(); save(); };
+    const setIdx = i => { const ps = baseP(); if (i < 0 || i >= ps.length || i === o.idx) return; o.idx = i; o.prezzi = {}; o.srvVilla = {}; drawPer(); drawList(); drawTexts(); save(); };
     let visibili = [];
     const drawList = () => {
       const q = (o.q || '').trim().toLowerCase();
@@ -297,9 +300,11 @@
     };
     const drawRiep = () => {
       const vv = scelte();
-      $('#off-riep').innerHTML = vv.length ? vv.map(v => { const pr = prezzoDi(v), ex = srvAparte(v).filter(x => typeof x.eur === 'number' && x.eur > 0), et = extraTot(v), inc = srvInclVilla(v);
-        const ag = srvAparte(v);
-        return `<tr><td><b>${esc(v.name)}</b>${inc.length ? `<small class="off-riep-l">Inclusi: ${esc(inc.map(x => x.label).join(', '))}</small>` : ''}${ag.length ? `<small class="off-riep-l off-agg">In aggiunta: ${esc(ag.map(x => x.label + (typeof x.eur === 'number' && x.eur > 0 ? ' ' + S.money(x.eur) : ' (senza prezzo)')).join(', '))}</small>` : ''}</td><td>${pr === null ? '<span class="note">su richiesta</span>' : S.money(pr)}</td><td>${ex.length ? `${S.money(et)}<small class="note"> (${esc(ex.map(x => x.label).join(', '))})</small>` : '<span class="note">—</span>'}</td><td><b>${pr === null ? '—' : S.money(pr + et)}</b></td></tr>`; }).join('')
+      $('#off-riep').innerHTML = vv.length ? vv.map(v => { const pr = prezzoDi(v), et = extraTot(v), inc = srvInclVilla(v), ag = srvAparte(v), li = listinoOf(v);
+        const affIn = `<input class="off-rp" data-rp="${esc(v.id)}" inputmode="numeric" value="${esc(o.prezzi[v.id] !== undefined ? o.prezzi[v.id] : typeof li === 'number' ? String(li) : '')}" placeholder="su richiesta">${typeof li === 'number' && pr !== null && pr !== li ? `<small class="note off-mod">listino ${esc(S.money(li))}</small>` : ''}`;
+        const srvIn = ag.length ? ag.map(x => { const b0 = prezzoSrvBase(v, x.key), cur = (o.srvVilla[v.id] || {})[x.key]; const val0 = cur !== undefined ? cur : typeof x.eur === 'number' ? String(x.eur) : '';
+          return `<label class="off-rs-l"><span>${esc(x.label)}</span><input class="off-rs" data-rs="${esc(v.id)}|${esc(x.key)}" inputmode="numeric" value="${esc(val0)}" placeholder="—">${typeof b0 === 'number' && typeof x.eur === 'number' && x.eur !== b0 ? `<small class="note off-mod">scheda ${esc(S.money(b0))}</small>` : ''}</label>`; }).join('') : '<span class="note">—</span>';
+        return `<tr data-rv="${esc(v.id)}"><td><b>${esc(v.name)}</b>${inc.length ? `<small class="off-riep-l">Inclusi: ${esc(inc.map(x => x.label).join(', '))}</small>` : ''}</td><td>${affIn}</td><td class="off-rs-c">${srvIn}<small class="note" data-rt>${et ? 'totale servizi ' + esc(S.money(et)) : ''}</small></td><td><b data-rtot>${pr === null ? '—' : S.money(pr + et)}</b></td></tr>`; }).join('')
         : '<tr><td colspan="4" class="note">Scegli le ville al punto 2.</td></tr>';
     };
     const drawTexts = () => {
@@ -342,7 +347,7 @@
     }
     drawPer(); drawList(); drawTexts();
 
-    $('#off-tar').addEventListener('click', e => { const b = e.target.closest('[data-t]'); if (!b) return; o.tariff = b.dataset.t; o.idx = 0; o.prezzi = {}; $$('#off-tar button').forEach(x => x.classList.toggle('on', x === b)); drawPer(); drawList(); drawTexts(); save(); });
+    $('#off-tar').addEventListener('click', e => { const b = e.target.closest('[data-t]'); if (!b) return; o.tariff = b.dataset.t; o.idx = 0; o.prezzi = {}; o.srvVilla = {}; $$('#off-tar button').forEach(x => x.classList.toggle('on', x === b)); drawPer(); drawList(); drawTexts(); save(); });
     $('#off-cal').addEventListener('click', e => { const b = e.target.closest('[data-i]'); if (b) setIdx(Number(b.dataset.i)); });
     $('#off-prev').addEventListener('click', () => setIdx(o.idx - 1));
     $('#off-next').addEventListener('click', () => setIdx(o.idx + 1));
@@ -382,12 +387,19 @@
     $('#off-list').addEventListener('change', e => {
       const cb = e.target.closest('[data-pick]'); if (cb) { const id = cb.dataset.pick; o.ville = o.ville.filter(x => x !== id); if (cb.checked) o.ville.push(id); drawList(); drawTexts(); save(); }
     });
-    $('#off-list').addEventListener('input', e => { const i = e.target.closest('[data-price]'); if (i) { o.prezzi[i.dataset.price] = i.value; save(); } const n = e.target.closest('[data-nota]'); if (n) { o.note[n.dataset.nota] = n.value; save(); } });
+    $('#off-list').addEventListener('input', e => { const i = e.target.closest('[data-price]'); if (i) { o.prezzi[i.dataset.price] = i.value; drawRiep(); save(); } const n = e.target.closest('[data-nota]'); if (n) { o.note[n.dataset.nota] = n.value; save(); } });
     drawSrv();
     $('#off-srv').addEventListener('change', e => { const c = e.target.closest('[data-son]'); if (!c) return; const k = c.closest('[data-ok]').dataset.ok; o.srv[k] = Object.assign({}, o.srv[k], { on: c.checked });
       // spuntando il servizio si spuntano anche le sue descrizioni collegate (poi si possono togliere una per una)
       if (c.checked) { const sel = incSel().slice(); S.inclusioniDi(st).filter(i => i.servizio === k).forEach(i => { if (!sel.includes(i.id)) sel.push(i.id); }); o.incSel = sel; } drawSrv(); drawTexts(); save(); });
     $('#off-srv').addEventListener('click', e => { const bt = e.target.closest('[data-smode] button'); if (!bt || bt.disabled) return; const k = bt.closest('[data-ok]').dataset.ok; const cur = Object.assign({}, o.srv[k]); delete cur.incluso; o.srv[k] = Object.assign(cur, { modo: bt.dataset.m }); drawSrv(); drawTexts(); save(); });
+    // riepilogo prezzi per villa: affitto e servizi modificabili qui (l'affitto è lo stesso campo del punto 2)
+    const totRiga = vid => { const v = scelte().find(z => z.id === vid), tr = $(`#off-riep tr[data-rv="${CSS.escape(vid)}"]`); if (!v || !tr) return;
+      const pr = prezzoDi(v), et = extraTot(v); tr.querySelector('[data-rtot]').textContent = pr === null ? '—' : S.money(pr + et); tr.querySelector('[data-rt]').textContent = et ? 'totale servizi ' + S.money(et) : ''; };
+    $('#off-riep').addEventListener('input', e => { const a = e.target.closest('[data-rp]'), r = e.target.closest('[data-rs]'); if (!a && !r) return;
+      if (a) { o.prezzi[a.dataset.rp] = a.value; const li = $(`#off-list [data-price="${CSS.escape(a.dataset.rp)}"]`); if (li) li.value = a.value; totRiga(a.dataset.rp); }
+      else { const [vid, k] = r.dataset.rs.split('|'); o.srvVilla[vid] = Object.assign({}, o.srvVilla[vid]); if (r.value.trim() === '') delete o.srvVilla[vid][k]; else o.srvVilla[vid][k] = r.value; totRiga(vid); }
+      save(); });
     $('#off-srv').addEventListener('input', e => { if (!e.target.matches('[data-sprz]')) return; const k = e.target.closest('[data-ok]').dataset.ok; o.srv[k] = Object.assign({}, o.srv[k], { prezzo: e.target.value }); drawRiep(); save(); });
     $('#off-incl').addEventListener('change', e => { const c = e.target.closest('[data-inc]'); if (!c) return; const sel = incSel().filter(x => x !== c.dataset.inc); if (c.checked) sel.push(c.dataset.inc); o.incSel = sel; save(); });
     $('#off-incx').addEventListener('input', e => { o.incExtra = e.target.value; save(); });
@@ -654,7 +666,9 @@
         html = html || await htmlMail();
         const stato = JSON.parse(JSON.stringify(o)); ['tab', 'q', 'f', 'fOpen', 'persOpen', 'ultima'].forEach(k => delete stato[k]);
         const rec = { cliente: o.cliente.trim(), email: String(o.email || '').trim().toLowerCase(), telefono: String(o.tel || '').trim(), lingua: o.lingua, oggetto: oggettoMail(), periodo: periodoTxt(), tariffa: o.tariff,
-          ville: scelte().map(v => ({ id: v.id, name: v.name, prezzo: prezzoTot(v) })), html, stato, creatoDa: String(store.user || '').toLowerCase(), quando: new Date().toISOString() };
+          ville: scelte().map(v => { const li = listinoOf(v);
+            return { id: v.id, name: v.name, prezzo: prezzoTot(v), affitto: prezzoDi(v), listino: typeof li === 'number' ? li : null,
+              servizi: srvAparte(v).map(x => { const b0 = prezzoSrvBase(v, x.key); return { k: x.key, label: x.label, prezzo: typeof x.eur === 'number' ? x.eur : null, base: typeof b0 === 'number' ? b0 : null }; }) }; }), html, stato, creatoDa: String(store.user || '').toLowerCase(), quando: new Date().toISOString() };
         // stessa offerta salvata poco fa (stesso testo): aggiorno quella invece di crearne un'altra
         const u = o.ultima; const firma = rec.html.length + '|' + rec.cliente + '|' + rec.email + '|' + rec.telefono + '|' + rec.oggetto + '|' + rec.ville.map(v => v.id + v.prezzo).join(',');
         if (u && u.firma === firma && storico.some(x => x.id === u.id)) { const x = storico.find(y => y.id === u.id); rec.id = u.id; rec.tipi = Array.from(new Set((x.tipi || []).concat(tipo))); rec.quando = x.quando; ['esito', 'esitoIl', 'tipoContatto'].forEach(k => { if (x[k] !== undefined) rec[k] = x[k]; }); }
@@ -664,6 +678,25 @@
     }
     const TIPI = { word: 'Word', mail: 'Mail', whatsapp: 'WhatsApp', pdf: 'PDF' };
     const dataOra = iso => { try { const d = new Date(iso); return d.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ' ' + d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }); } catch (_) { return ''; } };
+    // report dei prezzi modificati nelle offerte rispetto a listino (affitto) e scheda villa / Impostazioni (servizi)
+    let repPrezzi = false;
+    const reportPrezzi = () => { const R = {}; const pc = (a, b) => b ? (a - b) / b * 100 : null;
+      storico.forEach(x => (x.ville || []).forEach(v => { const r = R[v.id] = R[v.id] || { id: v.id, name: v.name, n: 0, mod: 0, d: [], srv: {} };
+        r.n++; const stp = x.stato && x.stato.prezzi ? x.stato.prezzi[v.id] : undefined;
+        if (typeof v.listino === 'number' && typeof v.affitto === 'number') { if (v.affitto !== v.listino) { r.mod++; r.d.push(pc(v.affitto, v.listino)); } }
+        else if (stp !== undefined && String(stp).trim() !== '') r.mod++;
+        (v.servizi || []).forEach(z => { if (typeof z.base !== 'number') return; const q = r.srv[z.k] = r.srv[z.k] || { label: z.label, n: 0, mod: 0, d: [] }; q.n++;
+          if (typeof z.prezzo === 'number' && z.prezzo !== z.base) { q.mod++; q.d.push(pc(z.prezzo, z.base)); } }); }));
+      const media = l => { const a = l.filter(n => typeof n === 'number'); if (!a.length) return ''; const m = a.reduce((t, n) => t + n, 0) / a.length; return ` (in media ${m > 0 ? '+' : ''}${Math.round(m)}%)`; };
+      const L0 = Object.values(R).map(r => Object.assign(r, { srvMod: Object.values(r.srv).reduce((t, q) => t + q.mod, 0) })).filter(r => r.mod || r.srvMod)
+        .sort((a, b) => (b.mod + b.srvMod) - (a.mod + a.srvMod) || a.name.localeCompare(b.name, 'it'));
+      return `<section class="card off-rep"><h3>Prezzi modificati nelle offerte</h3>
+        <p class="note">Quante volte hai cambiato nell'offerta l'affitto rispetto al listino della villa, o il prezzo di un servizio rispetto alla scheda villa / Impostazioni. Se una villa compare spesso, probabilmente il valore nella scheda va aggiornato. Le offerte salvate prima di oggi contano solo l'affitto (senza la differenza).</p>
+        ${L0.length ? `<div class="tbl-wrap"><table class="prices"><thead><tr><th>Villa</th><th class="r">Offerte</th><th>Affitto modificato</th><th>Servizi modificati</th></tr></thead><tbody>
+          ${L0.map(r => `<tr><td><a href="#villa-${encodeURIComponent(r.id)}"><b>${esc(r.name)}</b></a></td><td class="r">${r.n}</td>
+            <td>${r.mod ? `<b>${r.mod}</b> su ${r.n}${media(r.d)}` : '<span class="note">mai</span>'}</td>
+            <td>${Object.values(r.srv).filter(q => q.mod).map(q => `${esc(q.label)}: <b>${q.mod}</b> su ${q.n}${media(q.d)}`).join('<br>') || '<span class="note">mai</span>'}</td></tr>`).join('')}
+        </tbody></table></div>` : '<p class="note">Nessun prezzo modificato nelle offerte salvate.</p>'}</section>`; };
     function drawStorico() {
       const box = $('#off-storico'); if (!box) return;
       $('#off-st-n').textContent = storico.length ? ` · ${storico.length}` : '';
@@ -674,7 +707,8 @@
       const G = Object.entries(gruppi).map(([k, l]) => { l.sort((a, b) => String(b.quando).localeCompare(String(a.quando))); return { k, l, ultimo: l[0].quando }; }).sort((a, b) => String(b.ultimo).localeCompare(String(a.ultimo)));
       box.innerHTML = `<section class="card"><h2>Storico delle offerte</h2>
         <p class="note">Ogni offerta si salva da sola quando la copi per la mail, la mandi su WhatsApp o scarichi Word o PDF, divisa per cliente (email, poi telefono, poi nome). Da qui la rivedi, la ricopi o la riapri per modificarla.</p>
-        <div class="off-tools"><input type="search" id="off-st-q" placeholder="Cerca cliente, email, telefono, villa o periodo" value="${esc(cercaSt)}"></div>
+        <div class="off-tools"><input type="search" id="off-st-q" placeholder="Cerca cliente, email, telefono, villa o periodo" value="${esc(cercaSt)}"><button type="button" class="btn${repPrezzi ? ' primary' : ''}" id="off-st-rep">Prezzi modificati</button></div>
+        ${repPrezzi ? reportPrezzi() : ''}
         <div class="off-chips" id="off-st-f">${[['', 'Tutte', storico.length], ['aperte', 'Da chiudere', storico.filter(aperta).length]].concat(ESITI.map(([k, t]) => [k, t, conta[k] || 0])).map(([k, t, n]) => `<button type="button" class="rp-chip${fEsito === k ? ' on' : ''}" data-fe="${k}">${t} <b>${n}</b></button>`).join('')}</div>
         ${G.length ? G.map(g => { const c = g.l.find(x => x.cliente) || g.l[0]; const em = g.l.find(x => x.email); const tl = g.l.find(x => x.telefono); const open = aperte[g.k] !== false;
           return `<details class="off-cli" data-g="${esc(g.k)}" ${open ? 'open' : ''}><summary><b>${esc(c.cliente || (em ? em.email : tl ? tl.telefono : 'Senza cliente'))}</b>${em && c.cliente ? ` <span class="note">${esc(em.email)}</span>` : ''}${tl && (c.cliente || em) ? ` <span class="note">${esc(tl.telefono)}</span>` : ''}<span class="note off-cli-n">${g.l.length} ${g.l.length === 1 ? 'offerta' : 'offerte'} · ultima ${esc(dataOra(g.ultimo))}</span></summary>
@@ -688,6 +722,7 @@
       const qi = $('#off-st-q'); qi.oninput = () => { cercaSt = qi.value; const pos = qi.selectionStart; drawStorico(); const n = $('#off-st-q'); n.focus(); n.setSelectionRange(pos, pos); };
       $$('.off-cli', box).forEach(d => d.addEventListener('toggle', () => { aperte[d.dataset.g] = d.open; }));
       $$('[data-fe]', box).forEach(b => b.onclick = () => { fEsito = b.dataset.fe; drawStorico(); });
+      const rb = $('#off-st-rep'); if (rb) rb.onclick = () => { repPrezzi = !repPrezzi; drawStorico(); };
     }
     // esito di un'offerta (Storico e Contatti)
     const cambiaEsito = e => { const sl = e.target.closest('[data-esito]'); if (!sl) return; sl.className = 'off-esito es-' + sl.value;
