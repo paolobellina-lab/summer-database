@@ -535,7 +535,7 @@
         const on = ctx.online, marP = v.vendita != null && v.acquisto != null ? v.vendita - v.acquisto : null;
         const marR = v.vendita != null && on ? v.vendita + (haDep ? tratt : 0) - sp : null;
         const r4 = (voce, nota, pr, re, cls, diffCls) => { const d = pr != null && re != null ? re - pr : null;
-          return `<tr${cls ? ` class="${cls}"` : ''}><td>${voce}${nota ? `<small>${nota}</small>` : ''}</td><td class="r">${pr == null ? '—' : euro(pr)}</td><td class="r">${re == null ? (on ? '—' : vuoto) : euro(re)}</td><td class="r${d && diffCls ? ' ' + diffCls(d) : ''}">${d == null || !d ? '—' : segno(d)}</td></tr>`; };
+          return `<tr${cls ? ` class="${cls}"` : ''}><td>${voce}${nota ? `<small>${nota}</small>` : ''}</td><td class="r">${pr == null ? '—' : euro(pr)}</td><td class="r">${re == null ? (on ? '—' : vuoto) : euro(re)}</td><td class="r${d && diffCls ? ' ' + diffCls(d) : d === 0 ? ' ok' : ''}">${d == null ? '—' : d === 0 ? 'OK' : segno(d)}</td></tr>`; };
         const num0 = n => typeof n === 'number' ? n : null;
         const piuCaro = d => d > 0 ? 'neg' : 'pos', piuAlto = d => d > 0 ? 'pos' : 'neg';
         celle = r4('Vendita', 'affitto + servizi a parte, prezzo al cliente', v.vendita, v.vendita)
@@ -568,7 +568,7 @@
           return d > 0 ? ['oltre il previsto' + pc, 'chk-bad'] : ['sotto il previsto' + pc, 'chk-ok'];
         };
         const riga = (voce, nota, pr, re, daIns) => { const [t, c] = esito(pr, re, daIns); const d = pr == null ? null : re - pr;
-          return `<tr><td><b>${voce}</b>${nota ? `<small>${nota}</small>` : ''}</td><td class="r">${pr == null ? '—' : euro(pr)}</td><td class="r">${euro(re)}</td><td class="r">${d == null || (!re && pr > 0) ? '—' : segno(d)}</td><td><span class="chk ${c}">${t}</span></td></tr>`; };
+          return `<tr><td><b>${voce}</b>${nota ? `<small>${nota}</small>` : ''}</td><td class="r">${pr == null ? '—' : euro(pr)}</td><td class="r">${euro(re)}</td><td class="r">${d == null || (!re && pr > 0) ? '—' : d === 0 ? 'OK' : segno(d)}</td><td><span class="chk ${c}">${t}</span></td></tr>`; };
         const totPrev = affPrev == null && srvPrev == null ? null : (grp && grp.root.id !== x.b.id ? 0 : affPrev || 0) + (srvPrev || 0);
         const totReal = (grp && grp.root.id !== x.b.id ? 0 : affReal) + srvReal;
         chkHtml = `<div class="card pr-chk"><h2>Previsto e reale</h2>

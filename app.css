@@ -1169,3 +1169,4 @@ dialog.dlg-promo { width: min(680px, calc(100vw - 32px)); }
   #bform .bcols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: start; }
   #bform .bcol { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 }
+.pr-val-t td.ok { color: #1d6b3a; font-weight: 600; }
