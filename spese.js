@@ -696,8 +696,9 @@
           const q4 = `<div class="card pr-q"><h2>Spese aggiuntive</h2>${tab(
               agg.map(([c, t]) => r2(esc(c), 'richiesta durante il soggiorno', euro(t))).join('') || r2('Nessuna spesa aggiuntiva', '', euro(0)),
               r2('<b>Totale da addebitare al cliente</b>', notaAdd(dep, aggReal, euro), `<b>${euro(aggReal)}</b>`, 'tot')
-              + (oltreC || nAddC ? r2('Addebitato al cliente', nAddC ? `${nAddC} ${nAddC === 1 ? 'nota' : 'note'} "Addebito cliente" (oltre il deposito)` : 'nessuna nota "Addebito cliente"', euro(addC))
-                + (oltreC - addC > 0 ? r2('Ancora da addebitare', 'registralo con la nota "Addebito cliente"', euro(oltreC - addC), 'neg') : '') : ''))}</div>`;
+              + (oltreC || nAddC ? r2('Addebitato al cliente', nAddC ? `${nAddC} ${nAddC === 1 ? 'nota' : 'note'} "Addebito cliente" (oltre il deposito)` : 'nessuna nota "Addebito cliente"', euro(addC)) : '')
+              + (haDep ? r2('Deposito di sicurezza trattenuto', depChiuso ? `ricevuto ${dep == null ? '—' : euro(dep)} − restituito ${euro(rest)}` : `ricevuto ${dep == null ? '—' : euro(dep)}: si conta dopo la nota "Restituzione deposito"`, depChiuso ? euro(tratt) : '—', depChiuso && tratt < 0 ? 'neg' : '') : '')
+              + (oltreC || nAddC ? (oltreC - addC > 0 ? r2('Ancora da addebitare', 'registralo con la nota "Addebito cliente"', euro(oltreC - addC), 'neg') : '') : ''))}</div>`;
           chkHtml = `<div class="pr-quad">${q1}<div class="pr-col">${q2}${q5}</div>${q3}${q4}</div>`; // riga 1: Riepilogo | Affitto + a carico del proprietario; riga 2: Spese offerte | Spese aggiuntive (stesso lato superiore)
         } else {
           chkHtml = `<div class="card pr-chk"><h2>Previsto e reale</h2>
