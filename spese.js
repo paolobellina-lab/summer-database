@@ -454,10 +454,9 @@
     // affitto al proprietario reale (note "Affitto proprietario" di tutto il gruppo, inserite una volta sola) ripartito a mano:
     // root.ripartizioneReale = { idCollegata: euro }, la principale tiene il resto; vale solo con la ripartizione del previsto (v.quota)
     const affGrp = (V, g) => g.membri.reduce((t, m) => { const it = V.l.find(y => y.b && y.b.id === m.id); return t + (it ? sommaAff(it.spese) : 0); }, 0);
-    const quotaReale = (V, x) => { if (!x.b || !ctx.gruppoAcq || !val(x).quota) return null; const g = ctx.gruppoAcq(x.b); if (!g) return null;
-      const rip = g.root.ripartizioneReale; if (!rip || typeof rip !== 'object') return null; const altri = g.membri.filter(m => m.id !== g.root.id);
-      if (!altri.every(m => typeof rip[m.id] === 'number')) return null;
-      return x.b.id === g.root.id ? affGrp(V, g) - altri.reduce((t, m) => t + rip[m.id], 0) : rip[x.b.id]; };
+    const quotaReale = (V, x) => { if (!x.b || !ctx.gruppoAcq || !ctx.ripDi || !val(x).quota) return null; const g = ctx.gruppoAcq(x.b); if (!g) return null;
+      return ctx.ripDi(g, g.root.ripartizioneReale, affGrp(V, g)).q[x.b.id]; };
+    const ripMan = (g, k) => !!ctx.ripDi(g, g.root[k], 0).manuale;
     const affR = (V, x) => { const q = quotaReale(V, x); return q == null ? sommaAff(x.spese) : q; };
     const spTot = (V, x) => somma(x.spese) - sommaAff(x.spese) + affR(V, x);
     const acq = ctx.canAcq();
@@ -581,17 +580,17 @@
         const tv = righeG.reduce((t, r) => t + (r.vm.vendita || 0), 0), ts = righeG.reduce((t, r) => t + r.sm, 0), tt = righeG.reduce((t, r) => t + r.tr, 0);
         const ta = ctx.valori(grp.root, true).acquisto, bil = !!v.quota, totAff = typeof grp.root.prezzoAcquisto === 'number' ? grp.root.prezzoAcquisto : null;
         // ripartizione manuale dell'affitto al proprietario tra le prenotazioni del gruppo (la principale tiene il resto)
-        const bilHtml = () => { const rip = grp.root.ripartizione || {}, ripR = grp.root.ripartizioneReale || {}, totRe = affGrp(V, grp);
+        const bilHtml = () => { const totRe = affGrp(V, grp), manP = ripMan(grp, 'ripartizione'), manR = ripMan(grp, 'ripartizioneReale'), rip = manP ? grp.root.ripartizione : {}, ripR = manR ? grp.root.ripartizioneReale : {}, autoP = ctx.ripDi(grp, null, totAff || 0).q, autoR = ctx.ripDi(grp, null, totRe).q;
           const righe = grp.membri.map(m => { const nt = nNotti(m.from, m.to), root0 = m.id === grp.root.id;
             return `<tr><td>${esc((m.cliente || '').trim() || 'Senza nome')}${root0 ? ' <small class="note">(principale: il resto)</small>' : ''}</td><td>${esc(dataBreve(m.from))} → ${esc(dataBreve(m.to))}</td><td class="r">${nt}</td>
-              <td class="r">${root0 ? `<b id="bil-resto">—</b>` : `<input type="number" step="0.01" min="0" class="bil-in" data-id="${esc(m.id)}" data-notti="${nt}" value="${typeof rip[m.id] === 'number' ? rip[m.id] : ''}" style="width:120px;text-align:right">`}</td>
-              <td class="r">${root0 ? `<b id="bil-resto-re">—</b>` : `<input type="number" step="0.01" min="0" class="bil-re" data-id="${esc(m.id)}" data-notti="${nt}" value="${typeof ripR[m.id] === 'number' ? ripR[m.id] : ''}" style="width:120px;text-align:right">`}</td></tr>`; }).join('');
-          return `<details class="pr-bil"${bil ? '' : ' open'} style="margin-top:14px"><summary><b>Bilancia l'affitto tra le prenotazioni</b>${bil ? ' · ripartito a mano' : ''}</summary>
-            <p class="note">Scrivi quanto dell'affitto al proprietario (${totAff == null ? 'acquisto concordato non inserito' : euro(totAff)}) va a ogni prenotazione collegata: la principale tiene il resto. Con la ripartizione, ogni prenotazione ha il suo acquisto previsto, il suo margine e i quattro riquadri.<br>Colonna <b>Pagato (reale)</b>: le note "Affitto proprietario" di tutto il gruppo (${euro(totRe)}, inserite una volta sola su una qualsiasi delle prenotazioni) divise a mano allo stesso modo, indipendenti dal previsto: così ogni prenotazione ha il suo previsto e il suo reale.</p>
+              <td class="r">${root0 ? `<b id="bil-resto">—</b>` : `<input type="number" step="0.01" min="0" class="bil-in" data-id="${esc(m.id)}" data-notti="${nt}" value="${typeof rip[m.id] === 'number' ? rip[m.id] : ''}" placeholder="${autoP[m.id]}" style="width:120px;text-align:right">`}</td>
+              <td class="r">${root0 ? `<b id="bil-resto-re">—</b>` : `<input type="number" step="0.01" min="0" class="bil-re" data-id="${esc(m.id)}" data-notti="${nt}" value="${typeof ripR[m.id] === 'number' ? ripR[m.id] : ''}" placeholder="${autoR[m.id]}" style="width:120px;text-align:right">`}</td></tr>`; }).join('');
+          return `<details class="pr-bil"${manP ? '' : ' open'} style="margin-top:14px"><summary><b>Bilancia l'affitto tra le prenotazioni</b> · ${manP ? 'previsto a mano' : 'previsto per notti'} · ${manR ? 'pagato a mano' : 'pagato per notti'}</summary>
+            <p class="note">Finché non lo bilanci, l'affitto si divide in proporzione alle notti (valori in grigio). Scrivi quanto dell'affitto al proprietario (${totAff == null ? 'acquisto concordato non inserito' : euro(totAff)}) va a ogni prenotazione collegata: la principale tiene il resto. Con la ripartizione, ogni prenotazione ha il suo acquisto previsto, il suo margine e i quattro riquadri.<br>Colonna <b>Pagato (reale)</b>: le note "Affitto proprietario" di tutto il gruppo (${euro(totRe)}, inserite una volta sola su una qualsiasi delle prenotazioni) divise a mano allo stesso modo, indipendenti dal previsto: così ogni prenotazione ha il suo previsto e il suo reale.</p>
             <div class="tbl-wrap"><table class="prices"><thead><tr><th>Prenotazione</th><th>Date</th><th class="r">Notti</th><th class="r">Affitto previsto</th><th class="r">Pagato (reale)</th></tr></thead><tbody>${righe}</tbody>
             <tfoot><tr><td colspan="3"><b>Totale</b></td><td class="r"><b>${totAff == null ? '—' : euro(totAff)}</b></td><td class="r"><b>${euro(totRe)}</b></td></tr></tfoot></table></div>
             <p class="note" id="bil-msg"></p>
-            <div class="actions" style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" type="button" id="bil-notti">Dividi per notti</button><button class="btn primary" type="button" id="bil-save">Salva la ripartizione</button>${grp.root.ripartizione ? '<button class="btn" type="button" id="bil-del">Togli la ripartizione</button>' : ''}</div></details>`; };
+            <div class="actions" style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" type="button" id="bil-notti">Dividi per notti</button><button class="btn primary" type="button" id="bil-save">Salva la ripartizione</button>${(manP || manR) ? '<button class="btn" type="button" id="bil-del">Togli la ripartizione</button>' : ''}</div></details>`; };
         grpHtml = `<div class="card pr-grp"><h2>Acquisto unico dal proprietario</h2>
           <p class="note">Pagata al proprietario ${esc(dataBreve(grp.root.pagatoDal || grp.root.from))} → ${esc(dataBreve(grp.root.pagatoAl || grp.root.to))}. L'acquisto si conta una volta sola; vendita e spese restano di ogni prenotazione.</p>
           <div class="tbl-wrap"><table class="prices"><thead><tr><th>Prenotazione</th><th>Date</th><th class="r">Vendita</th>${ctx.online ? '<th class="r">Spese reali offerti e altre</th><th class="r">Spese reali servizi aggiuntivi</th>' : ''}</tr></thead><tbody>
@@ -692,10 +691,10 @@
           // 2. affitto al proprietario
           const affN = x.spese.filter(isAff).length;
           const q2 = `<div class="card pr-q"><h2>Affitto al proprietario</h2>${tab(
-              r2('Pagato al proprietario', qReale != null ? `quota del pagato per tutto il gruppo (${euro(affGrp(V, grpBil))}), ripartito a mano` : affN ? `${affN} ${affN === 1 ? 'nota spese' : 'note spese'} "Affitto proprietario", anche extra` : 'nessuna nota spese "Affitto proprietario"', euro(affReal) + chip(affPrev, affReal, 'da inserire'), 'tot'))}
+              r2('Pagato al proprietario', qReale != null ? `quota del pagato per tutto il gruppo (${euro(affGrp(V, grpBil))}), ${ripMan(grpBil, 'ripartizioneReale') ? 'ripartito a mano' : 'diviso per notti: bilancialo nel riquadro del gruppo'}` : affN ? `${affN} ${affN === 1 ? 'nota spese' : 'note spese'} "Affitto proprietario", anche extra` : 'nessuna nota spese "Affitto proprietario"', euro(affReal) + chip(affPrev, affReal, 'da inserire'), 'tot'))}
             ${qReale != null ? (() => { const nn = grpBil.membri.flatMap(m => { const it = V.l.find(y => y.b && y.b.id === m.id); return it ? it.spese.filter(isAff).map(z => [m, z]) : []; });
               return nn.length ? `<p class="note" style="margin:8px 0 2px">Note "Affitto proprietario" del gruppo (inserite una volta sola, valgono per tutte le prenotazioni):</p>${tab(nn.map(([m, z]) => r2(esc(dataBreve(z.data || '')) + (z.motivo ? ' · ' + esc(z.motivo) : ''), m.id === x.b.id ? 'inserita qui' : `inserita su <a href="#prenotazioni-${encodeURIComponent(m.id)}">${esc((m.cliente || '').trim() || 'Senza nome')}</a>`, euro(Number(z.importo) || 0))).join(''))}` : ''; })() : ''}
-            ${prev(riga('Affitto proprietario', v.quota ? 'quota prevista dell\'acquisto unico' : 'acquisto concordato nella prenotazione', affPrev, affReal, 'da inserire tra le spese'))}
+            ${prev(riga('Affitto proprietario', v.quota ? 'quota prevista dell\'acquisto unico' + (ripMan(grpBil, 'ripartizione') ? ', a mano' : ', per notti') : 'acquisto concordato nella prenotazione', affPrev, affReal, 'da inserire tra le spese'))}
             ${affPrev != null && !affReal ? '<p class="note">Inserisci l\'affitto pagato come nota spese "Affitto proprietario" (con eventuali extra).</p>' : ''}${affPrev == null ? '<p class="note">Acquisto concordato non inserito nella prenotazione.</p>' : ''}</div>`;
           // 3. spese offerte: servizi della prenotazione + altre spese non aggiuntive, per categoria
           const off = CATS.servizi.filter(z => ctx.hasSrv && ctx.hasSrv(x.b, z.key));
@@ -817,21 +816,23 @@
       if ($('#pd-new', root)) $('#pd-new', root).onclick = () => A.openNuova(x.villaId, x.b ? x.b.id : '');
       $('#pd-print', root).onclick = () => window.print();
       if (grpBil || grp) { const g = grpBil || grp, tot0 = typeof g.root.prezzoAcquisto === 'number' ? g.root.prezzoAcquisto : null, ins = $$('.bil-in', root), inR = $$('.bil-re', root), totR0 = affGrp(V, g);
-        const resto = () => { const s0 = ins.reduce((t, i) => t + (Number(i.value) || 0), 0), r = tot0 == null ? null : tot0 - s0, el = $('#bil-resto', root);
+        const resto = () => { const s0 = ins.reduce((t, i) => t + (Number(i.value || i.placeholder) || 0), 0), r = tot0 == null ? null : tot0 - s0, el = $('#bil-resto', root);
           if (el) { el.textContent = r == null ? '—' : euro(r); el.style.color = r != null && r < 0 ? 'var(--danger, #c0392b)' : ''; } return r; };
-        const restoR = () => { const r = totR0 - inR.reduce((t, i) => t + (Number(i.value) || 0), 0), el = $('#bil-resto-re', root);
+        const restoR = () => { const r = totR0 - inR.reduce((t, i) => t + (Number(i.value || i.placeholder) || 0), 0), el = $('#bil-resto-re', root);
           if (el) { el.textContent = euro(r); el.style.color = r < 0 ? 'var(--danger, #c0392b)' : ''; } return r; };
         ins.forEach(i => i.addEventListener('input', resto)); resto(); inR.forEach(i => i.addEventListener('input', restoR)); restoR();
         const bn = $('#bil-notti', root); if (bn) bn.onclick = () => { if (tot0 == null) { ctx.toast('Prima inserisci l\'acquisto concordato nella prenotazione principale'); return; }
           const nt = g.membri.reduce((t, m) => t + nNotti(m.from, m.to), 0) || 1; ins.forEach(i => { i.value = Math.round(tot0 * Number(i.dataset.notti) / nt * 100) / 100; }); resto();
           if (totR0) { inR.forEach(i => { i.value = Math.round(totR0 * Number(i.dataset.notti) / nt * 100) / 100; }); restoR(); } };
         const bs = $('#bil-save', root); if (bs) bs.onclick = () => { if (tot0 == null) { ctx.toast('Prima inserisci l\'acquisto concordato nella prenotazione principale'); return; }
-          if (ins.some(i => i.value === '' || !(Number(i.value) >= 0))) { $('#bil-msg', root).textContent = 'Scrivi un importo per ogni prenotazione collegata (anche 0).'; return; }
+          const vuotiP = ins.filter(i => i.value === '').length;
+          if (vuotiP && vuotiP < ins.length) { $('#bil-msg', root).textContent = 'Affitto previsto: scrivi un importo per ogni prenotazione collegata (anche 0), oppure lascia vuota tutta la colonna (si divide per notti).'; return; }
+          if (ins.some(i => i.value !== '' && !(Number(i.value) >= 0))) { $('#bil-msg', root).textContent = 'Affitto previsto: importo non valido.'; return; }
           if (resto() < 0) { $('#bil-msg', root).textContent = 'Le quote superano l\'acquisto concordato: alla principale resterebbe un importo negativo.'; return; }
           const vuotiR = inR.filter(i => i.value === '').length;
-          if (vuotiR && vuotiR < inR.length) { $('#bil-msg', root).textContent = 'Pagato (reale): scrivi un importo per ogni prenotazione collegata, oppure lascia vuota tutta la colonna.'; return; }
+          if (vuotiR && vuotiR < inR.length) { $('#bil-msg', root).textContent = 'Pagato (reale): scrivi un importo per ogni prenotazione collegata, oppure lascia vuota tutta la colonna (si divide per notti).'; return; }
           if (!vuotiR && (inR.some(i => !(Number(i.value) >= 0)) || restoR() < 0)) { $('#bil-msg', root).textContent = 'Pagato (reale): le quote superano le note "Affitto proprietario" del gruppo.'; return; }
-          const rip = {}; ins.forEach(i => { rip[i.dataset.id] = Math.round(Number(i.value) * 100) / 100; });
+          let rip = null; if (ins.length && !vuotiP) { rip = {}; ins.forEach(i => { rip[i.dataset.id] = Math.round(Number(i.value) * 100) / 100; }); }
           let ripR = null; if (inR.length && !vuotiR) { ripR = {}; inR.forEach(i => { ripR[i.dataset.id] = Math.round(Number(i.value) * 100) / 100; }); }
           const b0 = ctx.data().bookings.find(b => b.id === g.root.id); if (!b0) return;
           ctx.store.upsertBooking(Object.assign(JSON.parse(JSON.stringify(b0)), { ripartizione: rip, ripartizioneReale: ripR })); ctx.toast('Ripartizione salvata'); if (ctx.ridisegna) ctx.ridisegna(); };
