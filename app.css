@@ -1162,3 +1162,10 @@ dialog.dlg-promo { width: min(680px, calc(100vw - 32px)); }
 .pr-val-t td.neg { color: var(--danger); }
 .pr-val-t td.pos { color: #1d6b3a; }
 .pr-val-t tr.neg td.r { color: var(--danger); } .pr-val-t tr.pos td.r { color: #1d6b3a; }
+/* finestra prenotazione: da pc larga il doppio */
+.bcols, .bcol { display: contents; }
+@media (min-width: 1000px) {
+  dialog:has(#bform) { width: min(920px, calc(100vw - 48px)); }
+  #bform .bcols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: start; }
+  #bform .bcol { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+}

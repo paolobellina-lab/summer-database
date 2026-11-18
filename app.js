@@ -694,7 +694,7 @@ window.SDBStore.ready.then(function () {
     const villas = sortedVillas();
     dlg.innerHTML = `<form class="dlg" method="dialog" id="bform">
       <h3>${ro ? 'Prenotazione' : existing ? 'Modifica periodo' : 'Nuovo periodo'}</h3>
-      <section class="dsec sec-date"><h4>Villa e date</h4>
+      <div class="bcols"><div class="bcol"><section class="dsec sec-date"><h4>Villa e date</h4>
       <label class="field"><span>Villa</span><select id="b-villa">${villas.map(v => `<option value="${esc(v.id)}" ${v.id === b.villaId ? 'selected' : ''}>${esc(v.name)}</option>`).join('')}</select></label>
       <div class="row">
         <label class="field"><span>Check-in</span><input type="date" id="b-from" value="${esc(b.from)}" required></label>
@@ -732,7 +732,7 @@ window.SDBStore.ready.then(function () {
       <div id="b-spese"></div>
       ${canSee('prenotazioni') && accScontrini().length ? `<div class="field"><span>Assegnata a (app Scontrini)</span><div class="as-mini">${accScontrini().map(ac => `<label class="as-check"><input type="checkbox" data-bacc="${esc(ac.email)}" ${(ac.prenotazioni || []).includes(b.id) || (ac.ville || []).includes(b.villaId) ? 'checked' : ''} ${(ac.ville || []).includes(b.villaId) ? 'disabled title="Ha già tutta la villa"' : ''}> ${esc(ac.nome || ac.email)}</label>`).join('')}</div></div>` : ''}
       </section>
-      <section class="dsec sec-srv"><h4>Servizi</h4>
+      </div><div class="bcol"><section class="dsec sec-srv"><h4>Servizi</h4>
       <div class="srv-list">
         ${servizi(null, null, true).filter(x => !x.off || hasSrv(b, x)).map(x => { const d = srvDet(b, x.key); const on = hasSrv(b, x); return `<div class="srv-item${on ? ' on' : ''}" data-sk="${esc(x.key)}">
           <label class="flag"><input type="checkbox" class="srv-cb" ${x.base ? `id="b-${x.key}"` : `data-srv="${esc(x.key)}"`} ${on ? 'checked' : ''}><span><b>${esc(x.label)}</b></span></label>
@@ -757,7 +757,7 @@ window.SDBStore.ready.then(function () {
         <label class="sw custom" title="Altro colore"><input type="color" id="b-color" value="${esc(color)}" aria-label="Altro colore"></label>
       </div>
       </section>
-      <label class="field"><span>Note</span><textarea id="b-note" rows="2">${esc(b.note)}</textarea></label>
+      <label class="field"><span>Note</span><textarea id="b-note" rows="2">${esc(b.note)}</textarea></label></div></div>
       <div id="b-warn"></div>
       <div id="b-confirm"></div>
       <div class="foot">
