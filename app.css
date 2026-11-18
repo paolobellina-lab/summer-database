@@ -1196,3 +1196,8 @@ dialog.dlg-promo { width: min(680px, calc(100vw - 32px)); }
 .pr-quad .pr-chk-t th, .pr-quad .pr-chk-t td { padding: 6px 5px; font-size: 13px; }
 .pr-quad .pr-chk-t td small { font-size: 11px; }
 .pr-quad .chk { white-space: normal; font-size: 11px; }
+/* riquadri del riepilogo: niente barra di scorrimento, il testo va a capo */
+.pr-q .tbl-wrap { overflow: visible; }
+.pr-q table { width: 100%; table-layout: auto; }
+.pr-q table.prices td, .pr-q table.prices th { white-space: normal; overflow-wrap: break-word; }
+.pr-q table.prices td.r, .pr-q table.prices th.r { white-space: nowrap; overflow-wrap: normal; }

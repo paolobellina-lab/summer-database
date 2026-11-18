@@ -634,7 +634,7 @@
               r2('Vendita', 'affitto + servizi a parte, prezzo al cliente', E(v.vendita))
             + r2('Spese totali', 'affitto proprietario + spese offerte + aggiuntive', euro(sp))
             + (haDep ? (depChiuso ? r2('Deposito di sicurezza trattenuto', `ricevuto ${dep == null ? '—' : euro(dep)} − restituito ${euro(rest)}`, euro(tratt), tratt < 0 ? 'neg' : '')
-                : r2('Deposito di sicurezza trattenuto', `ricevuto ${dep == null ? '—' : euro(dep)}: si conta quando registri la nota "Restituzione deposito sicurezza"`, '—')) : ''),
+                : r2('Deposito di sicurezza trattenuto', `ricevuto ${dep == null ? '—' : euro(dep)}: si conta dopo la nota "Restituzione deposito"`, '—')) : ''),
               r2('<b>Margine</b>', haDep ? 'vendita + deposito trattenuto − spese' : 'vendita − spese', marR == null ? vuoto : `<b>${euro(marR)}</b>`, marR != null && marR < 0 ? 'tot neg' : 'tot'))}
             ${prev(rigaM('Vendita', v.vendita, v.vendita, true) + rigaM('Spese totali', v.acquisto, sp, false) + rigaM('Margine', marP, marR, true))}
             ${v.vendita == null ? '<p class="note">Prezzo di vendita non inserito nella prenotazione.</p>' : ''}</div>`;
