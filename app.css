@@ -1220,3 +1220,4 @@ dialog.dlg-promo { width: min(680px, calc(100vw - 32px)); }
 .pc-sogg.par { background: #fdf0e0; color: #9a5410; border-color: #f2d3ad; }
 .pc-sogg.fin { background: #ecebe8; color: #55524c; border-color: #d8d5cf; }
 .pc-val b.pc-neg { color: var(--danger, #b3261e); }
+dialog.dlg-bil { width: min(900px, calc(100vw - 32px)); }
