@@ -156,7 +156,7 @@
     return out;
   }
 
-  const eur = new Intl.NumberFormat('it-IT', { maximumFractionDigits: 0 });
+  const eur = new Intl.NumberFormat('it-IT', { maximumFractionDigits: 0, useGrouping: 'always' });
   function money(v) { if (v === null || v === undefined) return ''; if (v === 'ND') return 'ND'; return eur.format(v) + ' €'; }
   function short(v) {
     if (v === null || v === undefined) return ''; if (v === 'ND') return 'ND';

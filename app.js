@@ -688,7 +688,7 @@ window.SDBStore.ready.then(function () {
     const from = S.addDays(day, -((dw - cd + 7) % 7)); return { from, to: S.addDays(from, 7) };
   };
   const julyWeek = v => { const wk = S.periodsFor(settings(), v, 'settimanale'); const p = wk.find(x => x.from >= '2027-07-01') || wk[0]; return p ? { from: p.from, to: p.to } : { from: '2027-07-04', to: '2027-07-11' }; };
-  const fmtNum = x => new Intl.NumberFormat('it-IT').format(x);
+  const fmtNum = x => new Intl.NumberFormat('it-IT', { useGrouping: 'always' }).format(x);
   function openBooking(init) {
     const dlg = $('#dlg');
     const existing = init.id ? data().bookings.find(b => b.id === init.id) : null;
@@ -1105,7 +1105,7 @@ window.SDBStore.ready.then(function () {
     if (!sortOpts.some(o => o[0] === ui.vdSort)) ui.vdSort = 'priceDesc';
     if (ui.vdLoc && !locs.includes(ui.vdLoc)) ui.vdLoc = '';
     const mq = v => { const n = parseFloat(String(v.indoorSqm || '').replace(/\./g, '').replace(',', '.')); return isFinite(n) && n > 0 ? n : null; };
-    const fmt = n => n >= 1e6 ? (n / 1e6).toLocaleString('it-IT', { maximumFractionDigits: 2 }) + ' mln €' : S.money(n);
+    const fmt = n => n >= 1e6 ? (n / 1e6).toLocaleString('it-IT', { maximumFractionDigits: 2, useGrouping: 'always' }) + ' mln €' : S.money(n);
     main.innerHTML = `<div class="page"><div class="wrap">
       <div class="head"><div><h1>Vendita</h1><div class="sub" id="vd-sub"></div></div></div>
       <div class="vl-tools vd-tools">
@@ -1385,7 +1385,7 @@ window.SDBStore.ready.then(function () {
           return `<tr><td>${esc(x.label)}</td><td style="text-align:right">${sola ? (typeof pv === 'number' ? S.money(pv) : '<span class="note">predefinito</span>') : `<input data-vsp="${esc(x.key)}" inputmode="numeric" value="${typeof pv === 'number' ? esc(fmtIn(pv)) : ''}" placeholder="${d === null ? '—' : esc(fmtIn(d))}">`}</td><td class="note" style="text-align:right">${d === null ? '—' : S.money(d)}</td></tr>`; }).join('')}
         </tbody></table></div></div>`;
     }
-    function fmtIn(x) { if (x === null || x === undefined || x === '') return ''; if (x === 'ND') return 'ND'; return new Intl.NumberFormat('it-IT').format(x); }
+    function fmtIn(x) { if (x === null || x === undefined || x === '') return ''; if (x === 'ND') return 'ND'; return new Intl.NumberFormat('it-IT', { useGrouping: 'always' }).format(x); }
 
     // periodi della villa
     const drawBookings = () => {

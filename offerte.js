@@ -130,7 +130,7 @@
       return busy ? 'occupata' : 'libera';
     };
     const prezzoDi = v => { const k = o.prezzi[v.id]; if (k !== undefined && k !== '') { const n = S.parseMoney(k); return typeof n === 'number' ? n : null; } const x = listinoOf(v); return typeof x === 'number' ? x : null; };
-    const euro = n => new Intl.NumberFormat(o.lingua === 'en' ? 'en-GB' : 'it-IT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n);
+    const euro = n => new Intl.NumberFormat(o.lingua === 'en' ? 'en-GB' : 'it-IT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0, useGrouping: 'always' }).format(n);
     const baseP = () => S.periodsFor(st, null, o.tariff);
     const periodoTxt = () => {
       const sel = ville().filter(v => o.ville.includes(v.id)); const ps = sel.map(perOf).filter(Boolean);
@@ -462,7 +462,7 @@
     });
 
     // dati di ogni villa per mail, WhatsApp e PDF: dalla villa più cara, quelle su richiesta in fondo (come nell'esempio delle offerte)
-    const eurT = n => new Intl.NumberFormat('it-IT', { maximumFractionDigits: 0 }).format(n) + ' €';
+    const eurT = n => new Intl.NumberFormat('it-IT', { maximumFractionDigits: 0, useGrouping: 'always' }).format(n) + ' €';
     function righeVille() {
       const l = L();
       const tar = (S.TARIFFE.find(t => t.key === o.tariff) || {}).label || '';

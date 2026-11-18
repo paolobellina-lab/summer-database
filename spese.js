@@ -7,7 +7,7 @@
  * si leggono solo quando servono.
  */
 (function () {
-  const fmtEuro = new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' });
+  const fmtEuro = new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR', useGrouping: 'always' });
   const euro = n => fmtEuro.format(Number(n) || 0);
   const daIso = s => { const [y, m, d] = String(s).split('-').map(Number); return new Date(y, m - 1, d); };
   const dataIt = s => (s ? daIso(s).toLocaleDateString('it-IT') : '');
