@@ -29,7 +29,7 @@
      (scontrino.servizio = chiave; vale anche il solo nome uguale, per gli scontrini dell'app Scontrini); libere = modificabili,
      con agg = quelle "aggiuntive" (da addebitare al cliente); fisse = Affitto proprietario, Danni villa (aggiuntiva), Restituzione deposito.
      Offerta o aggiuntiva la decide la categoria (niente più casella); scontrino.aggiuntiva si salva comunque, per l'app Scontrini. */
-  let CATS = { servizi: [], libere: ['Pulizie', 'Manutenzione', 'Lavanderia', 'Spesa e forniture', 'Utenze', 'Giardino e piscina', 'Benvenuto ospiti', 'Commissioni e tasse', 'Altro'], fisse: [AFF, 'Danni villa', REST_DEP], agg: [] };
+  let CATS = { prop: [], servizi: [], libere: ['Pulizie', 'Manutenzione', 'Lavanderia', 'Spesa e forniture', 'Utenze', 'Giardino e piscina', 'Benvenuto ospiti', 'Commissioni e tasse', 'Altro'], fisse: [AFF, 'Danni villa', REST_DEP], agg: [] };
   let CTX = null;
   const setCats = ctx => { if (ctx && ctx.catSpese) { CATS = ctx.catSpese(); CTX = ctx; } };
   // spesa di un servizio che la prenotazione non ha: è un servizio aggiuntivo (richiesto durante il soggiorno)
@@ -658,9 +658,11 @@
               + riga('Totale spese offerte', '', srvPrev, sommaInc(x.spese))) : ''}</div>`;
           // 4. spese aggiuntive
           const agg = perCat(isAgg);
+          const propL = perCat(z => !isRest(z) && !isAff(z) && (CATS.prop || []).includes(z.categoria)), propT = propL.reduce((t, r) => t + r[1], 0);
           const q4 = `<div class="card pr-q"><h2>Spese aggiuntive</h2>${tab(
               agg.map(([c, t]) => r2(esc(c), 'richiesta durante il soggiorno', euro(t))).join('') || r2('Nessuna spesa aggiuntiva', '', euro(0)),
-              r2('<b>Totale da addebitare al cliente</b>', notaAdd(dep, aggReal, euro), `<b>${euro(aggReal)}</b>`, 'tot'))}</div>`;
+              r2('<b>Totale da addebitare al cliente</b>', notaAdd(dep, aggReal, euro), `<b>${euro(aggReal)}</b>`, 'tot')
+              + r2('<b>Totale da addebitare al proprietario</b>', propL.length ? propL.map(([c, t]) => `${esc(c)} ${euro(t)}`).join(' · ') : 'categorie "a carico del proprietario" (Impostazioni → Categorie delle spese)', `<b>${euro(propT)}</b>`, 'tot'))}</div>`;
           chkHtml = `<div class="pr-quad">${q1}${q2}${q3}${q4}</div>`;
         } else {
           chkHtml = `<div class="card pr-chk"><h2>Previsto e reale</h2>

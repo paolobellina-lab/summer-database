@@ -105,7 +105,8 @@ window.SDBStore.ready.then(function () {
   const CAT_FISSE = ['Affitto proprietario', 'Danni villa', 'Restituzione deposito sicurezza'];
   const catLibere = st => { const l = (st || data().settings || {}).categorieSpese; return Array.isArray(l) ? l.slice() : CAT_LIBERE_DEF.slice(); };
   const catAgg = st => { const l = (st || data().settings || {}).categorieAggiuntive; return Array.isArray(l) ? l.slice() : []; };
-  const catSpese = () => ({ servizi: servizi(null, null, true).map(x => ({ key: x.key, label: x.label, off: x.off })), libere: catLibere(), fisse: CAT_FISSE.slice(), agg: catAgg() });
+  const catProp = st => { const l = (st || data().settings || {}).categorieProprietario; return Array.isArray(l) ? l.slice() : []; };
+  const catSpese = () => ({ servizi: servizi(null, null, true).map(x => ({ key: x.key, label: x.label, off: x.off })), libere: catLibere(), fisse: CAT_FISSE.slice(), agg: catAgg(), prop: catProp() });
   const hasSrv = (b, x) => x.base ? !!b[x.key] : (Array.isArray(b.servizi) && b.servizi.includes(x.key));
   const srvLabels = b => servizi(null, null, true).filter(x => hasSrv(b, x)).map(x => x.label);
   /* Dettaglio dei servizi nella prenotazione: serviziDett[chiave] = { incluso, acquisto, vendita, note }.
@@ -1585,7 +1586,7 @@ window.SDBStore.ready.then(function () {
         <form class="loc-new" id="srv-add" autocomplete="off"><input id="srv-add-n" placeholder="Nuovo servizio (es. Baby sitter)"><button class="btn small">Aggiungi servizio</button></form>
       </section>
       <section class="card"><h2>Categorie delle spese</h2>
-        <p class="note">Sono le voci del menu Categoria nelle note spese (pagina Prenotazioni). <b>Servizi</b>: si aggiornano da sole con i servizi qui sopra e legano la spesa al servizio offerto nella prenotazione, per confrontarla con il suo acquisto previsto. <b>Altre categorie</b>: le aggiungi e modifichi tu; con <b>Aggiuntiva</b> la spesa è un servizio aggiuntivo (da addebitare al cliente o trattenere dal deposito), senza è una spesa della prenotazione (es. manutenzione). Le <b>fisse</b> hanno regole proprie e non si cambiano. Rinominare o togliere una categoria non cambia gli scontrini già inseriti, che restano con il nome di prima.</p>
+        <p class="note">Sono le voci del menu Categoria nelle note spese (pagina Prenotazioni). <b>Servizi</b>: si aggiornano da sole con i servizi qui sopra e legano la spesa al servizio offerto nella prenotazione, per confrontarla con il suo acquisto previsto. <b>Altre categorie</b>: le aggiungi e modifichi tu; con <b>Aggiuntiva</b> la spesa è un servizio aggiuntivo (da addebitare al cliente o trattenere dal deposito), con <b>A carico del proprietario</b> va nel totale da addebitare al proprietario, senza spunte è una spesa della prenotazione. Le <b>fisse</b> hanno regole proprie e non si cambiano. Rinominare o togliere una categoria non cambia gli scontrini già inseriti, che restano con il nome di prima.</p>
         <div class="cat-grp"><h4>Servizi (automatiche)</h4><div class="cat-chips" id="cat-srv"></div></div>
         <div class="cat-grp"><h4>Altre categorie</h4><div id="cat-list" class="cat-admin"></div>
           <form class="loc-new" id="cat-add" autocomplete="off"><input id="cat-add-n" placeholder="Nuova categoria (es. Noleggio barca)"><label class="cat-agg"><input type="checkbox" id="cat-add-agg" checked> Aggiuntiva</label><button class="btn small">Aggiungi categoria</button></form></div>
@@ -1875,17 +1876,22 @@ window.SDBStore.ready.then(function () {
       const sv = servizi(st.servizi, st.serviziBase || {});
       $('#cat-srv').innerHTML = sv.length ? sv.map(x => `<span>${esc(x.label)}</span>`).join('') : '<span class="note">Nessun servizio</span>';
       const l = catLibere(st);
-      $('#cat-list').innerHTML = l.map((c, i) => `<div class="cat-row" data-ci="${i}"><input data-cn value="${esc(c)}" aria-label="Nome della categoria"><label class="cat-agg" title="Spesa per un servizio aggiuntivo richiesto durante il soggiorno: da addebitare al cliente o trattenere dal deposito"><input type="checkbox" data-cagg ${catAgg(st).includes(c) ? 'checked' : ''}> Aggiuntiva</label><span class="inc-act"><button type="button" class="btn small" data-cmv="-1" ${i ? '' : 'disabled'} aria-label="Sposta su">↑</button><button type="button" class="btn small" data-cmv="1" ${i < l.length - 1 ? '' : 'disabled'} aria-label="Sposta giù">↓</button><button type="button" class="btn small danger" data-cdel>Togli</button></span></div>`).join('') || '<p class="note">Nessuna categoria: aggiungine una.</p>';
+      $('#cat-list').innerHTML = l.map((c, i) => `<div class="cat-row" data-ci="${i}"><input data-cn value="${esc(c)}" aria-label="Nome della categoria"><label class="cat-agg" title="Spesa per un servizio aggiuntivo richiesto durante il soggiorno: da addebitare al cliente o trattenere dal deposito"><input type="checkbox" data-cagg ${catAgg(st).includes(c) ? 'checked' : ''}> Aggiuntiva</label><label class="cat-agg" title="Spesa da addebitare al proprietario della villa"><input type="checkbox" data-cprop ${catProp(st).includes(c) ? 'checked' : ''}> A carico del proprietario</label><span class="inc-act"><button type="button" class="btn small" data-cmv="-1" ${i ? '' : 'disabled'} aria-label="Sposta su">↑</button><button type="button" class="btn small" data-cmv="1" ${i < l.length - 1 ? '' : 'disabled'} aria-label="Sposta giù">↓</button><button type="button" class="btn small danger" data-cdel>Togli</button></span></div>`).join('') || '<p class="note">Nessuna categoria: aggiungine una.</p>';
     };
     const catEsiste = (n, salta) => { const t = n.toLowerCase(); return catLibere(st).some((c, i) => i !== salta && c.toLowerCase() === t) || CAT_FISSE.some(c => c.toLowerCase() === t) || servizi(st.servizi, st.serviziBase || {}, true).some(x => x.label.toLowerCase() === t); };
     $('#cat-list').addEventListener('change', e => { if (!e.target.matches('[data-cn]')) return; const i = Number(e.target.closest('[data-ci]').dataset.ci); const v = e.target.value.trim(); const l = catLibere(st);
       if (!v || catEsiste(v, i)) { if (v) toast('Esiste già una categoria o un servizio con questo nome'); drawCat(); return; }
-      const ag = catAgg(st); const was = l[i]; l[i] = v; st.categorieSpese = l; if (ag.includes(was)) st.categorieAggiuntive = ag.map(x => x === was ? v : x); save(); toast('Categoria rinominata'); });
-    $('#cat-list').addEventListener('change', e => { if (!e.target.matches('[data-cagg]')) return; const c = catLibere(st)[Number(e.target.closest('[data-ci]').dataset.ci)]; const ag = catAgg(st).filter(x => x !== c);
-      if (e.target.checked) ag.push(c); st.categorieAggiuntive = ag; save(); toast(e.target.checked ? `${c}: spesa aggiuntiva` : `${c}: spesa della prenotazione`); });
+      const ag = catAgg(st); const was = l[i]; l[i] = v; st.categorieSpese = l; if (ag.includes(was)) st.categorieAggiuntive = ag.map(x => x === was ? v : x); const pp = catProp(st); if (pp.includes(was)) st.categorieProprietario = pp.map(x => x === was ? v : x); save(); toast('Categoria rinominata'); });
+    // "Aggiuntiva" (da addebitare al cliente) e "A carico del proprietario" si escludono a vicenda
+    $('#cat-list').addEventListener('change', e => { const ag0 = e.target.matches('[data-cagg]'), pr0 = e.target.matches('[data-cprop]'); if (!ag0 && !pr0) return;
+      const row = e.target.closest('[data-ci]'), c = catLibere(st)[Number(row.dataset.ci)];
+      let ag = catAgg(st).filter(x => x !== c), pr = catProp(st).filter(x => x !== c);
+      if (e.target.checked) { if (ag0) ag.push(c); else pr.push(c); const altra = row.querySelector(ag0 ? '[data-cprop]' : '[data-cagg]'); if (altra) altra.checked = false; }
+      st.categorieAggiuntive = ag; st.categorieProprietario = pr; save();
+      toast(!e.target.checked ? `${c}: spesa della prenotazione` : ag0 ? `${c}: spesa aggiuntiva (da addebitare al cliente)` : `${c}: a carico del proprietario`); });
     $('#cat-list').addEventListener('click', e => { const row = e.target.closest('[data-ci]'); if (!row) return; const i = Number(row.dataset.ci); const l = catLibere(st);
       const mv = e.target.closest('[data-cmv]'); if (mv) { const j = i + Number(mv.dataset.cmv); if (j < 0 || j >= l.length) return; [l[i], l[j]] = [l[j], l[i]]; st.categorieSpese = l; save(); drawCat(); return; }
-      if (e.target.closest('[data-cdel]')) { const was = l[i]; l.splice(i, 1); st.categorieSpese = l; st.categorieAggiuntive = catAgg(st).filter(x => x !== was); save(); drawCat(); toast('Categoria tolta'); } });
+      if (e.target.closest('[data-cdel]')) { const was = l[i]; l.splice(i, 1); st.categorieSpese = l; st.categorieAggiuntive = catAgg(st).filter(x => x !== was); st.categorieProprietario = catProp(st).filter(x => x !== was); save(); drawCat(); toast('Categoria tolta'); } });
     $('#cat-add').addEventListener('submit', e => { e.preventDefault(); const v = $('#cat-add-n').value.trim(); if (!v) { $('#cat-add-n').focus(); return; }
       if (catEsiste(v, -1)) { toast('Esiste già una categoria o un servizio con questo nome'); return; }
       const l = catLibere(st); l.push(v); st.categorieSpese = l; if ($('#cat-add-agg').checked) st.categorieAggiuntive = catAgg(st).concat(v); save(); drawCat(); $('#cat-add-n').value = ''; toast(`Aggiunta la categoria ${v}`); });
