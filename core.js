@@ -23,10 +23,12 @@
     { key: 'confermato', label: 'Confermato (nostro)', blocks: true },
     { key: 'opzione', label: 'Opzione', blocks: true },
     { key: 'richiesta', label: 'Su richiesta', blocks: false },
-    { key: 'owner', label: 'Proprietario', blocks: true }
+    { key: 'owner', label: 'Proprietario', blocks: true },
+    // villa pagata al proprietario ma non ancora affittata: i giorni liberi si comportano come quelli pagati in più (fascia arancione, acquisto unico)
+    { key: 'vuoto', label: 'Vuoto per pieno', blocks: false }
   ];
 
-  const STATUS_COLOR = { occupato: '#d93025', confermato: '#3f9b3a', opzione: '#f0a000', richiesta: '#f2d73a', owner: '#5c4a72' };
+  const STATUS_COLOR = { occupato: '#d93025', confermato: '#3f9b3a', opzione: '#f0a000', richiesta: '#f2d73a', owner: '#5c4a72', vuoto: '#e9801c' };
   const PALETTE = ['#d93025', '#a3172b', '#e8590c', '#f0a000', '#f2d73a', '#3f9b3a', '#0b7a75', '#2f6fd6', '#23408e', '#7b4bc4', '#d14d8b', '#8a5a2b', '#6b7470'];
   // testo bianco o scuro a seconda della luminosità del colore della barra
   function inkFor(hex) {

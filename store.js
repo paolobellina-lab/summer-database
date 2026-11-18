@@ -173,7 +173,7 @@
     const villaPriv = v => ({ villaId: v.id, pricing: clone(v.pricing || {}) });
     const bookingPub = b => { const x = clone(b); delete x.prezzoAcquisto; delete x._nd; if (x.serviziDett) Object.keys(x.serviziDett).forEach(k => { if (x.serviziDett[k]) delete x.serviziDett[k].acquisto; }); return x; };
     const bookingPriv = b => { const servizi = {}; Object.keys(b.serviziDett || {}).forEach(k => { const d = b.serviziDett[k]; if (d && typeof d.acquisto === 'number') servizi[k] = d.acquisto; }); return { villaId: b.villaId, prezzoAcquisto: typeof b.prezzoAcquisto === 'number' ? b.prezzoAcquisto : null, servizi }; };
-    const blocca = st => { if (st === 'richiesta') return false; const c = ((state.settings || {}).stati || []).find(x => x && x.key === st); if (c && typeof c.blocks === 'boolean') return c.blocks; const b = S.STATI.find(x => x.key === st); return b ? b.blocks : true; };
+    const blocca = st => { if (st === 'richiesta' || st === 'vuoto') return false; const c = ((state.settings || {}).stati || []).find(x => x && x.key === st); if (c && typeof c.blocks === 'boolean') return c.blocks; const b = S.STATI.find(x => x.key === st); return b ? b.blocks : true; };
     const occOf = villaId => ({ villaId, periodi: Object.values(raw.bookings).filter(b => b.villaId === villaId && blocca(b.status)).sort((a, b) => (a.from < b.from ? -1 : 1)).map(b => ({ from: b.from, to: b.to, earlyIn: !!b.earlyIn, lateOut: !!b.lateOut })) });
     const sameOcc = (a, b) => JSON.stringify((a && a.periodi) || []) === JSON.stringify((b && b.periodi) || []);
     // ricompongo ville e prenotazioni per l'app, togliendo quello che il profilo non deve vedere
