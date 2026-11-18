@@ -113,7 +113,7 @@ Prezzi di acquisto dall'Excel: "Importa backup" riconosce anche un file `{ tipo:
 `buildBackup` in `app.js`: JSON con `data()` completo (ville con listini, prenotazioni con acquisto, impostazioni, profili, account) e, con accesso completo, `scontrini` senza foto solo come archivio (l'importazione non li tocca). "Backup automatico su questo dispositivo" (Impostazioni → Dati e backup, `localStorage`): all'apertura dell'app, una volta al giorno, scarica il file nei Download. Niente scrittura in cartelle scelte (File System Access): un sito con quel permesso potrebbe anche sovrascrivere i backup.
 
 ## Finestra prenotazione
-`openBooking` (`form#bform`): da pc (≥ 1000 px) larga 920 px, sezioni su due colonne (`.bcols` / `.bcol`: Villa e date + Cliente e prezzo a sinistra, Servizi + Stato e colore + Note a destra); sotto i 1000 px una colonna sola (`display: contents`).
+`openBooking` (`form#bform`): da pc (≥ 1000 px) larga 920 px, una colonna sola (scelta del proprietario: niente due colonne; i contenitori `.bcols` / `.bcol` restano con `display: contents`).
 
 ## Conferme
 `window.SDBConferma(testo, { titolo, ok, annulla, danger })` (in `app.js`) → `Promise<boolean>`: finestra di conferma con lo stile dell'app, centrata (`dialog#dlg-conf`). Da usare al posto di `confirm()` del browser.
