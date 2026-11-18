@@ -58,6 +58,14 @@
   const isAgg = s => { if (!s || isRest(s) || isAff(s)) return false; const sv = srvDiSpesa(s); if (srvNonOfferto(sv, bkDi(s))) return true; const a = aggPerCat(s.categoria, sv); return a === null ? s.aggiuntiva === true : a; };
   const sommaAgg = l => l.reduce((t, s) => t + (isAgg(s) ? Number(s.importo) || 0 : 0), 0);
   const sommaInc = l => somma(l) - sommaAgg(l) - sommaAff(l);
+  // deposito trattenuto: conta solo dopo aver registrato una "Restituzione deposito sicurezza" (anche di 0 €)
+  const haRest = l => l.some(isRest);
+  const trattDi = (dep, l) => haRest(l) ? (Number(dep) || 0) - sommaRest(l) : 0;
+  // aggiuntive: quanto trattenere sul deposito, quanto restituire, quanto addebitare oltre il deposito
+  const sulDeposito = (dep, agg) => { const d = Number(dep) || 0; const tr = Math.min(agg, d); return { tr, resta: d - tr, oltre: Math.max(0, agg - d) }; };
+  // nota della riga "Totale da addebitare al cliente": la cifra si trattiene sul deposito
+  const notaAdd = (dep, agg, euro) => { if (!dep) return 'nessun deposito di sicurezza: da far pagare al cliente'; const sd = sulDeposito(dep, agg);
+    return sd.oltre ? `da trattenere sul deposito (${euro(sd.tr)}, tutto il deposito) + ${euro(sd.oltre)} da far pagare a parte` : `da trattenere sul deposito: restituire ${euro(sd.resta)} dei ${euro(Number(dep))} ricevuti`; };
   // dentro le spese non aggiuntive: quelle legate a un servizio offerto e le altre spese della prenotazione (es. manutenzione)
   const isSrvOff = s => !isRest(s) && !isAff(s) && !isAgg(s) && !!srvDiSpesa(s);
   const isAltra = s => !isRest(s) && !isAff(s) && !isAgg(s) && !srvDiSpesa(s);
@@ -323,8 +331,10 @@
       if (sommaAff(l)) tot.push(['Affitto proprietario reale', euro(sommaAff(l))]);
       tot.push(['Spese reali servizi offerti', euro(sommaSrv(l))], ['Altre spese della prenotazione', euro(sommaAltre(l))], ['Spese reali servizi aggiuntivi', euro(sommaAgg(l))], ['Acquisto reale (totale spese)', euro(somma(l))]);
       const depR = sc && typeof sc.deposito === 'number' ? sc.deposito : 0, restW = sommaRest(l);
-      if (depR || restW) tot.push(['Deposito di sicurezza ricevuto', euro(depR)], ['Deposito restituito', '−' + euro(restW)], ['Deposito trattenuto', euro(depR - restW)]);
-      if (sc && sc.haPrezzo) tot.push([depR || restW ? 'Margine reale (vendita + deposito trattenuto − spese)' : 'Margine reale (vendita − spese)', ctxMoney(sc.totVendita + depR - restW - somma(l))]);
+      const trW = trattDi(depR, l);
+      if (depR || restW) tot.push(['Deposito di sicurezza ricevuto', euro(depR)], ['Deposito restituito', haRest(l) ? '−' + euro(restW) : 'non ancora registrato'], ['Deposito trattenuto', haRest(l) ? euro(trW) : '—']);
+      if (sommaAgg(l)) tot.push(['Totale da addebitare al cliente (' + notaAdd(depR, sommaAgg(l), euro) + ')', euro(sommaAgg(l))]);
+      if (sc && sc.haPrezzo) tot.push([trW ? 'Margine reale (vendita + deposito trattenuto − spese)' : 'Margine reale (vendita − spese)', ctxMoney(sc.totVendita + trW - somma(l))]);
       B.push({ kv: tot });
       B.push({ p: `Esportato il ${new Date().toLocaleString('it-IT')} da ${store.user || ''}. Foto e allegati sono nel file zip scaricato insieme.`, small: true });
       const nome = X.nomeFile(`Spese ${nomeVilla(villaId)} - ${titolo}${sc ? ' ' + sc.from : old ? ' ' + old.from : ''}`) + '.docx';
@@ -535,14 +545,14 @@
       if (!x) { root.innerHTML = `<div class="wrap"><a href="#prenotazioni" class="pr-back">← Tutte le prenotazioni</a><div class="card"><p class="note">Questa prenotazione non c'è più (cancellata o spostata).</p></div></div>`; return; }
       const villa = villaDi(x.villaId), v = val(x), sp = somma(x.spese);
       // deposito di sicurezza: ricevuto (nella prenotazione) − restituito (note spese "Restituzione deposito sicurezza")
-      const dep = v.deposito, rest = sommaRest(x.spese), haDep = dep != null || rest > 0, tratt = (dep || 0) - rest;
+      const dep = v.deposito, rest = sommaRest(x.spese), haDep = dep != null || rest > 0, depChiuso = haRest(x.spese), tratt = trattDi(dep, x.spese);
       const cella = (l, val0, nota, cls) => `<div class="pr-cell${cls ? ' ' + cls : ''}"><span>${l}</span><b>${val0}</b>${nota ? `<small>${nota}</small>` : ''}</div>`;
       const grp = x.b && ctx.gruppoAcq ? ctx.gruppoAcq(x.b) : null;
       // riquadro del gruppo: ogni prenotazione con vendita e spese, l'acquisto contato una volta sola, margini del gruppo
       let grpHtml = '';
       if (grp) {
         const righeG = grp.membri.map(m => { const it = V.l.find(y => y.b && y.b.id === m.id); const vm = ctx.valori(m), sm = it ? somma(it.spese) : 0, dm = it ? sommaRest(it.spese) : 0;
-          return { m, vm, sm, si: it ? sommaInc(it.spese) : 0, sa: it ? sommaAgg(it.spese) : 0, tr: (typeof m.deposito === 'number' ? m.deposito : 0) - dm }; });
+          return { m, vm, sm, si: it ? sommaInc(it.spese) : 0, sa: it ? sommaAgg(it.spese) : 0, tr: trattDi(m.deposito, it ? it.spese : []) }; });
         const tsi = righeG.reduce((t, r) => t + r.si, 0), tsa = righeG.reduce((t, r) => t + r.sa, 0);
         const tv = righeG.reduce((t, r) => t + (r.vm.vendita || 0), 0), ts = righeG.reduce((t, r) => t + r.sm, 0), tt = righeG.reduce((t, r) => t + r.tr, 0);
         const ta = ctx.valori(grp.root).acquisto;
@@ -581,9 +591,9 @@
           + r4('di cui servizi offerti', 'categorie dei servizi della prenotazione (incluso nel prezzo o a parte)', v.acquisto == null ? null : v.acquisto - (num0(x.b.prezzoAcquisto) || 0), on ? sommaSrv(x.spese) : null, 'sub', piuCaro)
           + r4('di cui altre spese della prenotazione', 'categorie non aggiuntive (es. manutenzione)', null, on ? sommaAltre(x.spese) : null, 'sub')
           + r4('di cui servizi aggiuntivi', 'richiesti durante il soggiorno: da addebitare o trattenere dal deposito', null, on ? sommaAgg(x.spese) : null, 'sub')
-          + (haDep ? r4('Deposito trattenuto', 'ricevuto − restituito', null, on ? tratt : null) : '')
+          + (haDep ? r4('Deposito trattenuto', depChiuso ? 'ricevuto − restituito' : 'si conta quando registri la restituzione', null, on && depChiuso ? tratt : null) : '')
           + r4('Margine', haDep ? 'vendita + deposito trattenuto − acquisto' : 'vendita − acquisto', marP, marR, 'tot', piuAlto)
-          + r4('Da addebitare al cliente', haDep ? 'aggiuntivi − deposito trattenuto' : 'spese aggiuntive', null, on ? Math.max(0, sommaAgg(x.spese) - (haDep ? Math.max(0, tratt) : 0)) : null);
+          + r4('Totale da addebitare al cliente', on ? notaAdd(dep, sommaAgg(x.spese), euro) : 'spese aggiuntive', null, on ? sommaAgg(x.spese) : null);
       } else celle = rowV('Vendita', E(v.vendita), 'affitto + servizi a parte') + rowV('Spese reali servizi offerti', ctx.online ? euro(sommaSrv(x.spese)) : vuoto, 'servizi della prenotazione') + rowV('Altre spese della prenotazione', ctx.online ? euro(sommaAltre(x.spese)) : vuoto, 'categorie non aggiuntive') + rowV('Spese reali servizi aggiuntivi', ctx.online ? euro(sommaAgg(x.spese)) : vuoto, 'da addebitare o trattenere dal deposito') + rowV(haDep ? 'Vendita + deposito trattenuto − spese' : 'Vendita − spese', v.vendita != null && ctx.online ? euro(v.vendita + (haDep ? tratt : 0) - sp) : vuoto);
       // controllo previsto / reale: i valori della prenotazione sono quelli ipotizzati (tranne la vendita), le note spese quelle reali
       let chkHtml = '', quad = false;
@@ -623,7 +633,8 @@
           const q1 = `<div class="card pr-q"><h2>Riepilogo</h2>${tab(
               r2('Vendita', 'affitto + servizi a parte, prezzo al cliente', E(v.vendita))
             + r2('Spese totali', 'affitto proprietario + spese offerte + aggiuntive', euro(sp))
-            + (haDep ? r2('Deposito di sicurezza trattenuto', `ricevuto ${dep == null ? '—' : euro(dep)} − restituito ${euro(rest)}`, euro(tratt), tratt < 0 ? 'neg' : '') : ''),
+            + (haDep ? (depChiuso ? r2('Deposito di sicurezza trattenuto', `ricevuto ${dep == null ? '—' : euro(dep)} − restituito ${euro(rest)}`, euro(tratt), tratt < 0 ? 'neg' : '')
+                : r2('Deposito di sicurezza trattenuto', `ricevuto ${dep == null ? '—' : euro(dep)}: si conta quando registri la nota "Restituzione deposito sicurezza"`, '—')) : ''),
               r2('<b>Margine</b>', haDep ? 'vendita + deposito trattenuto − spese' : 'vendita − spese', marR == null ? vuoto : `<b>${euro(marR)}</b>`, marR != null && marR < 0 ? 'tot neg' : 'tot'))}
             ${prev(rigaM('Vendita', v.vendita, v.vendita, true) + rigaM('Spese totali', v.acquisto, sp, false) + rigaM('Margine', marP, marR, true))}
             ${v.vendita == null ? '<p class="note">Prezzo di vendita non inserito nella prenotazione.</p>' : ''}</div>`;
@@ -647,10 +658,9 @@
               + riga('Totale spese offerte', '', srvPrev, sommaInc(x.spese))) : ''}</div>`;
           // 4. spese aggiuntive
           const agg = perCat(isAgg);
-          const daAdd = Math.max(0, aggReal - (haDep ? Math.max(0, tratt) : 0));
           const q4 = `<div class="card pr-q"><h2>Spese aggiuntive</h2>${tab(
               agg.map(([c, t]) => r2(esc(c), 'richiesta durante il soggiorno', euro(t))).join('') || r2('Nessuna spesa aggiuntiva', '', euro(0)),
-              r2('<b>Totale spese aggiuntive</b>', '', `<b>${euro(aggReal)}</b>`, 'tot') + r2('Da addebitare al cliente', haDep ? 'aggiuntive − deposito trattenuto' : 'spese aggiuntive', euro(daAdd)))}</div>`;
+              r2('<b>Totale da addebitare al cliente</b>', notaAdd(dep, aggReal, euro), `<b>${euro(aggReal)}</b>`, 'tot'))}</div>`;
           chkHtml = `<div class="pr-quad">${q1}${q2}${q3}${q4}</div>`;
         } else {
           chkHtml = `<div class="card pr-chk"><h2>Previsto e reale</h2>
@@ -699,7 +709,7 @@
         ${chkHtml}
         ${grpHtml}
         ${!x.gen && haDep && !quad ? `<div class="card pr-dep"><h2>Deposito di sicurezza</h2><div class="pr-grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
-          ${cella('Ricevuto dal cliente', dep == null ? vuoto : euro(dep), x.b ? 'dalla prenotazione' : '')}${cella('Restituito', rest ? '−' + euro(rest) : euro(0), 'note spese "Restituzione deposito"')}${cella('Trattenuto', euro(tratt), tratt > 0 ? 'resta a copertura dei danni' : '', tratt < 0 ? 'neg' : '')}</div>
+          ${cella('Ricevuto dal cliente', dep == null ? vuoto : euro(dep), x.b ? 'dalla prenotazione' : '')}${cella('Restituito', rest ? '−' + euro(rest) : euro(0), 'note spese "Restituzione deposito"')}${cella('Trattenuto', depChiuso ? euro(tratt) : '—', depChiuso ? (tratt > 0 ? 'trattenuto sul deposito' : '') : 'si conta quando registri la restituzione', tratt < 0 ? 'neg' : '')}</div>
           <p class="note">La restituzione riduce quanto ricevuto dal cliente: non è una spesa della villa e non entra nell'acquisto reale. I danni si inseriscono come spesa "Danni villa".</p></div>` : ''}
 
         <div class="card pr-spese">
