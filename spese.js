@@ -672,7 +672,13 @@
         }
       }
       const cats = {}; x.spese.forEach(s => { const c = s.categoria || 'Altro'; cats[c] = (cats[c] || 0) + (isRest(s) ? -1 : 1) * (Number(s.importo) || 0); });
-      const info = sc ? sc.righe.filter(([l]) => !/^Prezzo di (vendita|acquisto)/.test(l)) : x.gen ? [['Villa', villa.name], ['Località', villa.location || '']] : [['Villa', villa.name], ['Cliente', x.cliente], ['Check-in', dataIt(x.from)], ['Check-out', dataIt(x.to)], ['Stato', 'Non più in calendario']];
+      const info = sc ? (() => { // affitto al cliente e vendita dei servizi offerti, sopra il deposito di sicurezza
+          const r = sc.righe.filter(([l]) => !/^Prezzo di (vendita|acquisto)/.test(l));
+          const iv = sc.acq ? 3 : 2;
+          const add = [['Affitto villa al cliente', x.b && typeof x.b.prezzoVendita === 'number' ? euro(x.b.prezzoVendita) : '—']]
+            .concat(sc.servizi.map(z => [z[0], /^incluso/i.test(z[1]) ? 'incluso nel prezzo' : (z[iv] ? z[iv] + ' · a parte' : 'a parte, senza prezzo')]));
+          let k = r.findIndex(([l]) => /^(Deposito di sicurezza|Pagata al proprietario|Notti pagate libere|Assegnata a|Note)/.test(l)); if (k < 0) k = r.length;
+          r.splice(k, 0, ...add); return r; })() : x.gen ? [['Villa', villa.name], ['Località', villa.location || '']] : [['Villa', villa.name], ['Cliente', x.cliente], ['Check-in', dataIt(x.from)], ['Check-out', dataIt(x.to)], ['Stato', 'Non più in calendario']];
       root.innerHTML = `<div class="wrap pr-det">
         <a href="#prenotazioni" class="pr-back no-print">← Tutte le prenotazioni</a>
         <div class="head"><div><h1>${esc(villa.name)}</h1><div class="sub">${x.gen ? 'Spese generali della villa' : `${esc(x.cliente)} · ${esc(dataBreve(x.from))} → ${esc(dataBreve(x.to))} · ${nNotti(x.from, x.to)} notti`}</div></div>
@@ -691,8 +697,7 @@
         ${!x.gen && haDep && !quad ? `<div class="card pr-dep"><h2>Deposito di sicurezza</h2><div class="pr-grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
           ${cella('Ricevuto dal cliente', dep == null ? vuoto : euro(dep), x.b ? 'dalla prenotazione' : '')}${cella('Restituito', rest ? '−' + euro(rest) : euro(0), 'note spese "Restituzione deposito"')}${cella('Trattenuto', euro(tratt), tratt > 0 ? 'resta a copertura dei danni' : '', tratt < 0 ? 'neg' : '')}</div>
           <p class="note">La restituzione riduce quanto ricevuto dal cliente: non è una spesa della villa e non entra nell'acquisto reale. I danni si inseriscono come spesa "Danni villa".</p></div>` : ''}
-        ${sc && sc.servizi.length ? `<div class="card"><h2>Servizi</h2><div class="tbl-wrap"><table class="prices pr-srv"><thead><tr><th>Servizio</th><th>Modalità</th>${sc.acq ? '<th class="r">Acquisto</th>' : ''}<th class="r">Vendita</th><th>Note</th></tr></thead><tbody>
-          ${sc.servizi.map(r => `<tr>${r.map((c, i) => `<td${(sc.acq ? [2, 3] : [2]).includes(i) ? ' class="r"' : ''}>${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>` : ''}
+
         <div class="card pr-spese">
           <div class="pr-sp-head"><h2>Spese <span>${x.spese.length}</span></h2>${ctx.online ? `<b>${euro(sp)}</b>` : ''}</div>
           ${!ctx.online ? '<p class="note">Le spese si vedono con i dati online.</p>' : !V.conSpese ? '<p class="note">Caricamento scontrini…</p>'
