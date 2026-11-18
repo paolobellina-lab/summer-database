@@ -676,7 +676,7 @@
           const r = sc.righe.filter(([l]) => !/^Prezzo di (vendita|acquisto)/.test(l));
           const iv = sc.acq ? 3 : 2;
           const add = [['Affitto villa al cliente', x.b && typeof x.b.prezzoVendita === 'number' ? euro(x.b.prezzoVendita) : '—']]
-            .concat(sc.servizi.map(z => [z[0], /^incluso/i.test(z[1]) ? 'incluso nel prezzo' : (z[iv] ? z[iv] + ' · a parte' : 'a parte, senza prezzo')]));
+            .concat(sc.servizi.map(z => [z[0], /^incluso/i.test(z[1]) ? 'incluso' : (z[iv] || '—')]));
           let k = r.findIndex(([l]) => /^(Deposito di sicurezza|Pagata al proprietario|Notti pagate libere|Assegnata a|Note)/.test(l)); if (k < 0) k = r.length;
           r.splice(k, 0, ...add); return r; })() : x.gen ? [['Villa', villa.name], ['Località', villa.location || '']] : [['Villa', villa.name], ['Cliente', x.cliente], ['Check-in', dataIt(x.from)], ['Check-out', dataIt(x.to)], ['Stato', 'Non più in calendario']];
       root.innerHTML = `<div class="wrap pr-det">
