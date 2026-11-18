@@ -713,6 +713,7 @@ window.SDBStore.ready.then(function () {
     const villas = sortedVillas();
     dlg.innerHTML = `<form class="dlg" method="dialog" id="bform">
       <h3>${ro ? 'Prenotazione' : existing ? 'Modifica periodo' : 'Nuovo periodo'}</h3>
+      ${canSee('prenotazioni') && accScontrini().length ? `<div class="field b-assegn"><span>Assegnata a (app Scontrini)</span><div class="as-mini">${accScontrini().map(ac => `<label class="as-check"><input type="checkbox" data-bacc="${esc(ac.email)}" ${(ac.prenotazioni || []).includes(b.id) || (ac.ville || []).includes(b.villaId) ? 'checked' : ''} ${(ac.ville || []).includes(b.villaId) ? 'disabled title="Ha già tutta la villa"' : ''}> ${esc(ac.nome || ac.email)}</label>`).join('')}</div></div>` : ''}
       <div class="bcols"><div class="bcol"><section class="dsec sec-date"><h4>Villa e date</h4>
       <label class="field"><span>Villa</span><select id="b-villa">${villas.map(v => `<option value="${esc(v.id)}" ${v.id === b.villaId ? 'selected' : ''}>${esc(v.name)}</option>`).join('')}</select></label>
       <div class="row">
@@ -749,7 +750,6 @@ window.SDBStore.ready.then(function () {
       </div>
       <div class="pricehint" id="b-hint"></div>
       <div id="b-spese"></div>
-      ${canSee('prenotazioni') && accScontrini().length ? `<div class="field"><span>Assegnata a (app Scontrini)</span><div class="as-mini">${accScontrini().map(ac => `<label class="as-check"><input type="checkbox" data-bacc="${esc(ac.email)}" ${(ac.prenotazioni || []).includes(b.id) || (ac.ville || []).includes(b.villaId) ? 'checked' : ''} ${(ac.ville || []).includes(b.villaId) ? 'disabled title="Ha già tutta la villa"' : ''}> ${esc(ac.nome || ac.email)}</label>`).join('')}</div></div>` : ''}
       </section>
       </div><div class="bcol"><section class="dsec sec-srv"><h4>Servizi</h4>
       <div class="srv-list">
