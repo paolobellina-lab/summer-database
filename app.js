@@ -102,7 +102,7 @@ window.SDBStore.ready.then(function () {
   /* Categorie delle note spese: i servizi (automatiche, legate a quanto offerto nella prenotazione: scontrino.servizio = chiave),
      le altre modificabili in Impostazioni → Servizi e inclusioni (settings.categorieSpese) e le fisse con regole proprie. */
   const CAT_LIBERE_DEF = ['Pulizie', 'Manutenzione', 'Lavanderia', 'Spesa e forniture', 'Utenze', 'Giardino e piscina', 'Benvenuto ospiti', 'Commissioni e tasse', 'Altro'];
-  const CAT_FISSE = ['Affitto proprietario', 'Danni villa', 'Restituzione deposito sicurezza', 'Addebito proprietario'];
+  const CAT_FISSE = ['Affitto proprietario', 'Danni villa', 'Restituzione deposito sicurezza', 'Addebito proprietario', 'Addebito cliente'];
   const catLibere = st => { const l = (st || data().settings || {}).categorieSpese; return Array.isArray(l) ? l.slice() : CAT_LIBERE_DEF.slice(); };
   const catAgg = st => { const l = (st || data().settings || {}).categorieAggiuntive; return Array.isArray(l) ? l.slice() : []; };
   const catProp = st => { const l = (st || data().settings || {}).categorieProprietario; return Array.isArray(l) ? l.slice() : []; };
