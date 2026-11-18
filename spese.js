@@ -71,6 +71,11 @@
   const sommaInc = l => somma(l) - sommaAgg(l) - sommaAff(l);
   // deposito trattenuto: conta solo dopo aver registrato una "Restituzione deposito sicurezza" (anche di 0 €)
   const haRest = l => l.some(isRest);
+  // metodo di pagamento della spesa (scontrini.pagamento): contanti, carta di credito, bonifico; null = non indicato
+  const PAGAMENTI = [['contanti', 'Contanti'], ['carta', 'Carta di credito'], ['bonifico', 'Bonifico']];
+  const pagLabel = k => (PAGAMENTI.find(x => x[0] === k) || [])[1] || '';
+  const pagSec = (pre, cur) => `<section class="dsec sec-pag"><h4>Metodo di pagamento</h4><div class="pag-opts">${PAGAMENTI.map(([k, l]) => `<label class="pag-opt"><input type="radio" name="${pre}-pag" value="${k}" ${cur === k ? 'checked' : ''}><span>${l}</span></label>`).join('')}</div></section>`;
+  const pagLetto = pre => { const r = document.querySelector(`input[name="${pre}-pag"]:checked`); return r ? r.value : null; };
   const trattDi = (dep, l) => haRest(l) ? (Number(dep) || 0) - sommaRest(l) : 0;
   // aggiuntive: quanto trattenere sul deposito, quanto restituire, quanto addebitare oltre il deposito
   const sulDeposito = (dep, agg) => { const d = Number(dep) || 0; const tr = Math.min(agg, d); return { tr, resta: d - tr, oltre: Math.max(0, agg - d) }; };
@@ -136,7 +141,7 @@
     // una riga di spesa (con la versione precedente barrata in rosso se è stata modificata)
     A.rigaSpesa = s => `<div class="sp-rc${Array.isArray(s.storico) && s.storico.length ? ' edited' : ''}">
       <span class="d">${dataIt(s.data)}</span>
-      <div class="m">${esc(s.motivo || '—')}${isAgg(s) ? ' <span class="sp-agg">aggiuntiva</span>' : ''}<small>${esc(s.categoria || '')}${s.creatoDa ? ' · ' + esc(s.creatoDa) : ''}${s.modificatoDa ? ` · <span class="sp-mod">modificato da ${esc(s.modificatoDa)}${s.modificatoIl ? ' il ' + esc(quando(s.modificatoIl)) : ''}</span>` : ''}</small></div>
+      <div class="m">${esc(s.motivo || '—')}${isAgg(s) ? ' <span class="sp-agg">aggiuntiva</span>' : ''}<small>${esc(s.categoria || '')}${s.pagamento ? ' · ' + esc(pagLabel(s.pagamento)) : ''}${s.creatoDa ? ' · ' + esc(s.creatoDa) : ''}${s.modificatoDa ? ` · <span class="sp-mod">modificato da ${esc(s.modificatoDa)}${s.modificatoIl ? ' il ' + esc(quando(s.modificatoIl)) : ''}</span>` : ''}</small></div>
       <span class="amount${isRest(s) ? ' sp-neg' : ''}">${importoTxt(s)}</span>
       <div class="sp-act no-print">
         <button class="btn small" type="button" data-foto="${esc(s.id)}">${nAll(s) ? 'Allegati · ' + nAll(s) : '+ Allegato'}</button>
@@ -166,6 +171,7 @@
           <label class="field"><span>Categoria</span><select id="ed-cat">${catOpts(esc, s, cur && !cur.nonInCalendario ? bookings.find(b => b.id === cur.id) : null)}</select><small class="note cat-tipo" id="ed-tipo"></small></label>
           <label class="field"><span>Motivo</span><input id="ed-mot" value="${esc(s.motivo || '')}"></label>
 </section>
+        ${pagSec('ed', s.pagamento || null)}
         <section class="dsec sec-date"><h4>Villa e prenotazione</h4>
           <label class="field"><span>Villa</span><select id="ed-villa">${ville().map(v => `<option value="${esc(v.id)}" ${v.id === s.villaId ? 'selected' : ''}>${esc(v.name)}</option>`).join('')}</select></label>
           <label class="field"><span>Prenotazione</span><select id="ed-pren">${prenOpts(s.villaId)}</select></label></section>
@@ -190,8 +196,8 @@
         if (pv === '__keep') { prenotazioneId = s.prenotazioneId || null; prenotazione = s.prenotazione || null; }
         else if (pv) { const bk = bookings.find(x => x.id === pv); prenotazioneId = pv; prenotazione = { cliente: (bk.cliente || '').trim() || 'Prenotazione senza nome', from: bk.from, to: bk.to }; }
         else { prenotazioneId = null; prenotazione = null; }
-        const changes = Object.assign({ importo, data: $('#ed-data').value }, catSalva($('#ed-cat').value, prenotazioneId ? bookings.find(x => x.id === prenotazioneId) : null), { motivo: $('#ed-mot').value.trim(), villaId, prenotazioneId, prenotazione });
-        const prevFields = { importo: s.importo, data: s.data, categoria: s.categoria || '', motivo: s.motivo || '', villaId: s.villaId, prenotazioneId: s.prenotazioneId || null, prenotazione: s.prenotazione || null , aggiuntiva: isAgg(s), servizio: s.servizio || null };
+        const changes = Object.assign({ importo, data: $('#ed-data').value }, catSalva($('#ed-cat').value, prenotazioneId ? bookings.find(x => x.id === prenotazioneId) : null), { motivo: $('#ed-mot').value.trim(), villaId, prenotazioneId, prenotazione, pagamento: pagLetto('ed') });
+        const prevFields = { importo: s.importo, data: s.data, categoria: s.categoria || '', motivo: s.motivo || '', villaId: s.villaId, prenotazioneId: s.prenotazioneId || null, prenotazione: s.prenotazione || null , aggiuntiva: isAgg(s), servizio: s.servizio || null, pagamento: s.pagamento || null };
         const same = Object.keys(changes).every(k => JSON.stringify(changes[k] ?? null) === JSON.stringify(prevFields[k] ?? null));
         if (same) { dlg.close(); return; }
         const previous = Object.assign({}, prevFields, { autore: s.modificatoDa || s.creatoDa || '', sostituitoDa: store.user || '', sostituitoIl: new Date().toISOString() });
@@ -282,6 +288,7 @@
         <section class="dsec sec-srv"><h4>Descrizione</h4>
           <label class="field"><span>Categoria</span><select id="nw-cat">${catOpts(esc, null)}</select><small class="note cat-tipo" id="nw-tipo"></small></label>
           <label class="field"><span>Motivo</span><input id="nw-mot" placeholder="es. pulizia finale, lampadina…"></label></section>
+        ${pagSec('nw', null)}
         <section class="dsec sec-st"><h4>Foto dello scontrino</h4>
           <div class="nw-photo"><img id="nw-prev" alt="" hidden><span class="note" id="nw-none">Nessuna foto</span>
             <label class="btn small" for="nw-cam">Scatta foto</label><input type="file" id="nw-cam" accept="image/*" capture="environment" hidden>
@@ -302,7 +309,7 @@
         const importo = parseImporto($('#nw-imp').value);
         if (!(importo > 0)) { $('#nw-msg').innerHTML = '<div class="warn err">Importo non valido.</div>'; return; }
         const pv = $('#nw-pren').value; const bk = pv ? bookings.find(x => x.id === pv) : null;
-        const dati = { villaId: $('#nw-villa').value, prenotazioneId: bk ? bk.id : null, prenotazione: bk ? { cliente: (bk.cliente || '').trim() || 'Prenotazione senza nome', from: bk.from, to: bk.to } : null, data: $('#nw-data').value, importo, motivo: $('#nw-mot').value.trim() }; Object.assign(dati, catSalva($('#nw-cat').value, bk));
+        const dati = { villaId: $('#nw-villa').value, prenotazioneId: bk ? bk.id : null, prenotazione: bk ? { cliente: (bk.cliente || '').trim() || 'Prenotazione senza nome', from: bk.from, to: bk.to } : null, data: $('#nw-data').value, importo, motivo: $('#nw-mot').value.trim(), pagamento: pagLetto('nw') }; Object.assign(dati, catSalva($('#nw-cat').value, bk));
         $('#nw-save').disabled = true;
         try { await store.addScontrino(dati, foto); dlg.close(); toast('Spesa salvata: la vede anche l\'app Scontrini'); }
         catch (x) { $('#nw-save').disabled = false; $('#nw-msg').innerHTML = `<div class="warn err">Salvataggio non riuscito: ${esc(x.message || x)}</div>`; }
@@ -315,8 +322,8 @@
     function exportCsv(righe, nomeFile) {
       if (!righe.length) { toast('Niente da esportare'); return; }
       const cella = v => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`;
-      const rows = [['Villa', 'Prenotazione', 'Check-in', 'Check-out', 'Data scontrino', 'Categoria', 'Tipo', 'Motivo', 'Importo', 'Inserito da', 'Allegati']];
-      righe.forEach(({ s, villa, p }) => rows.push([villa, p ? p.cliente : 'Spese generali', p ? dataIt(p.from) : '', p ? dataIt(p.to) : '', dataIt(s.data), s.categoria || '', isRest(s) ? 'Restituzione deposito' : isAddP(s) ? 'Addebito proprietario (entrata)' : isAddC(s) ? 'Addebito cliente (entrata)' : isAff(s) ? 'Affitto proprietario' : isAgg(s) ? 'Servizio aggiuntivo' : isSrvOff(s) ? 'Servizio offerto' : isPropS(s) ? 'A carico del proprietario' : 'Altra spesa della prenotazione', s.motivo || '', ((isRest(s) ? -1 : 1) * (Number(s.importo) || 0)).toFixed(2).replace('.', ','), s.creatoDa || '', nAll(s)]));
+      const rows = [['Villa', 'Prenotazione', 'Check-in', 'Check-out', 'Data scontrino', 'Categoria', 'Tipo', 'Motivo', 'Pagamento', 'Importo', 'Inserito da', 'Allegati']];
+      righe.forEach(({ s, villa, p }) => rows.push([villa, p ? p.cliente : 'Spese generali', p ? dataIt(p.from) : '', p ? dataIt(p.to) : '', dataIt(s.data), s.categoria || '', isRest(s) ? 'Restituzione deposito' : isAddP(s) ? 'Addebito proprietario (entrata)' : isAddC(s) ? 'Addebito cliente (entrata)' : isAff(s) ? 'Affitto proprietario' : isAgg(s) ? 'Servizio aggiuntivo' : isSrvOff(s) ? 'Servizio offerto' : isPropS(s) ? 'A carico del proprietario' : 'Altra spesa della prenotazione', s.motivo || '', pagLabel(s.pagamento), ((isRest(s) ? -1 : 1) * (Number(s.importo) || 0)).toFixed(2).replace('.', ','), s.creatoDa || '', nAll(s)]));
       const testo = '﻿' + rows.map(r => r.map(cella).join(';')).join('\r\n');
       X.scarica(nomeFile || `spese-ville_${isoLocale(new Date())}.csv`, new Blob([testo], { type: 'text/csv;charset=utf-8' }));
     }

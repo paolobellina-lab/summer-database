@@ -1221,3 +1221,8 @@ dialog.dlg-promo { width: min(680px, calc(100vw - 32px)); }
 .pc-sogg.fin { background: #ecebe8; color: #55524c; border-color: #d8d5cf; }
 .pc-val b.pc-neg { color: var(--danger, #b3261e); }
 dialog.dlg-bil { width: min(900px, calc(100vw - 32px)); }
+/* metodo di pagamento nella nota spese */
+.pag-opts { display: flex; flex-wrap: wrap; gap: 8px; }
+.pag-opt { display: inline-flex; align-items: center; gap: 8px; padding: 9px 14px; border: 1px solid var(--line, #d9d4c7); border-radius: 8px; background: var(--card, #fffdf7); cursor: pointer; font-weight: 500; }
+.pag-opt input { margin: 0; }
+.pag-opt:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
