@@ -508,9 +508,10 @@
       const soggHtml = x => { const f = x.from, t = x.to; if (!f || !t) return '';
         if (oggi < f) return '<span class="pc-sogg arr">In arrivo</span>';
         if (oggi < t) return '<span class="pc-sogg cor">Soggiorno in corso</span>';
+        if (x.b && x.b.conteggiConclusi) return '<span class="pc-sogg fin">Conteggi conclusi</span>';
         if (!ctx.online || !V.conSpese) return '<span class="pc-sogg par">Partiti</span>';
         const dc = daChiudere(x);
-        return dc.length ? `<span class="pc-sogg par" title="Da chiudere: ${esc(dc.join(', '))}">Partiti · da chiudere: ${esc(dc.join(', '))}</span>` : '<span class="pc-sogg fin">Conteggi conclusi</span>'; };
+        return dc.length ? `<span class="pc-sogg par" title="Da chiudere: ${esc(dc.join(', '))}">Partiti · da chiudere: ${esc(dc.join(', '))}</span>` : '<span class="pc-sogg par" title="Spunta &quot;Conteggi conclusi&quot; nella prenotazione">Partiti · tutto inserito, da segnare come conclusi</span>'; };
       const card = x => {
         const v = val(x), sp = spTot(V, x), villa = villaDi(x.villaId);
         return `<article class="vcard pcard${x.old ? ' is-old' : ''}${x.gen ? ' is-gen' : ''}" data-pk="${esc(x.chiave)}" tabindex="0">
