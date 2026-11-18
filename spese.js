@@ -649,8 +649,13 @@
           const marP = v.vendita != null && v.acquisto != null ? v.vendita - v.acquisto : null;
           const rigaM = (voce, pr, re, piuAlto) => { const d = pr != null && re != null ? re - pr : null; return `<tr><td><b>${voce}</b></td><td class="r">${pr == null ? '—' : euro(pr)}</td><td class="r">${re == null ? '—' : euro(re)}</td><td class="r">${d == null ? '—' : d === 0 ? 'OK' : segno(d)}</td><td>${d == null ? '' : d === 0 ? '<span class="chk chk-ok">OK</span>' : (piuAlto ? d > 0 : d < 0) ? '<span class="chk chk-ok">meglio del previsto</span>' : '<span class="chk chk-bad">peggio del previsto</span>'}</td></tr>`; };
           // 1. riepilogo
+          // vendita = solo affitto al cliente + servizi a parte (mai deposito trattenuto né addebiti): la nota mostra le parti
+          const venNota = () => { if (!sc) return 'affitto + servizi a parte, prezzo al cliente'; const iv = sc.acq ? 3 : 2;
+            const parti = [x.b && typeof x.b.prezzoVendita === 'number' ? 'affitto ' + euro(x.b.prezzoVendita) : null]
+              .concat(sc.servizi.filter(z => !/^incluso/i.test(z[1]) && z[iv]).map(z => esc(z[0]) + ' ' + z[iv])).filter(Boolean);
+            return (parti.length ? parti.join(' + ') : 'affitto + servizi a parte') + ' · senza deposito e addebiti'; };
           const q1 = `<div class="card pr-q"><h2>Riepilogo</h2>${tab(
-              r2('Vendita', 'affitto + servizi a parte, prezzo al cliente', E(v.vendita))
+              r2('Vendita', venNota(), E(v.vendita))
             + r2('Spese totali', 'affitto proprietario + spese offerte + aggiuntive + a carico del proprietario', euro(sp))
             + (haDep ? (depChiuso ? r2('Deposito di sicurezza trattenuto', `ricevuto ${dep == null ? '—' : euro(dep)} − restituito ${euro(rest)}`, euro(tratt), tratt < 0 ? 'neg' : '')
                 : r2('Deposito di sicurezza trattenuto', `ricevuto ${dep == null ? '—' : euro(dep)}: si conta dopo la nota "Restituzione deposito"`, '—')) : ''),
