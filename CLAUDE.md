@@ -72,6 +72,7 @@ Nel calendario Disponibilità un **clic** su una riga (anche dove la villa non h
 - Prezzi dei servizi per villa: `villas.prezziServizi = { chiave: euro }` (solo i servizi non compresi; vuoto = predefinito di Impostazioni), nel riquadro Listino prezzi della scheda; resta in `villas`.
 - `meta/settings.servizi`: `[{ key, label }]` in aggiunta ai 3 di base (campi `pulizia`, `cuoco`, `transfer`). Nella prenotazione i servizi aggiunti stanno in `servizi: [key]`.
 - I 3 di base si rinominano e si tolgono da Impostazioni → Servizi e inclusioni: `meta/settings.serviziBase = { pulizia|cuoco|transfer: { label, off } }`. Tolto = nascosto (non compare in prenotazioni nuove, offerte, schede villa, voci collegate); i campi `pulizia`/`cuoco`/`transfer` restano nelle prenotazioni che li hanno, che continuano a mostrarli e a sommarli (`servizi(cfg, base, tutti)` in `app.js`); "Rimetti" li riattiva.
+- Nella finestra prenotazione i servizi non spuntati stanno in alto e quelli spuntati sotto (`.srv-item.on { order: 1 }`): spuntandolo, un servizio passa sotto.
 - Dettaglio dei servizi nella prenotazione: `serviziDett: { [key]: { incluso, acquisto, vendita, note } }`. `incluso: true` = compreso nel prezzo di vendita dell'affitto; altrimenti acquisto e vendita del servizio si sommano al totale (barra del calendario, guadagno).
 
 ## Seafront – Seaview
