@@ -102,7 +102,7 @@ window.SDBStore.ready.then(function () {
   /* Categorie delle note spese: i servizi (automatiche, legate a quanto offerto nella prenotazione: scontrino.servizio = chiave),
      le altre modificabili in Impostazioni → Servizi e inclusioni (settings.categorieSpese) e le fisse con regole proprie. */
   const CAT_LIBERE_DEF = ['Pulizie', 'Manutenzione', 'Lavanderia', 'Spesa e forniture', 'Utenze', 'Giardino e piscina', 'Benvenuto ospiti', 'Commissioni e tasse', 'Altro'];
-  const CAT_FISSE = ['Affitto proprietario', 'Danni villa', 'Restituzione deposito sicurezza', 'Addebito cliente', 'Addebito proprietario'];
+  const CAT_FISSE = ['Affitto proprietario', 'Commissione agenzia', 'Danni villa', 'Restituzione deposito sicurezza', 'Addebito cliente', 'Addebito proprietario'];
   const catLibere = st => { const l = (st || data().settings || {}).categorieSpese; return Array.isArray(l) ? l.slice() : CAT_LIBERE_DEF.slice(); };
   const catAgg = st => { const l = (st || data().settings || {}).categorieAggiuntive; return Array.isArray(l) ? l.slice() : []; };
   const catProp = st => { const l = (st || data().settings || {}).categorieProprietario; return Array.isArray(l) ? l.slice() : []; };
@@ -332,6 +332,14 @@ window.SDBStore.ready.then(function () {
   const quotaAcq = b => { const g = gruppoAcq(b); if (!g) return null;
     const tot = typeof g.root.prezzoAcquisto === 'number' ? g.root.prezzoAcquisto : 0;
     return ripDi(g, g.root.ripartizione, tot).q[b.id]; };
+  // agenzie (Impostazioni): meta/settings.agenzie = [{ id, nome, perc }] (perc 0,08 = 8%); nella prenotazione agenziaId + agenziaPerc (copiata alla scelta)
+  // commissione = perc × (affitto + servizi a parte) senza la percentuale agenzia già compresa nel listino della villa
+  const agenzie = () => (settings().agenzie || []).filter(a => a && a.id);
+  const commAgenzia = b => { if (!b || !b.agenziaId) return null; const a = agenzie().find(x => x.id === b.agenziaId);
+    const perc = typeof b.agenziaPerc === 'number' ? b.agenziaPerc : a ? Number(a.perc) || 0 : 0; const v = valoriPren(b, true).vendita;
+    const vl = data().villas.find(x => x.id === b.villaId), pl = vl && vl.pricing && vl.pricing.settimanale, agL = pl && typeof pl.agenzia === 'number' ? pl.agenzia : S.AGENZIA_DEF;
+    const base = typeof v === 'number' ? v / (1 + agL) : null;
+    return { nome: a ? a.nome : 'agenzia non più in elenco', perc, agL, vendita: v, base, importo: base === null ? null : Math.round(base * perc * 100) / 100 }; };
   const valoriPren = (b, intero) => { const sv = srvTot(b); const hv = typeof b.prezzoVendita === 'number', ha = typeof b.prezzoAcquisto === 'number';
     const q = intero || !canAcq() ? null : quotaAcq(b), affA = q != null ? q : ha ? b.prezzoAcquisto : null;
     return { vendita: hv || sv.vendita ? (hv ? b.prezzoVendita : 0) + sv.vendita : null, acquisto: canAcq() && (affA != null || sv.acquisto) ? (affA || 0) + sv.acquisto : null, affAcq: canAcq() ? affA : null, quota: q != null, deposito: typeof b.deposito === 'number' ? b.deposito : null }; };
@@ -355,7 +363,7 @@ window.SDBStore.ready.then(function () {
 
   // contesto della pagina Prenotazioni (spese.js)
   const ctxPren = () => ({ ui, saveUI, esc, data, spese, store, $, $$, toast, schedaPren, compressImage, canAcq, canEdit, isFull, S, catSpese, hasSrv: (b, k) => hasSrv(b, servizi(null, null, true).find(x => x.key === k) || { key: k }), srvDet,
-    stati, statoLabel, bookingColor, valori: valoriPren, openBooking, gruppoAcq, ripDi, ridisegna: () => route(), pagatiLiberi: b => nottiDi(pagatiLiberi(b)),
+    stati, statoLabel, bookingColor, valori: valoriPren, openBooking, gruppoAcq, ripDi, commAgenzia, agenzie, ridisegna: () => route(), pagatiLiberi: b => nottiDi(pagatiLiberi(b)),
     nuovaPren: villaId => { const v = villaById(villaId) || sortedVillas()[0]; if (!v) { toast('Prima inserisci una villa'); return; } openBooking(Object.assign({ villaId: v.id }, julyWeek(v))); }, cover: id => (thumbs.map[id] || {}).thumb || '', onThumbs: f => { villasRedraw = f; } });
   /* ---------- router ---------- */
   function route() {
@@ -751,6 +759,10 @@ window.SDBStore.ready.then(function () {
         <label class="field"><span>Deposito di sicurezza €</span><input id="b-dep" inputmode="numeric" value="${typeof b.deposito === 'number' ? esc(fmtNum(b.deposito)) : ''}" placeholder="ricevuto dal cliente"></label>
         <div class="field b-dep-note"><span>&nbsp;</span><small class="note">La restituzione si registra come nota spesa "Restituzione deposito sicurezza".</small></div>
       </div>
+      ${agenzie().length || b.agenziaId ? `<div class="row">
+        <label class="field"><span>Agenzia</span><select id="b-ag"><option value="">Nessuna (vendita diretta)</option>${agenzie().map(a => `<option value="${esc(a.id)}" ${b.agenziaId === a.id ? 'selected' : ''}>${esc(a.nome)} · ${esc(String(Math.round((Number(a.perc) || 0) * 1000) / 10).replace('.', ','))}%</option>`).join('')}${b.agenziaId && !agenzie().some(a => a.id === b.agenziaId) ? `<option value="${esc(b.agenziaId)}" selected>agenzia non più in elenco</option>` : ''}</select></label>
+        <div class="field"><span>&nbsp;</span><small class="note" id="b-ag-n"></small></div>
+      </div>` : ''}
       <div class="pricehint" id="b-hint"></div>
       <div id="b-spese"></div>
       </section>
@@ -802,6 +814,8 @@ window.SDBStore.ready.then(function () {
     let acqDi = b.acquistoDi || null;
     const read = () => ({ villaId: $('#b-villa').value, status: $('#b-status').value, from: $('#b-from').value, to: $('#b-to').value, cliente: $('#b-cliente').value.trim(), note: $('#b-note').value.trim(), color: colorTouched ? color : null, earlyIn: $('#b-early').checked, lateOut: $('#b-late').checked,
       acquistoDi: acqDi,
+      agenziaId: $('#b-ag') ? $('#b-ag').value || null : (b.agenziaId || null),
+      agenziaPerc: $('#b-ag') && $('#b-ag').value ? ($('#b-ag').value === b.agenziaId && typeof b.agenziaPerc === 'number' ? b.agenziaPerc : (() => { const a = agenzie().find(x => x.id === $('#b-ag').value); return a ? Number(a.perc) || 0 : null; })()) : null,
       pagatoDal: $('#b-pag').checked && $('#b-status').value !== 'vuoto' && $('#b-pag-from').value ? $('#b-pag-from').value : null, pagatoAl: $('#b-pag').checked && $('#b-status').value !== 'vuoto' && $('#b-pag-to').value ? $('#b-pag-to').value : null, prezzoVendita: money('#b-sale'), prezzoAcquisto: money('#b-buy'), deposito: money('#b-dep'), pulizia: $('#b-pulizia') ? $('#b-pulizia').checked : !!b.pulizia, cuoco: $('#b-cuoco') ? $('#b-cuoco').checked : !!b.cuoco, transfer: $('#b-transfer') ? $('#b-transfer').checked : !!b.transfer, serviziDett: readSrv(), servizi: $$('#bform [data-srv]').filter(c => c.checked).map(c => c.dataset.srv).concat((b.servizi || []).filter(k => !servizi().some(x => x.key === k))) });
     function money(sel) { const v = S.parseMoney($(sel).value); return typeof v === 'number' ? v : null; }
     const num = el => { const v = S.parseMoney(el.value); return typeof v === 'number' ? v : null; };
@@ -883,6 +897,9 @@ window.SDBStore.ready.then(function () {
       const sv = srvTot(x); const hasSv = sv.vendita || sv.acquisto;
       const mg = typeof x.prezzoVendita === 'number' && typeof x.prezzoAcquisto === 'number' ? x.prezzoVendita + sv.vendita - x.prezzoAcquisto - sv.acquisto : null;
       const totV = typeof x.prezzoVendita === 'number' ? x.prezzoVendita + sv.vendita : null;
+      if ($('#b-ag-n')) { const x0 = read(); const c = commAgenzia(Object.assign({}, b, x0, { serviziDett: x0.serviziDett || b.serviziDett }));
+        $('#b-ag-n').innerHTML = !c ? 'Scegli l\'agenzia che ha portato il cliente: si calcola quanto le spetta.' : c.importo === null ? 'Inserisci la vendita concordata per calcolare la commissione.'
+          : `Da riconoscere all'agenzia: <b>${S.money(c.importo)}</b> = ${String(Math.round(c.perc * 1000) / 10).replace('.', ',')}% di ${S.money(Math.round(c.base))} (vendita ${S.money(c.vendita)} senza il ${Math.round(c.agL * 100)}% agenzia del listino). Si registra come spesa dal riepilogo della prenotazione.`; }
       $('#b-hint').innerHTML = [
         li ? `Listino: <b>${S.money(li.sale)}</b>${li.net ? ` · netto ${S.money(li.net)}` : ''} <span class="muted">(${esc(li.label)})</span>${ro ? '' : ' <button type="button" class="btn small" id="b-uselist">Usa listino</button>'}` : '<span class="muted">Nessun prezzo di listino per queste date esatte.</span>',
         hasSv ? `Servizi a parte: vendita <b>${S.money(sv.vendita)}</b>${canAcq() ? ` · acquisto ${S.money(sv.acquisto)}` : ''}${totV !== null ? ` · <b>Totale cliente ${S.money(totV)}</b>` : ''}` : '',
@@ -1620,6 +1637,11 @@ window.SDBStore.ready.then(function () {
         <div class="ut-def">${[['acqua', 'Acqua', '€ / m³'], ['gas', 'Gas', '€ / m³'], ['luce', 'Elettricità', '€ / kWh']].map(([k, l, u]) => { const t = (st.tariffeUtenze || {})[k];
           return `<label class="field"><span>${l} <small class="note">${u}</small></span><input data-utd="${k}" inputmode="decimal" value="${typeof t === 'number' ? esc(String(t).replace('.', ',')) : ''}" placeholder="es. 0,45"></label>`; }).join('')}</div>
       </section>
+      <section class="card"><h2>Agenzie</h2>
+        <p class="note">Le agenzie che portano clienti, con la loro percentuale. Il listino delle ville comprende già la percentuale massima (campo Agenzia % del listino, di norma 10%): se a un'agenzia dai meno, il nostro margine aumenta. Nella prenotazione scegli l'agenzia e vedi quanto riconoscerle.</p>
+        <div class="tbl-wrap"><table class="prices ag-tbl"><thead><tr><th>Agenzia</th><th>Percentuale %</th><th>Usata</th><th></th></tr></thead><tbody id="ag-list"></tbody></table></div>
+        <form class="loc-new" id="ag-add" autocomplete="off"><input id="ag-add-n" placeholder="Nuova agenzia (es. Agenzia Rossi)"><input id="ag-add-p" inputmode="decimal" placeholder="%" style="max-width:90px"><button class="btn small">Aggiungi agenzia</button></form>
+      </section>
       <section class="card"><h2>Categorie delle spese</h2>
         <p class="note">Sono le voci del menu Categoria nelle note spese (pagina Prenotazioni). <b>Servizi</b>: si aggiornano da sole con i servizi qui sopra e legano la spesa al servizio offerto nella prenotazione, per confrontarla con il suo acquisto previsto. <b>Altre categorie</b>: le aggiungi e modifichi tu; con <b>Aggiuntiva</b> la spesa è un servizio aggiuntivo (da addebitare al cliente o trattenere dal deposito), con <b>A carico del proprietario</b> va nel totale da addebitare al proprietario, senza spunte è una spesa della prenotazione. Le <b>fisse</b> hanno regole proprie e non si cambiano. Rinominare o togliere una categoria non cambia gli scontrini già inseriti, che restano con il nome di prima.</p>
         <div class="cat-grp"><h4>Servizi (automatiche)</h4><div class="cat-chips" id="cat-srv"></div></div>
@@ -1951,6 +1973,25 @@ window.SDBStore.ready.then(function () {
       save(); drawSrv(); drawInc(); drawCat(); toast('Servizio tolto'); });
     $$('[data-utd]').forEach(i => i.addEventListener('input', () => { const t = i.value.trim().replace(/\s/g, '').replace(',', '.'), n = Number(t);
       st.tariffeUtenze = Object.assign({}, st.tariffeUtenze); if (t === '') delete st.tariffeUtenze[i.dataset.utd]; else if (isFinite(n) && n >= 0) st.tariffeUtenze[i.dataset.utd] = n; else return; save(); }));
+    // agenzie: [{ id, nome, perc }]; l'id non cambia (va in bookings.agenziaId)
+    const drawAg = () => { const box = $('#ag-list'); if (!box) return; const l = st.agenzie || [];
+      box.innerHTML = l.length ? l.map((a, i) => { const n = data().bookings.filter(b => b.agenziaId === a.id).length;
+        return `<tr data-ai="${i}"><td><input data-an value="${esc(a.nome)}"></td><td><input data-ap inputmode="decimal" value="${esc(String(Math.round((Number(a.perc) || 0) * 1000) / 10).replace('.', ','))}" style="max-width:90px"></td><td class="note">${n} prenot.</td><td><button type="button" class="btn small" data-adel>Togli</button></td></tr>`; }).join('')
+        : '<tr><td colspan="4" class="note">Nessuna agenzia: aggiungine una qui sotto.</td></tr>'; };
+    drawAg();
+    if ($('#ag-list')) {
+      $('#ag-list').addEventListener('input', e => { const tr = e.target.closest('[data-ai]'); if (!tr) return; const i = Number(tr.dataset.ai), l = st.agenzie = (st.agenzie || []).slice(); const a = l[i] = Object.assign({}, l[i]);
+        if (e.target.matches('[data-an]')) { const v = e.target.value.trim(); if (!v) return; a.nome = v; }
+        if (e.target.matches('[data-ap]')) { const n = Number(e.target.value.trim().replace(',', '.')); if (!isFinite(n) || n < 0 || e.target.value.trim() === '') return; a.perc = n / 100; }
+        save(); });
+      $('#ag-list').addEventListener('click', async e => { if (!e.target.closest('[data-adel]')) return; const i = Number(e.target.closest('[data-ai]').dataset.ai), a = (st.agenzie || [])[i]; if (!a) return;
+        const n = data().bookings.filter(b => b.agenziaId === a.id).length;
+        if (n && !(await window.SDBConferma(`${a.nome} è scelta in ${n} ${n === 1 ? 'prenotazione' : 'prenotazioni'}: la percentuale salvata lì resta. Togliere l'agenzia dall'elenco?`, { titolo: 'Agenzie', ok: 'Togli' }))) return;
+        st.agenzie = st.agenzie.filter((_, j) => j !== i); save(); drawAg(); });
+      $('#ag-add').addEventListener('submit', e => { e.preventDefault(); const nome = $('#ag-add-n').value.trim(), n = Number($('#ag-add-p').value.trim().replace(',', '.'));
+        if (!nome) return; if ((st.agenzie || []).some(a => a.nome.toLowerCase() === nome.toLowerCase())) { toast('Esiste già un\'agenzia con questo nome'); return; }
+        st.agenzie = (st.agenzie || []).concat([{ id: 'ag' + Date.now().toString(36), nome, perc: isFinite(n) && $('#ag-add-p').value.trim() !== '' ? n / 100 : S.AGENZIA_DEF }]); save(); drawAg(); $('#ag-add-n').value = ''; $('#ag-add-p').value = ''; });
+    }
     $('#srv-add').addEventListener('submit', e => {
       e.preventDefault(); const label = $('#srv-add-n').value.trim(); if (!label) { $('#srv-add-n').focus(); return; }
       if (servizi(st.servizi, st.serviziBase || {}, true).some(x => x.label.toLowerCase() === label.toLowerCase())) { toast('Esiste già questo servizio (se è tra i tolti, rimettilo)'); return; }

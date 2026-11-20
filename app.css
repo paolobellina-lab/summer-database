@@ -1251,3 +1251,5 @@ dialog.dlg-bil { width: min(900px, calc(100vw - 32px)); }
 .pr-ut .ut-t th { font-size: 10px; }
 .pr-ut .ut-t td, .pr-ut .ut-t th { white-space: nowrap; }
 @media print { .pr-ut input.ut-in { border: 0; background: none; } }
+.pr-ag { margin-top: 16px; border-top: 1px solid var(--line, #e5dfd2); padding-top: 12px; }
+.pr-ag h3 { margin: 0 0 4px; font-size: 15px; letter-spacing: .04em; text-transform: uppercase; }

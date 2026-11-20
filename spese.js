@@ -33,6 +33,8 @@
   /* "Affitto proprietario": quanto pagato davvero al proprietario (affitto ed eventuali extra). È l'acquisto reale dell'affitto,
      da confrontare con l'acquisto concordato della prenotazione (previsto); non è un servizio incluso né aggiuntivo. */
   const AFF = 'Affitto proprietario';
+  // commissione riconosciuta all'agenzia che ha portato il cliente: spesa normale della prenotazione, mai aggiuntiva
+  const COMM = 'Commissione agenzia';
   const isAff = s => s && s.categoria === AFF;
   const sommaAff = l => l.reduce((t, s) => t + (isAff(s) ? Number(s.importo) || 0 : 0), 0);
   // casella "servizio aggiuntivo": Danni villa la spunta, Affitto proprietario la toglie e la nasconde
@@ -40,14 +42,14 @@
      (scontrino.servizio = chiave; vale anche il solo nome uguale, per gli scontrini dell'app Scontrini); libere = modificabili,
      con agg = quelle "aggiuntive" (da addebitare al cliente); fisse = Affitto proprietario, Danni villa (aggiuntiva), Restituzione deposito.
      Offerta o aggiuntiva la decide la categoria (niente più casella); scontrino.aggiuntiva si salva comunque, per l'app Scontrini. */
-  let CATS = { prop: [], servizi: [], libere: ['Pulizie', 'Manutenzione', 'Lavanderia', 'Spesa e forniture', 'Utenze', 'Giardino e piscina', 'Benvenuto ospiti', 'Commissioni e tasse', 'Altro'], fisse: [AFF, 'Danni villa', REST_DEP, ADD_CLI, ADD_PROP], agg: [] };
+  let CATS = { prop: [], servizi: [], libere: ['Pulizie', 'Manutenzione', 'Lavanderia', 'Spesa e forniture', 'Utenze', 'Giardino e piscina', 'Benvenuto ospiti', 'Commissioni e tasse', 'Altro'], fisse: [AFF, COMM, 'Danni villa', REST_DEP, ADD_CLI, ADD_PROP], agg: [] };
   let CTX = null;
   const setCats = ctx => { if (ctx && ctx.catSpese) { CATS = ctx.catSpese(); CTX = ctx; } };
   // spesa di un servizio che la prenotazione non ha: è un servizio aggiuntivo (richiesto durante il soggiorno)
   const srvNonOfferto = (srv, bk) => !!(srv && bk && CTX && CTX.hasSrv && !CTX.hasSrv(bk, srv.key));
   const bkDi = s => s && s.prenotazioneId && CTX ? CTX.data().bookings.find(b => b.id === s.prenotazioneId && b.villaId === s.villaId) : null;
   const srvDiSpesa = s => (s && ((s.servizio && CATS.servizi.find(x => x.key === s.servizio)) || CATS.servizi.find(x => x.label === s.categoria))) || null;
-  const aggPerCat = (cat, srv) => cat === 'Danni villa' ? true : cat === AFF || cat === REST_DEP || cat === ADD_PROP || cat === ADD_CLI || srv ? false : CATS.agg.includes(cat) ? true : CATS.libere.includes(cat) ? false : null;
+  const aggPerCat = (cat, srv) => cat === 'Danni villa' ? true : cat === AFF || cat === COMM || cat === REST_DEP || cat === ADD_PROP || cat === ADD_CLI || srv ? false : CATS.agg.includes(cat) ? true : CATS.libere.includes(cat) ? false : null;
   const tipoCat = (cat, srv) => cat === ADD_CLI ? 'Addebitato al cliente oltre il deposito: è un\'entrata come una vendita, si somma al margine' : cat === ADD_PROP ? 'Addebitato al proprietario: è un\'entrata come una vendita, si somma al margine' : srv ? 'Servizio offerto: si confronta con l\'acquisto previsto del servizio' : cat === AFF ? 'Pagato al proprietario: si confronta con l\'acquisto concordato' : cat === REST_DEP ? 'Restituito al cliente: riduce il deposito, non è una spesa' : aggPerCat(cat) ? 'Servizio aggiuntivo: da addebitare al cliente o trattenere dal deposito' : 'Altra spesa della prenotazione: non addebitata al cliente (es. manutenzione)';
   // menu Categoria: <optgroup> servizi (value "srv:chiave") · altre · fisse; cur = scontrino in modifica
   const catOpts = (esc, cur, bk) => {
@@ -822,6 +824,11 @@
         <div class="pr-top">
           ${media(x.villaId, pill(x))}
           <div class="card pr-info"><h2>${x.gen ? 'Villa' : 'Prenotazione'}</h2><dl class="pr-kv">${info.map(([l, val0]) => `<dt>${esc(l)}</dt><dd>${esc(val0)}</dd>`).join('')}</dl>
+            ${x.b && ctx.commAgenzia && x.b.agenziaId ? (() => { const c = ctx.commAgenzia(x.b), reg = x.spese.filter(s => s.categoria === COMM), regT = reg.reduce((t, s) => t + (Number(s.importo) || 0), 0);
+              return `<div class="pr-ag"><h3>Agenzia</h3><dl class="pr-kv"><dt>Agenzia</dt><dd>${esc(c.nome)} · ${esc(String(Math.round(c.perc * 1000) / 10).replace('.', ','))}%</dd>
+                <dt>Da riconoscere</dt><dd><b>${c.importo === null ? '—' : esc(euro(c.importo))}</b> <small class="note">${c.base === null ? 'manca la vendita' : `su ${esc(euro(Math.round(c.base)))} (vendita senza il ${Math.round(c.agL * 100)}% del listino)`}</small></dd>
+                <dt>Registrata</dt><dd>${reg.length ? esc(euro(regT)) + ` <small class="note">${reg.length} ${reg.length === 1 ? 'nota' : 'note'} "${COMM}"</small>` : '<span class="note">non ancora</span>'}</dd></dl>
+                ${ctx.canEdit() && ctx.online && c.importo !== null && !reg.length ? `<p class="no-print" style="margin:6px 0 0"><button type="button" class="btn" id="ag-spesa">Inserisci come spesa (${esc(euro(c.importo))})</button></p>` : ''}</div>`; })() : ''}
             ${x.b ? (() => { const uc = utCalc(x.b, ctx.data().settings), ed = ctx.canEdit();
               const cel = (k, f, v0, ph) => ed ? `<input class="ut-in" data-ut="${k}|${f}" inputmode="decimal" value="${esc(fmtU(v0))}"${ph ? ` placeholder="${esc(ph)}"` : ''}>` : esc(fmtU(v0) || '—');
               return `<div class="pr-ut"><h3>Utenze</h3><p class="note">Letture dei contatori all'arrivo e all'uscita: il consumo × la tariffa dà quanto far pagare al cliente.</p>
@@ -898,6 +905,11 @@
         box.addEventListener('focusout', e => { if (!box.contains(e.relatedTarget)) salva(); });
         utIns.forEach(i => i.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); salva(); } }));
         window.addEventListener('hashchange', salva, { once: true }); }
+      const agb = $('#ag-spesa', root); if (agb && x.b) agb.onclick = async () => { const c = ctx.commAgenzia(x.b); if (!c || c.importo === null) return; agb.disabled = true;
+        const oggi = new Date(), d0 = `${oggi.getFullYear()}-${String(oggi.getMonth() + 1).padStart(2, '0')}-${String(oggi.getDate()).padStart(2, '0')}`;
+        const dati = { villaId: x.b.villaId, prenotazioneId: x.b.id, prenotazione: { cliente: (x.b.cliente || '').trim() || 'Prenotazione senza nome', from: x.b.from, to: x.b.to }, data: d0, importo: c.importo,
+          motivo: `${c.nome} · ${String(Math.round(c.perc * 1000) / 10).replace('.', ',')}% di ${euro(Math.round(c.base))}`, pagamento: null, categoria: COMM, servizio: null, aggiuntiva: false };
+        try { await ctx.store.addScontrino(dati, null); ctx.toast('Commissione registrata come spesa'); } catch (e) { agb.disabled = false; ctx.toast('Non salvata: ' + (e && e.message || e)); } };
       const cc = $('#pd-concl', root); if (cc && x.b) cc.onchange = () => { const b0 = ctx.data().bookings.find(b => b.id === x.b.id); if (!b0) return;
         ctx.store.upsertBooking(Object.assign(JSON.parse(JSON.stringify(b0)), { conteggiConclusi: cc.checked })); ctx.toast(cc.checked ? 'Conteggi conclusi' : 'Conteggi riaperti'); };
       if (grpBil || grp) { const g = grpBil || grp, tot0 = typeof g.root.prezzoAcquisto === 'number' ? g.root.prezzoAcquisto : null, ins = $$('.bil-in', root), inR = $$('.bil-re', root), totR0 = affGrp(V, g);
