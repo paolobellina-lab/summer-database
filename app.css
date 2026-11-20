@@ -1390,3 +1390,4 @@ dialog.dlg-pvar:has(#pv-fig:not([hidden])) { width: min(760px, calc(100vw - 32px
 @media (max-width: 640px) { .off-ore-f { grid-template-columns: 1fr 1fr; } }
 .off-ggn { display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; font-weight: 600; }
 .off-ggn input { width: 46px; text-align: right; }
+.off-srv-note { display: block; max-width: none; }
