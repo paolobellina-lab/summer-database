@@ -1261,3 +1261,10 @@ dialog.dlg-bil { width: min(900px, calc(100vw - 32px)); }
 #srv-add select { max-width: 280px; }
 .srv-tbl td.srv-off { text-align: center; }
 .srv-tbl td.srv-off input { width: 18px; height: 18px; }
+
+/* Servizi e categorie: riordino e Togli nascosti finché non si preme "Riordina e togli" */
+.h2-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.h2-bar h2 { margin-bottom: 0; }
+.h2-bar + * { margin-top: 10px; }
+.srv-tbl.srv-noedit .col-act { display: none; }
+#srv-ord[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
