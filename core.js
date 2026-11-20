@@ -235,13 +235,13 @@
   /* Prezzo "a ore, con il personale" (prezziServizi[k].unita = 'ore', es. cuoco): figure = [{ id, it, en, da, vendita (€/h), ore (al giorno) }];
      una figura entra quando gli ospiti sono almeno "da" (cuoco 1, butler 7, extra waiter e kitchen aid 13). Acquisto €/h di ogni figura nella parte
      protetta: chiave '<k>@h:<id>'. Totale = Σ figure attive (€/h × ore × giorni), giorni = notti del soggiorno. opz.over = { id: { vendita, ore } }
-     = valori cambiati nella singola offerta. */
+     = valori cambiati nella singola offerta; opz.giorni = giorni effettivi se il servizio non è tutti i giorni (es. solo weekend). */
   const isOre = (st, k) => ((((st && st.prezziServizi) || {})[k]) || {}).unita === 'ore';
   const FIG_DEF = [{ id: 'f1', it: 'Cuoco', en: 'Chef', da: 1, vendita: null, ore: 6 }];
   const figureDi = (st, k) => { const f = ((((st && st.prezziServizi) || {})[k]) || {}).figure; return Array.isArray(f) && f.length ? f : FIG_DEF; };
   const nOr = (x, y) => { const z = typeof x === 'string' ? Number(x.replace(/\./g, '').replace(',', '.')) : x; return typeof z === 'number' && isFinite(z) && String(x).trim() !== '' ? z : y; };
   const oreCalc = (st, k, notti, opz) => { opz = opz || {}; const v = opz.villa || null, over = opz.over || {};
-    const osp = (Number(opz.ospiti) > 0 ? Number(opz.ospiti) : numCampo(v && v.guests)) || 1, g = Math.max(0, Number(notti) || 0);
+    const osp = (Number(opz.ospiti) > 0 ? Number(opz.ospiti) : numCampo(v && v.guests)) || 1, g = Math.max(0, opz.giorni != null ? Number(opz.giorni) || 0 : Number(notti) || 0);
     const righe = figureDi(st, k).filter(f => osp >= (Number(f.da) || 1)).map(f => { const o2 = over[f.id] || {};
       const ore = nOr(o2.ore, typeof f.ore === 'number' ? f.ore : null), vh = nOr(o2.vendita, typeof f.vendita === 'number' ? f.vendita : null), ah = opz.acq ? nOr(o2.acquisto, opz.acq[k + '@h:' + f.id]) : null;
       return { id: f.id, it: f.it, en: f.en, ore, giorni: g, vh, ah, v: vh != null && ore != null ? Math.round(vh * ore * g) : null, a: ah != null && ore != null ? Math.round(ah * ore * g) : null }; });

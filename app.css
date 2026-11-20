@@ -1379,3 +1379,14 @@ dialog.dlg-pvar:has(#pv-fig:not([hidden])) { width: min(760px, calc(100vw - 32px
 .off-ore { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; padding: 6px 10px; background: var(--accent-soft); border-radius: 6px; }
 .off-ore-f { display: inline-flex; align-items: center; gap: 6px; }
 .off-ore-f input { width: 64px; text-align: right; }
+/* personale a ore nell'offerta: una figura per riga, giorni della settimana */
+.off-ore { flex-direction: column; align-items: stretch; flex-wrap: nowrap; gap: 6px; }
+.off-ore-h { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 14px; }
+.off-gg { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.off-gg [data-gg] { width: 30px; height: 28px; border: 1px solid var(--line); background: var(--surface); border-radius: 4px; font-weight: 600; color: var(--muted); cursor: pointer; }
+.off-gg [data-gg].on { background: var(--navy); color: #fff; border-color: var(--navy); }
+.off-ore-f { display: grid; grid-template-columns: minmax(150px, 220px) 110px auto auto; align-items: center; gap: 10px; }
+.off-ore-f > span { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+@media (max-width: 640px) { .off-ore-f { grid-template-columns: 1fr 1fr; } }
+.off-ggn { display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; font-weight: 600; }
+.off-ggn input { width: 46px; text-align: right; }

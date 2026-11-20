@@ -90,7 +90,12 @@
     // prezzo "di base" (senza modifiche nell'offerta): scheda villa, altrimenti Impostazioni; se settimanale, sulle settimane del periodo
     const prezzoSrvBase = (v, k) => { const pe = v ? perOf(v) : null, notti = pe && pe.from && pe.to ? S.diffDays(pe.from, pe.to) : 0;
       const pv = (v && v.prezziServizi || {})[k]; if (typeof pv === 'number') return S.srvPrezzo(st, k, pv, notti); const d = (st.prezziServizi || {})[k] || {};
-      return S.srvPrezzoV(st, k, typeof d.vendita === 'number' ? d.vendita : null, notti, { villa: v, ospiti: Number(o.ospiti) || 0, over: o.srvOre[k] }); };
+      return S.srvPrezzoV(st, k, typeof d.vendita === 'number' ? d.vendita : null, notti, { villa: v, ospiti: Number(o.ospiti) || 0, over: o.srvOre[k], giorni: giorniOre(k, pe) }); };
+    // servizi a ore: giorni della settimana in cui c'è il servizio (o.srvOre[k]._gg = [0..6], 0 = domenica; mancante = tutti) → giorni del soggiorno che cadono in quei giorni
+    const GG = [[1, 'L'], [2, 'M'], [3, 'M'], [4, 'G'], [5, 'V'], [6, 'S'], [0, 'D']];
+    const ggSel = k => { const g = (o.srvOre[k] || {})._gg; return Array.isArray(g) ? g : [0, 1, 2, 3, 4, 5, 6]; };
+    const giorniOre = (k, pe) => { const nn = (o.srvOre[k] || {})._n; if (nn != null && nn !== '' && Number(nn) >= 0) return Number(nn); const g = ggSel(k); if (g.length === 7 || !pe || !pe.from || !pe.to) return g.length === 7 ? null : pe && pe.from && pe.to ? 0 : null; let n = 0;
+      for (let d = S.parseISO ? S.parseISO(pe.from) : new Date(pe.from + 'T00:00:00'), e = S.parseISO ? S.parseISO(pe.to) : new Date(pe.to + 'T00:00:00'); d < e; d.setDate(d.getDate() + 1)) if (g.includes(d.getDay())) n++; return n; };
     // ordine: prezzo scritto per questa villa nel riepilogo → prezzo scritto per tutte al punto 3 → base
     const prezzoSrv = (v, k) => { const y = v && (o.srvVilla[v.id] || {})[k]; if (y !== undefined && String(y).trim() !== '') return S.parseMoney(y);
       const x = (o.srv[k] || {}).prezzo; if (x !== undefined && String(x).trim() !== '') return S.parseMoney(x); return prezzoSrvBase(v, k); };
@@ -325,9 +330,12 @@
         <td><input data-sprz inputmode="numeric" value="${esc(d.prezzo)}" placeholder="da scheda villa" title="Vuoto: per ogni villa il prezzo della sua scheda (o quello di Impostazioni). Scritto: uguale per tutte le ville; 0 = senza prezzo" ${d.on && d.modo !== 'inc' ? '' : 'disabled'} aria-label="Prezzo di ${esc(x.label)}"></td></tr>` + oreRow(x, d); }).join('');
     };
     // servizi a ore: le figure con €/h e ore al giorno modificabili per questa offerta (vuoto = Impostazioni)
-    const oreRow = (x, d) => { if (!S.isOre(st, x.key) || !d.on) return ''; const ov = o.srvOre[x.key] || {}, f2 = v => typeof v === 'number' ? String(v).replace('.', ',') : '';
-      return `<tr class="off-ore-r"><td colspan="3"><div class="off-ore"><span class="note">Personale di questa offerta (vuoto = Impostazioni; entra secondo gli ospiti):</span>${S.figureDi(st, x.key).map(f => { const z = ov[f.id] || {};
-        return `<label class="off-ore-f"><b>${esc(f.it)}</b><small class="note">${f.da > 1 ? 'da ' + f.da + ' ospiti' : 'sempre'}</small><span><input data-ofv="${esc(x.key)}|${esc(f.id)}" inputmode="decimal" value="${esc(z.vendita != null ? String(z.vendita) : '')}" placeholder="${esc(f2(f.vendita))}"> €/h</span><span><input data-ofo="${esc(x.key)}|${esc(f.id)}" inputmode="decimal" value="${esc(z.ore != null ? String(z.ore) : '')}" placeholder="${esc(f2(f.ore))}"> h/giorno</span></label>`; }).join('')}</div></td></tr>`; };
+    const oreRow = (x, d) => { if (!S.isOre(st, x.key) || !d.on) return ''; const ov = o.srvOre[x.key] || {}, f2 = v => typeof v === 'number' ? String(v).replace('.', ',') : '', g = ggSel(x.key);
+      return `<tr class="off-ore-r"><td colspan="3"><div class="off-ore"><div class="off-ore-h"><span class="note">Personale di questa offerta (vuoto = Impostazioni; entra secondo gli ospiti)</span>
+        <span class="off-gg" data-ogg="${esc(x.key)}">${GG.map(([n, l]) => `<button type="button" data-gg="${n}" class="${g.includes(n) ? 'on' : ''}">${l}</button>`).join('')}${(() => { const v0 = scelte()[0], pe = v0 ? perOf(v0) : null, tot = pe && pe.from && pe.to ? S.diffDays(pe.from, pe.to) : null, n0 = giorniOre(x.key, pe);
+          return `<span class="off-ggn"><input data-ogn="${esc(x.key)}" inputmode="numeric" value="${esc(String(n0 != null ? n0 : tot != null ? tot : ''))}" title="Giorni con il servizio: si calcola dai giorni scelti, oppure scrivilo tu">gg / ${tot != null ? tot : '—'}gg</span>`; })()}<button type="button" class="btn small" data-gwe>Solo weekend</button><button type="button" class="btn small" data-gall>Tutti</button></span></div>
+        ${S.figureDi(st, x.key).map(f => { const z = ov[f.id] || {};
+        return `<div class="off-ore-f"><b>${esc(f.it)}</b><small class="note">${f.da > 1 ? 'da ' + f.da + ' ospiti' : 'sempre'}</small><span><input data-ofv="${esc(x.key)}|${esc(f.id)}" inputmode="decimal" value="${esc(z.vendita != null ? String(z.vendita) : '')}" placeholder="${esc(f2(f.vendita))}"> €/h</span><span><input data-ofo="${esc(x.key)}|${esc(f.id)}" inputmode="decimal" value="${esc(z.ore != null ? String(z.ore) : '')}" placeholder="${esc(f2(f.ore))}"> h/giorno</span></div>`; }).join('')}</div></td></tr>`; };
     const drawRiep = () => {
       const vv = scelte();
       $('#off-riep').innerHTML = vv.length ? vv.map(v => { const pr = prezzoDi(v), et = extraTot(v), inc = srvInclVilla(v), ag = srvAparte(v), li = listinoOf(v);
@@ -423,6 +431,12 @@
     $('#off-list').addEventListener('input', e => { const i = e.target.closest('[data-price]'); if (i) { o.prezzi[i.dataset.price] = i.value; drawRiep(); save(); } const n = e.target.closest('[data-nota]'); if (n) { o.note[n.dataset.nota] = n.value; save(); } });
     drawSrv();
     $('#off-osp').addEventListener('input', e => { o.ospiti = Number(String(e.target.value).replace(/\D/g, '')) || null; drawSrv(); drawRiep(); drawTexts(); save(); });
+    $('#off-srv').addEventListener('click', e => { const box = e.target.closest('[data-ogg]'); if (!box) return; const k = box.dataset.ogg, ov = o.srvOre[k] = o.srvOre[k] || {}; let g = ggSel(k).slice();
+      const b = e.target.closest('[data-gg]'); if (b) { const n = Number(b.dataset.gg); g = g.includes(n) ? g.filter(z => z !== n) : g.concat(n); if (!g.length) return; }
+      else if (e.target.closest('[data-gwe]')) g = [6, 0]; else if (e.target.closest('[data-gall]')) g = [0, 1, 2, 3, 4, 5, 6]; else return;
+      ov._gg = g.length === 7 ? undefined : g; delete ov._n; drawSrv(); drawRiep(); drawTexts(); save(); });
+    $('#off-srv').addEventListener('change', e => { const t = e.target.closest('[data-ogn]'); if (!t) return; const k = t.dataset.ogn, ov = o.srvOre[k] = o.srvOre[k] || {}, n = String(t.value).replace(/\D/g, '');
+      if (n === '') delete ov._n; else ov._n = Number(n); drawSrv(); drawRiep(); drawTexts(); save(); });
     $('#off-srv').addEventListener('input', e => { const t = e.target.closest('[data-ofv],[data-ofo]'); if (!t) return; const [k, id] = (t.dataset.ofv || t.dataset.ofo).split('|');
       const ov = o.srvOre[k] = o.srvOre[k] || {}, z = ov[id] = ov[id] || {}, val = String(t.value).trim(); z[t.dataset.ofv ? 'vendita' : 'ore'] = val === '' ? null : val; drawRiep(); drawTexts(); save(); });
     $('#off-srv').addEventListener('change', e => { const c = e.target.closest('[data-son]'); if (!c) return; const k = c.closest('[data-ok]').dataset.ok; o.srv[k] = Object.assign({}, o.srv[k], { on: c.checked });
