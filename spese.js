@@ -887,6 +887,7 @@
           <div class="actions no-print">${ctx.online ? '<button class="btn primary" type="button" id="pd-new">+ Nuova spesa</button>' : ''}
             <button class="btn" type="button" id="pd-print">Stampa</button>
             ${ctx.online ? '<button class="btn" type="button" id="pd-exp">Esporta</button>' : ''}
+            ${x.b && ctx.contratto ? '<button class="btn" type="button" id="pd-contr">Contratto</button>' : ''}
             ${x.b && ctx.canEdit() ? '<button class="btn" type="button" id="pd-mod">Modifica prenotazione</button>' : ''}</div></div>
         <div class="pr-top">
           ${media(x.villaId, pill(x))}
@@ -1007,6 +1008,7 @@
           ctx.store.upsertBooking(c); ctx.toast('Ripartizione tolta'); if (ctx.ridisegna) ctx.ridisegna(); }; }
       if ($('#pd-exp', root)) $('#pd-exp', root).onclick = () => A.openExport({ villa: x.villaId, pid: x.gen ? '__gen' : x.old ? x.chiave.split('|').slice(2).join('|') : x.b.id });
       if ($('#pd-mod', root)) $('#pd-mod', root).onclick = () => ctx.openBooking({ id: x.b.id });
+      const pdC = $('#pd-contr', root); if (pdC) { const info = () => ctx.contrInfo && ctx.contrInfo(x.b.id).then(t => { pdC.textContent = t ? 'Contratto · ' + t : 'Contratto'; }); info(); pdC.onclick = () => ctx.contratto(x.b, info); }
     }
 
     render();

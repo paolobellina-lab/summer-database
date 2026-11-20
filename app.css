@@ -1393,3 +1393,11 @@ dialog.dlg-pvar:has(#pv-fig:not([hidden])) { width: min(760px, calc(100vw - 32px
 .off-ggn { display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; font-weight: 600; }
 .off-ggn input { width: 46px; text-align: right; }
 .off-srv-note { display: block; max-width: none; }
+/* contratto */
+dialog.dlg-contr { width: min(980px, calc(100vw - 32px)); }
+.ct-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px 12px; }
+.ct-grid .ct-wide { grid-column: 1 / -1; }
+.ct-h { margin: 10px 0 0; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--navy); border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+.ct-h small { text-transform: none; letter-spacing: 0; font-weight: 400; margin-left: 6px; }
+.ct-vers { margin: 0; padding-left: 18px; font-size: 13px; }
+#ct-card .card + .card { margin-top: 14px; }

@@ -386,7 +386,13 @@ window.SDBStore.ready.then(function () {
   // contesto della pagina Prenotazioni (spese.js)
   const ctxPren = () => ({ ui, saveUI, esc, data, spese, store, $, $$, toast, schedaPren, compressImage, canAcq, canEdit, isFull, S, catSpese, hasSrv: (b, k) => hasSrv(b, servizi(null, null, true).find(x => x.key === k) || { key: k }), srvDet,
     stati, statoLabel, bookingColor, valori: valoriPren, openBooking, gruppoAcq, ripDi, commAgenzia, agenzie, ridisegna: () => route(), pagatiLiberi: b => nottiDi(pagatiLiberi(b)),
-    nuovaPren: villaId => { const v = villaById(villaId) || sortedVillas()[0]; if (!v) { toast('Prima inserisci una villa'); return; } openBooking(Object.assign({ villaId: v.id }, julyWeek(v))); }, cover: id => (thumbs.map[id] || {}).thumb || '', onThumbs: f => { villasRedraw = f; } });
+    nuovaPren: villaId => { const v = villaById(villaId) || sortedVillas()[0]; if (!v) { toast('Prima inserisci una villa'); return; } openBooking(Object.assign({ villaId: v.id }, julyWeek(v))); }, cover: id => (thumbs.map[id] || {}).thumb || '', onThumbs: f => { villasRedraw = f; },
+    contratto: window.SDBContratto && isAdmin() ? (b, onSaved) => window.SDBContratto.apri(b, ctxContr(onSaved)).catch(err => toast(err && err.code === 'permission-denied' ? 'Contratto: pubblica le regole nuove (contratti) nella console Firebase' : 'Contratto: ' + (err.message || err))) : null,
+    contrInfo: window.SDBContratto && isAdmin() ? id => Promise.resolve(store.getContratto(id)).then(c => c ? (c.firmatoIl ? 'firmato il ' + S.dmy(c.firmatoIl) : c.inviatoIl ? 'inviato il ' + S.dmy(c.inviatoIl) : 'dati inseriti') : '', () => '') : null });
+  /* dipendenze della finestra del contratto (contratto.js) */
+  const ctxContr = onSaved => ({ store, esc, toast, S, onSaved, villa: villaById, valori: valoriPren, user: () => store.user || '',
+    offerte: () => new Promise(res => { let fatto = false, off = null; const fine = l => { if (fatto) return; fatto = true; res(l || []); setTimeout(() => { if (off) off(); }, 0); }; try { off = store.listenOfferte(fine, () => fine([])); } catch (_) { fine([]); } setTimeout(() => fine([]), 4000); }),
+    inclusi: (b, l) => { const inc = S.inclusioniDi ? S.inclusioniDi(settings()) : []; return servizi(null, null, true).filter(x => hasSrv(b, x)).map(x => { const i = inc.find(y => y.servizio === x.key); return (i && (i[l] || i.en || i.it)) || x.label; }); } });
   /* ---------- router ---------- */
   function route() {
     let h = (location.hash || '#disponibilita').slice(1);
@@ -1615,6 +1621,7 @@ window.SDBStore.ready.then(function () {
       ['servizi', 'Servizi e inclusioni', 'Prezzi predefiniti dei servizi, voci incluse nelle offerte'],
       store.mode === 'online' && isFull() ? ['account', 'Account e accessi', nAcc ? nAcc + (nAcc === 1 ? ' account autorizzato' : ' account autorizzati') : 'Chi può entrare e in quali pagine'] : null,
       window.SDBReport ? ['schede', 'Schede incomplete', 'Campi non compilati di ogni villa'] : null,
+      window.SDBContratto && isAdmin() ? ['contratto', 'Contratto', 'Modello del Booking Form, acconto, saldo, dati bancari'] : null,
       ['dati', 'Dati e backup', 'Backup e pulizia di fine stagione']
     ].filter(Boolean).filter(p => isFull() || p[0] === 'generale');
   }
@@ -1706,6 +1713,7 @@ window.SDBStore.ready.then(function () {
         ${S.TARIFFE.map(x => `<tr><td class="per">${x.label}</td><td><input data-d="${x.key}" data-k="arrotonda" value="${esc(st.defaults[x.key].arrotonda)}"></td><td><input data-d="${x.key}" data-k="margine" value="${esc(Math.round(st.defaults[x.key].margine * 1000) / 10)}"></td><td><input data-d="${x.key}" data-k="minimo" value="${esc(st.defaults[x.key].minimo === undefined ? S.MARGINE_MIN : st.defaults[x.key].minimo)}"></td><td><input data-d="${x.key}" data-k="agenzia" value="${esc(Math.round((st.defaults[x.key].agenzia === undefined ? S.AGENZIA_DEF : Number(st.defaults[x.key].agenzia) || 0) * 1000) / 10)}"></td></tr>`).join('')}
       </tbody></table></div></section>`)}
       ${window.SDBReport ? pg('schede', '<section class="card" id="rp-card"></section>') : ''}
+      ${window.SDBContratto && isAdmin() ? pg('contratto', '<div id="ct-card"><p class="note">Caricamento…</p></div>') : ''}
       ${pg('dati', `${store.mode === 'online' && isFull() ? `<section class="card" id="ab-card"><h2>Backup automatico su questo dispositivo</h2>
         <p class="note">Ogni giorno, la prima volta che apri l'app, scarica da solo un backup completo nella cartella <b>Download</b>: ville con listini di acquisto e vendita, prenotazioni, impostazioni, profili e note spese (senza foto). Una volta a settimana copia i file su una chiavetta e staccala: una copia scollegata resta al sicuro anche se Firebase venisse cancellato.</p>
         <label class="flag ab-flag"><input type="checkbox" id="ab-on" ${lsGet(AUTOKEY) === 'si' ? 'checked' : ''}><span><b>Scarica un backup ogni giorno</b><small>Vale solo per questo computer o telefono. Consigliato sul computer.</small></span></label>
@@ -2265,6 +2273,7 @@ window.SDBStore.ready.then(function () {
     };
     $('#w-book').addEventListener('click', () => askWipe('book'));
     if ($('#w-sc')) $('#w-sc').addEventListener('click', () => askWipe('sc'));
+    if ($('#ct-card') && cur === 'contratto') window.SDBContratto.mountSettings($('#ct-card'), { store, esc, toast }).catch(err => { $('#ct-card').innerHTML = `<div class="warn err">${err && err.code === 'permission-denied' ? 'Pubblica le regole nuove (contratti) nella console Firebase.' : 'Errore: ' + esc(err.message || err)}</div>`; });
     if ($('#rp-card') && cur === 'schede') window.SDBReport.mount($('#rp-card'), { data, esc, store, FIELDS, hiddenField, S, coverOf: id => (thumbs.map[id] || {}).fotoId || null });
     if ($('#cc-card')) window.SDBCaricaCartella.mount($('#cc-card'), { data, store, esc, $, $$, toast, compressImage, coverOf: id => (thumbs.map[id] || {}).fotoId || null });
     if ($('#is-card')) window.SDBImportaSito.mount($('#is-card'), { data, store, esc, $, $$, toast, compressImage, coverOf: id => (thumbs.map[id] || {}).fotoId || null });

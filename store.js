@@ -25,7 +25,7 @@
 
   /* ------------------------------------------------------------------ LOCALE */
   function LocalStore() {
-    let state = null, canPersist = true; const memBro = [], offSubs = [];
+    let state = null, canPersist = true; const memBro = [], offSubs = [], memContr = { cfg: null, mod: {}, c: {} };
     const subs = new Set();
     const read = () => { try { const raw = localStorage.getItem(KEY); if (raw) return JSON.parse(raw); } catch (e) { canPersist = false; } return null; };
     const persist = () => {
@@ -64,6 +64,15 @@
       async addBrochure(villaId, file, lingua) { const id = 'b' + Date.now(); memBro.push({ id, villaId, nome: file.name, lingua: lingua || '', size: file.size, parti: 1, _blob: new Blob([await file.arrayBuffer()], { type: 'application/pdf' }) }); return id; },
       getBrochure(b) { return Promise.resolve(b._blob); },
       deleteBrochure(b) { const i = memBro.findIndex(x => x.id === b.id); if (i >= 0) memBro.splice(i, 1); return Promise.resolve(); },
+      // contratti (solo in memoria in locale): modelli Word, predefiniti e dati del cliente per prenotazione
+      getContrCfg() { return Promise.resolve(memContr.cfg ? JSON.parse(JSON.stringify(memContr.cfg)) : null); },
+      setContrCfg(x) { memContr.cfg = JSON.parse(JSON.stringify(x)); return Promise.resolve(); },
+      getModello(l) { return Promise.resolve(memContr.mod[l] || null); },
+      async setModello(l, file) { memContr.mod[l] = { nome: file.name, size: file.size, dati: new Uint8Array(await file.arrayBuffer()), caricatoIl: new Date().toISOString() }; },
+      delModello(l) { delete memContr.mod[l]; return Promise.resolve(); },
+      getContratto(id) { return Promise.resolve(memContr.c[id] ? JSON.parse(JSON.stringify(memContr.c[id])) : null); },
+      setContratto(id, x) { memContr.c[id] = JSON.parse(JSON.stringify(x)); return Promise.resolve(); },
+      listContratti() { return Promise.resolve(Object.keys(memContr.c).map(id => Object.assign({ id }, JSON.parse(JSON.stringify(memContr.c[id]))))); },
       setSicurezza(x) { state.sicurezza = x; persist(); },
       setServiziAcquisto(p) { state.serviziAcquisto = p; persist(); },
       // pulizia di fine stagione (protetta da password nell'interfaccia)
@@ -499,6 +508,19 @@
         await db.collection('villas_brochure').doc(b.id).delete();
         for (let k = 0; k < (b.parti || 0); k++) await db.collection('villas_brochure_parti').doc(b.id + '_' + k).delete();
       },
+      /* ---- contratti: solo amministratori (regole). contratti_modelli/{en|it} = { nome, size, dati (bytes) }, contratti_modelli/cfg = predefiniti e dati bancari,
+         contratti/{bookingId} = dati del contratto (anagrafica, passaporto, carta solo mascherata, versioni). ---- */
+      getContrCfg() { return db.collection('contratti_modelli').doc('cfg').get().then(d => d.exists ? d.data() : null); },
+      setContrCfg(x) { return db.collection('contratti_modelli').doc('cfg').set(x); },
+      getModello(l) { return db.collection('contratti_modelli').doc(l).get().then(d => { if (!d.exists) return null; const x = d.data(); return Object.assign({}, x, { dati: x.dati.toUint8Array(), caricatoIl: x.caricatoIl && x.caricatoIl.toDate ? x.caricatoIl.toDate().toISOString() : x.caricatoIl }); }); },
+      async setModello(l, file) {
+        const buf = new Uint8Array(await file.arrayBuffer()); if (buf.length > 900000) throw new Error('il modello supera 900 KB');
+        await db.collection('contratti_modelli').doc(l).set({ nome: file.name, size: buf.length, dati: firebase.firestore.Blob.fromUint8Array(buf), caricatoDa: api.user || '', caricatoIl: firebase.firestore.FieldValue.serverTimestamp() });
+      },
+      delModello(l) { return db.collection('contratti_modelli').doc(l).delete(); },
+      getContratto(id) { return db.collection('contratti').doc(id).get().then(d => d.exists ? d.data() : null); },
+      setContratto(id, x) { return db.collection('contratti').doc(id).set(x); },
+      listContratti() { return db.collection('contratti').get().then(q => q.docs.map(d => Object.assign({ id: d.id }, d.data()))); },
       setCover(villaId, fotoId, thumb) { return db.collection('villas_thumb').doc(villaId).set({ thumb, fotoId }); },
       async deleteFoto(villaId, fotoId, next) {
         await db.collection('villas_foto').doc(fotoId).delete();

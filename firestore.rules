@@ -108,6 +108,10 @@ service cloud.firestore {
       allow create: if completo() || (pagina('offerte') && request.resource.data.creatoDa == emailUtente());
     }
 
+    // contratti dei clienti (anagrafica, passaporto, carta solo mascherata) e modelli Word del contratto: solo amministratori
+    match /contratti/{id}         { allow read, write: if amministratore(); }
+    match /contratti_modelli/{id} { allow read, write: if amministratore(); }
+
     match /meta/accessi   { allow read: if autorizzato(); allow write: if amministratore(); }
     match /meta/profili   { allow read: if autorizzato(); allow write: if amministratore(); }
     match /meta/settings  { allow read: if autorizzato(); allow write: if completo(); }
