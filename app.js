@@ -1964,7 +1964,7 @@ window.SDBStore.ready.then(function () {
     $('.srv-tbl').addEventListener('click', e => { const bt = e.target.closest('[data-pvar]'); if (!bt) return; const row = bt.closest('[data-pk]'); apriVar(row.dataset.pk, (row.querySelector('[data-sl],[data-cn]') || {}).value || ''); });
     // finestra "Prezzi variabili": regola (gruppi / fasce di ospiti o camere) e prezzo per località; acquisti nella parte protetta
     const apriVar = (k, nome) => {
-      let d = document.getElementById('dlg-pvar'); if (!d) { d = document.createElement('dialog'); d.id = 'dlg-pvar'; d.className = 'dlg-pvar'; document.body.appendChild(d); }
+      const vec = document.getElementById('dlg-pvar'); if (vec) vec.remove(); const d = document.createElement('dialog'); d.id = 'dlg-pvar'; d.className = 'dlg-pvar'; document.body.appendChild(d);
       const pz = prezziSrv()[k] || {}, r0 = JSON.parse(JSON.stringify(pz.regola || { tipo: '' })), acq = canAcq();
       const locs = Array.from(new Set((st.localita && st.localita.length ? st.localita : locList()).map(x => String(x).trim().toUpperCase()).filter(Boolean))).sort();
       const fz = S.fasceDi(r0).map(f => ({ da: f.da, a: f.a, vendita: f.vendita, acquisto: typeof acqSrv[k + '@f:' + f.da] === 'number' ? acqSrv[k + '@f:' + f.da] : acqSrv[k + '@f:' + f.a] }));
@@ -1973,7 +1973,7 @@ window.SDBStore.ready.then(function () {
         d.querySelector('#pv-g').hidden = t.indexOf('gruppi') !== 0; d.querySelector('#pv-f').hidden = t.indexOf('fasce') !== 0;
         d.querySelectorAll('.pv-cosa').forEach(z => { z.textContent = cosa; });
         d.querySelector('#pv-fl').innerHTML = fz.map((f, i) => `<div class="pv-fr" data-fi="${i}"><span>da</span><input data-fd inputmode="numeric" value="${f.da != null ? f.da : ''}"><span>a</span><input data-ff inputmode="numeric" value="${f.a != null ? f.a : ''}" placeholder="oltre" title="Vuoto = e oltre"><span class="pv-cosa">${cosa}</span><span>→ vendita €</span><input data-fv inputmode="numeric" value="${esc(fmt(f.vendita))}">${acq ? `<span>acquisto €</span><input data-fa inputmode="numeric" value="${esc(fmt(f.acquisto))}">` : ''}<button type="button" class="btn small danger" data-fdel>Togli</button></div>`).join('') || '<p class="note">Nessuna fascia.</p>'; };
-      d.innerHTML = `<form class="dlg" method="dialog"><h3>Prezzi variabili · ${esc(nome)}</h3>
+      d.innerHTML = `<form class="dlg" method="dialog"><h3>Prezzi · ${esc(nome)}</h3>
         <div class="pv-g pv-norm"><span>Prezzo normale</span>${acq ? `<label>acquisto previsto € <input id="pv-na" inputmode="numeric" value="${esc(fmt(acqSrv[k]))}" placeholder="—"></label>` : ''}<label>vendita € <input id="pv-nv" inputmode="numeric" value="${esc(fmt(pz.vendita))}" placeholder="—"></label></div>
         <p class="note">Il prezzo normale cambia secondo la villa con le regole qui sotto. Ospiti = quelli dell'offerta o della prenotazione, se no la capienza della villa; camere = camere della villa. Si applica prima del calcolo settimanale.</p>
         <div class="pv-g"><span>Il prezzo vale</span><select id="pv-u"><option value="soggiorno" ${pz.unita === 'settimana' ? '' : 'selected'}>a soggiorno</option><option value="settimana" ${pz.unita === 'settimana' ? 'selected' : ''}>a settimana</option></select>
@@ -1984,26 +1984,48 @@ window.SDBStore.ready.then(function () {
         <details class="pv-loc" ${Object.keys(pz.loc || {}).length ? 'open' : ''}><summary>Prezzo per località (es. transfer)</summary>
           <div class="pv-ll">${locs.map(l => `<div class="pv-lr" data-loc="${esc(l)}"><span>${esc(l)}</span><input data-lv inputmode="numeric" value="${esc(fmt(((pz.loc || {})[l] || {}).vendita))}" placeholder="vendita">${acq ? `<input data-la inputmode="numeric" value="${esc(fmt(acqSrv[k + '@loc:' + l]))}" placeholder="acquisto">` : ''}</div>`).join('') || '<p class="note">Nessuna località: si aggiungono in Impostazioni → Generale.</p>'}</div>
           <p class="note">Vuoto = prezzo normale. Il prezzo della località sostituisce quello normale, poi si applica la regola (es. transfer a Porto Rafael 150 € × gruppi di 6 ospiti).</p></details>
+        <div class="pv-sim"><h4>Prova</h4>
+          <div class="pv-sg"><label>Villa <select id="ps-villa"><option value="">— scegli o scrivi sotto —</option>${data().villas.slice().sort((x, y) => String(x.name).localeCompare(String(y.name), 'it', { numeric: true })).map(v0 => `<option value="${esc(v0.id)}">${esc(v0.name)}</option>`).join('')}</select></label>
+            <label>Località <select id="ps-loc"><option value="">—</option>${locs.map(l => `<option value="${esc(l)}">${esc(l)}</option>`).join('')}</select></label>
+            <label>Camere <input id="ps-cam" inputmode="numeric" placeholder="—"></label><label>Ospiti <input id="ps-osp" inputmode="numeric" placeholder="—"></label><label>Notti <input id="ps-n" inputmode="numeric" value="7"></label></div>
+          <div id="pv-sr"></div></div>
         <div class="foot"><button type="button" class="btn" id="pv-no">Annulla</button><button type="button" class="btn primary" id="pv-ok">Salva</button></div></form>`;
-      const leggiF = () => { d.querySelectorAll('.pv-fr').forEach(rw => { const f = fz[Number(rw.dataset.fi)]; const n0 = sel => { const z = Number(String(rw.querySelector(sel).value).replace(/\D/g, '')); return z > 0 ? z : null; }; f.da = n0('[data-fd]'); f.a = n0('[data-ff]'); f.vendita = num(rw.querySelector('[data-fv]').value); if (acq) f.acquisto = num(rw.querySelector('[data-fa]').value); }); };
+      const leggiF = () => { d.querySelectorAll('.pv-fr').forEach(rw => { const f = fz[Number(rw.dataset.fi)]; if (!f) return; const n0 = sel => { const z = Number(String(rw.querySelector(sel).value).replace(/\D/g, '')); return z > 0 ? z : null; }; f.da = n0('[data-fd]'); f.a = n0('[data-ff]'); f.vendita = num(rw.querySelector('[data-fv]').value); if (acq) f.acquisto = num(rw.querySelector('[data-fa]').value); }); };
       d.querySelector('#pv-t').onchange = () => { leggiF(); draw(); };
       d.querySelector('#pv-u').onchange = e => { d.querySelector('#pv-cw').hidden = e.target.value !== 'settimana'; };
       d.querySelector('#pv-fadd').onclick = () => { leggiF(); const ul = fz[fz.length - 1]; fz.push({ da: ul ? (ul.a != null ? ul.a + 1 : null) : 1, a: null, vendita: null, acquisto: null }); draw(); };
       d.querySelector('#pv-fl').addEventListener('click', e => { if (!e.target.closest('[data-fdel]')) return; leggiF(); fz.splice(Number(e.target.closest('[data-fi]').dataset.fi), 1); draw(); });
       d.querySelector('#pv-no').onclick = () => d.close();
-      d.querySelector('#pv-ok').onclick = () => { leggiF(); const t = d.querySelector('#pv-t').value, o0 = Object.assign({}, prezziSrv()[k]);
+      // legge la finestra senza salvare: { o0 = prezziServizi[k], acqK = acquisti di questa voce, err }
+      const leggiTutto = () => { leggiF(); const t = d.querySelector('#pv-t').value, o0 = Object.assign({}, prezziSrv()[k]), acqK = {};
         const ff = fz.filter(f => f.da > 0).sort((a, b) => a.da - b.da);
-        if (t.indexOf('fasce') === 0 && (ff.some(f => f.a != null && f.a < f.da) || ff.some((f, i) => i && (ff[i - 1].a == null || ff[i - 1].a >= f.da)))) { toast('Le fasce si sovrappongono o "a" è minore di "da": controlla i numeri'); return; }
-        Object.keys(acqSrv).forEach(z => { if (z.indexOf(k + '@') === 0) delete acqSrv[z]; });
+        const err = t.indexOf('fasce') === 0 && (ff.some(f => f.a != null && f.a < f.da) || ff.some((f, i) => i && (ff[i - 1].a == null || ff[i - 1].a >= f.da)));
         if (!t) delete o0.regola; else o0.regola = t.indexOf('gruppi') === 0 ? { tipo: t, n: Number(String(d.querySelector('#pv-n').value).replace(/\D/g, '')) || null } : { tipo: t, fasce: ff.map(f => ({ da: f.da, a: f.a, vendita: f.vendita })) };
-        if (t.indexOf('fasce') === 0 && acq) ff.forEach(f => { if (typeof f.acquisto === 'number') acqSrv[k + '@f:' + f.da] = f.acquisto; });
-        const loc = {}; d.querySelectorAll('.pv-lr').forEach(rw => { const l = rw.dataset.loc, v0 = num(rw.querySelector('[data-lv]').value); if (typeof v0 === 'number') loc[l] = { vendita: v0 }; if (acq) { const a0 = num(rw.querySelector('[data-la]').value); if (typeof a0 === 'number') acqSrv[k + '@loc:' + l] = a0; } });
+        if (t.indexOf('fasce') === 0 && acq) ff.forEach(f => { if (typeof f.acquisto === 'number') acqK[k + '@f:' + f.da] = f.acquisto; });
+        const loc = {}; d.querySelectorAll('.pv-lr').forEach(rw => { const l = rw.dataset.loc, v0 = num(rw.querySelector('[data-lv]').value); if (typeof v0 === 'number') loc[l] = { vendita: v0 }; if (acq) { const a0 = num(rw.querySelector('[data-la]').value); if (typeof a0 === 'number') acqK[k + '@loc:' + l] = a0; } });
         if (Object.keys(loc).length) o0.loc = loc; else delete o0.loc;
         const nv = num(d.querySelector('#pv-nv').value); o0.vendita = typeof nv === 'number' ? nv : null;
-        if (acq) { const na = num(d.querySelector('#pv-na').value); if (typeof na === 'number') acqSrv[k] = na; else delete acqSrv[k]; }
+        if (acq) { const na = num(d.querySelector('#pv-na').value); if (typeof na === 'number') acqK[k] = na; }
         const un = d.querySelector('#pv-u').value; o0.unita = un; delete o0.volte; if (un === 'settimana') { const ct = String(d.querySelector('#pv-c').value).trim().replace(',', '.'), cv = Number(ct); o0.coeff = ct !== '' && cv >= 0 ? cv : (typeof o0.coeff === 'number' ? o0.coeff : 1); }
-        prezziSrv()[k] = o0; save(); if (acq) salvaAcq(); d.close(); if (S.isVoceKey(k)) drawCat(); else drawSrv(); toast('Prezzi variabili salvati'); };
-      draw(); if (d.showModal) d.showModal(); else d.setAttribute('open', ''); };
+        return { o0, acqK, err }; };
+      // prova: villa (o località, camere, ospiti a mano) e notti → prezzo che esce, con le impostazioni scritte nella finestra (anche non salvate)
+      const sim = () => { const box = d.querySelector('#pv-sr'); if (!box) return; const { o0, acqK } = leggiTutto();
+        const stT = Object.assign({}, st, { prezziServizi: Object.assign({}, st.prezziServizi, { [k]: o0 }) });
+        const vill = { location: d.querySelector('#ps-loc').value, totalBedrooms: Number(d.querySelector('#ps-cam').value) || 0, guests: Number(d.querySelector('#ps-osp').value) || 0 };
+        const notti = Number(d.querySelector('#ps-n').value) || 7, opz = { villa: vill, ospiti: vill.guests };
+        const bV = S.srvAdatta(stT, k, o0.vendita, opz), bA = acq ? S.srvAdatta(stT, k, acqK[k] != null ? acqK[k] : null, Object.assign({}, opz, { acq: acqK })) : null;
+        const fV = S.srvPrezzo(stT, k, bV, notti), fA = acq ? S.srvPrezzo(stT, k, bA, notti) : null, sett = S.srvSettimane(notti), u = S.srvUnita(stT, k);
+        const eur = x => typeof x === 'number' ? fmtNum(x) + ' €' : '—';
+        box.innerHTML = `<div class="pv-res"><span>Vendita <b>${eur(fV)}</b></span>${acq ? `<span>Acquisto previsto <b>${eur(fA)}</b></span>` : ''}${acq && typeof fV === 'number' && typeof fA === 'number' ? `<span>Margine <b>${eur(fV - fA)}</b></span>` : ''}</div>
+          <small class="note">${typeof bV === 'number' ? `prezzo per questa villa ${eur(bV)}` : 'nessun prezzo di vendita'}${u.settimanale ? ` × ${String(Math.round(S.srvFattore(stT, k, notti) * 100) / 100).replace('.', ',')} (${String(Math.round(sett * 100) / 100).replace('.', ',')} settimane, dalla 2ª × ${String(u.coeff).replace('.', ',')})` : ' · a soggiorno: uguale per qualunque durata'}</small>`; };
+      d.querySelector('#ps-villa').onchange = e => { const v0 = data().villas.find(z => z.id === e.target.value); if (!v0) return;
+        d.querySelector('#ps-loc').value = String(v0.location || '').trim().toUpperCase(); d.querySelector('#ps-cam').value = S.numCampo(v0.totalBedrooms) || ''; d.querySelector('#ps-osp').value = S.numCampo(v0.guests) || ''; sim(); };
+      d.addEventListener('input', () => setTimeout(sim, 0)); d.addEventListener('change', () => setTimeout(sim, 0)); d.addEventListener('click', e => { if (e.target.closest('#pv-fadd, [data-fdel]')) setTimeout(sim, 0); });
+      d.querySelector('#pv-ok').onclick = () => { const { o0, acqK, err } = leggiTutto();
+        if (err) { toast('Le fasce si sovrappongono o "a" è minore di "da": controlla i numeri'); return; }
+        if (acq) { Object.keys(acqSrv).forEach(z => { if (z === k || z.indexOf(k + '@') === 0) delete acqSrv[z]; }); Object.assign(acqSrv, acqK); }
+        prezziSrv()[k] = o0; save(); if (acq) salvaAcq(); d.close(); if (S.isVoceKey(k)) drawCat(); else drawSrv(); toast('Prezzi salvati'); };
+      draw(); sim(); if (d.showModal) d.showModal(); else d.setAttribute('open', ''); };
     $('.srv-tbl').addEventListener('change', e => { if (!e.target.matches('[data-pdf]')) return; const k = e.target.closest('[data-pk]').dataset.pk;
       prezziSrv()[k] = Object.assign({}, prezziSrv()[k], { predef: e.target.checked }); save(); if (S.isVoceKey(k)) drawCat(); else drawSrv(); });
     $('.srv-tbl').addEventListener('change', e => { if (!e.target.matches('[data-pu]')) return; const row = e.target.closest('[data-pk]'), k = row.dataset.pk, sett = e.target.value === 'settimana';
