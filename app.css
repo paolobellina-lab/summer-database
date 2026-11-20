@@ -1268,3 +1268,6 @@ dialog.dlg-bil { width: min(900px, calc(100vw - 32px)); }
 .h2-bar + * { margin-top: 10px; }
 .srv-tbl.srv-noedit .col-act { display: none; }
 #srv-ord[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+/* Verifica di stagione */
+.vs-tbl td, .vs-tbl th { white-space: nowrap; }
+.vs-chip { display: inline-block; font-weight: 600; }

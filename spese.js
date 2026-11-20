@@ -525,7 +525,7 @@
     });
     root.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches && e.target.matches('.vcard[data-pk]')) e.target.click(); });
 
-    const render = () => { if (!document.body.contains(root)) return; setCats(ctx); if (sub) dettaglio(); else elenco(); };
+    const render = () => { if (!document.body.contains(root)) return; setCats(ctx); if (sub === 'verifica') verifica(); else if (sub) dettaglio(); else elenco(); };
 
     /* ---------- elenco delle prenotazioni ---------- */
     function elenco() {
@@ -599,7 +599,7 @@
         <div class="head"><div><h1>Prenotazioni</h1><div class="sub">Gli stessi periodi del calendario Disponibilità${ctx.online ? ' · vendita, acquisto previsto e spese reali (scontrini aggiornati in tempo reale)' : ' · le spese si vedono con i dati online'}</div></div>
           <div class="actions no-print">${ctx.canEdit() ? '<button class="btn primary" type="button" id="pr-book">+ Nuova prenotazione</button>' : ''}${ctx.online ? `<button class="btn${ctx.canEdit() ? '' : ' primary'}" type="button" id="pr-new">+ Nuova spesa</button>
             <button class="btn" type="button" id="pr-exp">Esporta spese</button>
-            <button class="btn" type="button" id="pr-assign">Account e assegnazioni</button>` : ''}</div></div>
+            <button class="btn" type="button" id="pr-assign">Account e assegnazioni</button>` : ''}${ctx.online && acq ? '<a class="btn" href="#prenotazioni-verifica">Verifica di stagione</a>' : ''}</div></div>
         <div class="card sp-filters no-print">
           <label class="field sp-q"><span>Cerca</span><input type="search" id="pr-q" placeholder="Cliente, villa o zona" value="${esc(ui.prQ || '')}"></label>
           <label class="field"><span>Villa</span><select id="pr-villa"><option value="">Tutte le ville</option>${A.ville().map(v => `<option value="${esc(v.id)}" ${vf === v.id ? 'selected' : ''}>${esc(v.name)}</option>`).join('')}</select></label>
@@ -621,6 +621,64 @@
       if ($('#pr-book', root)) $('#pr-book', root).onclick = () => ctx.nuovaPren(vf);
       if ($('#pr-exp', root)) $('#pr-exp', root).onclick = () => A.openExport(null);
       if ($('#pr-assign', root)) $('#pr-assign', root).onclick = () => openAssign(ctx);
+    }
+
+    /* ---------- verifica di stagione: acquisto previsto (Impostazioni) dei servizi e delle voci delle note spese
+       a confronto con le note spese reali. Previsto di una prenotazione = acquisto predefinito × settimane (se settimanale),
+       solo per le prenotazioni che hanno note di quella voce; le spese generali si mostrano a parte. Mai usato nelle spese. ---------- */
+    function verifica() {
+      const S = window.SDB, st = data().settings || {}, acqP = data().serviziAcquisto || {};
+      if (!acq || !ctx.online) { root.innerHTML = '<div class="wrap"><a href="#prenotazioni" class="pr-back">← Tutte le prenotazioni</a><div class="card"><p class="note">La verifica di stagione è disponibile con i dati online e con l\'accesso ai prezzi di acquisto.</p></div></div>'; return; }
+      const V = voci(ctx); if (!V.conSpese) { root.innerHTML = '<div class="wrap"><p class="note">Caricamento…</p></div>'; return; }
+      const vf = ui.vsVilla || '', da = ui.vsDa || '', a0 = ui.vsA || '';
+      const fisse = new Set(CATS.fisse);
+      const keyDi = sp => { const sv = srvDiSpesa(sp); if (sv) return { k: sv.key, label: sv.label, voce: false }; const c = String(sp.categoria || '').trim(); if (!c || fisse.has(c)) return null; return { k: S.voceKey(c), label: c, voce: true, fuori: !CATS.libere.includes(c) }; };
+      const R0 = new Map(); const riga = (k, label, voce, fuori) => { if (!R0.has(k)) R0.set(k, { k, label, voce, fuori, pren: 0, note: 0, reale: 0, prev: 0, realeP: 0, nPrev: 0, gen: 0 }); return R0.get(k); };
+      CATS.servizi.filter(x => !x.off).forEach(x => { if (typeof acqP[x.key] === 'number') riga(x.key, x.label, false); });
+      CATS.libere.forEach(c => { const k = S.voceKey(c); if (typeof acqP[k] === 'number') riga(k, c, true); });
+      const inPer = x => (!da || String(x.from || '') >= da) && (!a0 || String(x.from || '') <= a0);
+      V.l.filter(x => (!vf || x.villaId === vf) && inPer(x)).forEach(x => { const per = new Map();
+        x.spese.forEach(sp => { const kd = keyDi(sp); if (!kd) return; const r = riga(kd.k, kd.label, kd.voce, kd.fuori); r.note++; per.set(kd.k, (per.get(kd.k) || 0) + (Number(sp.importo) || 0)); });
+        const notti = x.from && x.to ? S.diffDays(x.from, x.to) : 0;
+        per.forEach((tot, k) => { const r = R0.get(k); r.pren++; r.reale += tot; const ap = acqP[k]; if (typeof ap === 'number') { r.prev += S.srvPrezzo(st, k, ap, notti); r.realeP += tot; r.nPrev++; } }); });
+      if (!da && !a0) V.generali.filter(x => !vf || x.villaId === vf).forEach(x => x.spese.forEach(sp => { const kd = keyDi(sp); if (!kd) return; const r = riga(kd.k, kd.label, kd.voce, kd.fuori); r.note++; r.gen += Number(sp.importo) || 0; }));
+      const righe = [...R0.values()].sort((p, q) => (p.voce - q.voce) || p.label.localeCompare(q.label, 'it'));
+      const pctS = (r0, p0) => p0 ? ((r0 - p0) / p0 * 100) : null;
+      const pctTxt = v => v == null ? '—' : (v > 0 ? '+' : '') + v.toFixed(1).replace('.', ',') + '%';
+      const esito = v => v == null ? '' : Math.abs(v) <= 5 ? 'ok' : v > 0 ? 'oltre' : 'sotto';
+      const unita = k => { const u = S.srvUnita(st, k); return u.settimanale ? `a settimana${u.coeff !== 1 ? ' (dalla 2ª × ' + String(u.coeff).replace('.', ',') + ')' : ''}` : 'a soggiorno'; };
+      const T = righe.reduce((t, r) => ({ reale: t.reale + r.reale, prev: t.prev + r.prev, realeP: t.realeP + r.realeP, gen: t.gen + r.gen }), { reale: 0, prev: 0, realeP: 0, gen: 0 });
+      const ville = [...new Set(V.l.concat(V.generali).map(x => x.villaId))].map(villaDi).sort((p, q) => String(p.name).localeCompare(String(q.name), 'it', { numeric: true }));
+      root.innerHTML = `<div class="wrap">
+        <a href="#prenotazioni" class="pr-back no-print">← Tutte le prenotazioni</a>
+        <div class="head"><div><h1>Verifica di stagione</h1><div class="sub">Acquisto previsto dei servizi e delle voci delle note spese (Impostazioni → Servizi e inclusioni) a confronto con le note spese reali. Il previsto di ogni prenotazione è l'acquisto predefinito (× settimane se il prezzo è settimanale), solo per le prenotazioni con note di quella voce.</div></div>
+          <div class="actions no-print"><button class="btn" type="button" id="vs-csv">Scarica Excel</button><button class="btn" type="button" onclick="window.print()">Stampa</button></div></div>
+        <div class="card sp-filters no-print">
+          <label class="field"><span>Villa</span><select id="vs-villa"><option value="">Tutte le ville</option>${ville.map(v => `<option value="${esc(v.id)}" ${vf === v.id ? 'selected' : ''}>${esc(v.name)}</option>`).join('')}</select></label>
+          <label class="field"><span>Arrivo dal</span><input type="date" id="vs-da" value="${esc(da)}"></label>
+          <label class="field"><span>al</span><input type="date" id="vs-a" value="${esc(a0)}"></label>
+        </div>
+        <div class="sp-summary" style="grid-template-columns:repeat(4,minmax(0,1fr))">
+          <div><b>${euro(T.prev)}</b><span>Acquisto previsto</span></div><div><b>${euro(T.realeP)}</b><span>Reale (voci con previsto)</span></div>
+          <div><b>${T.prev ? (T.realeP - T.prev >= 0 ? '+' : '') + euro(T.realeP - T.prev) : '—'}</b><span>Differenza ${pctTxt(pctS(T.realeP, T.prev))}</span></div><div><b>${euro(T.reale + T.gen)}</b><span>Tutte le note di queste voci</span></div></div>
+        ${righe.length ? `<div class="card"><div class="tbl-wrap"><table class="prices vs-tbl"><thead><tr><th>Voce</th><th>Prezzo</th><th style="text-align:right">Acquisto previsto</th><th style="text-align:right">Prenot.</th><th style="text-align:right">Note</th><th style="text-align:right">Previsto</th><th style="text-align:right">Reale</th><th style="text-align:right">Differenza</th><th style="text-align:right">Scostamento</th><th style="text-align:right">Media reale per prenot.</th><th style="text-align:right">Spese generali</th></tr></thead><tbody>
+          ${righe.map(r => { const ap = acqP[r.k], d = r.nPrev ? r.realeP - r.prev : null, pc = r.nPrev ? pctS(r.realeP, r.prev) : null, es = esito(pc);
+            return `<tr><td><b>${esc(r.label)}</b> <small class="note">${r.voce ? (r.fuori ? 'voce non più in elenco' : 'voce delle note spese') : 'servizio'}</small></td><td class="note">${esc(unita(r.k))}</td>
+              <td style="text-align:right">${typeof ap === 'number' ? euro(ap) : '<span class="note">—</span>'}</td><td style="text-align:right">${r.pren}</td><td style="text-align:right">${r.note}</td>
+              <td style="text-align:right">${r.nPrev ? euro(r.prev) : '—'}</td><td style="text-align:right">${euro(r.reale)}</td>
+              <td style="text-align:right">${d == null ? '—' : (d >= 0 ? '+' : '') + euro(d)}</td><td style="text-align:right">${pc == null ? '<span class="note">senza previsto</span>' : `<span class="chk ${es === 'oltre' ? 'chk-bad' : es === 'ok' ? 'chk-ok' : 'chk-warn'} vs-chip">${pctTxt(pc)}</span>`}</td>
+              <td style="text-align:right">${r.pren ? euro(r.reale / r.pren) : '—'}</td><td style="text-align:right">${r.gen ? euro(r.gen) : '—'}</td></tr>`; }).join('')}
+          </tbody></table></div><p class="note">Scostamento entro ±5% = in linea. Le note "non più in calendario" contano se rientrano nei filtri; le spese generali (senza prenotazione) si vedono a parte e solo senza filtro di date.</p></div>`
+          : '<div class="empty">Nessuna nota spese e nessun acquisto previsto per questi filtri.</div>'}
+      </div>`;
+      const set = (k, v) => { ui[k] = v; saveUI(); render(); };
+      $('#vs-villa', root).onchange = e => set('vsVilla', e.target.value);
+      $('#vs-da', root).onchange = e => set('vsDa', e.target.value);
+      $('#vs-a', root).onchange = e => set('vsA', e.target.value);
+      $('#vs-csv', root).onclick = () => { const cella = v => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`, n = v => v == null ? '' : v.toFixed(2).replace('.', ',');
+        const rows = [['Voce', 'Tipo', 'Prezzo', 'Acquisto previsto', 'Prenotazioni', 'Note', 'Previsto', 'Reale', 'Differenza', 'Scostamento %', 'Media reale per prenotazione', 'Spese generali']];
+        righe.forEach(r => { const ap = acqP[r.k]; rows.push([r.label, r.voce ? 'Voce delle note spese' : 'Servizio', unita(r.k), typeof ap === 'number' ? n(ap) : '', r.pren, r.note, r.nPrev ? n(r.prev) : '', n(r.reale), r.nPrev ? n(r.realeP - r.prev) : '', r.nPrev && r.prev ? n(pctS(r.realeP, r.prev)) : '', r.pren ? n(r.reale / r.pren) : '', r.gen ? n(r.gen) : '']); });
+        window.SDBExport.scarica(`verifica-stagione_${isoLocale(new Date())}.csv`, new Blob(['\ufeff' + rows.map(r => r.map(cella).join(';')).join('\r\n')], { type: 'text/csv;charset=utf-8' })); };
     }
 
     /* ---------- riepilogo di una prenotazione ---------- */

@@ -218,10 +218,17 @@
   const CARICHI = ['esmeralda', 'parte', 'proprietario'];
   const CARICO_LABEL = { esmeralda: 'A carico di Esmeralda', parte: 'A carico del cliente', proprietario: 'A carico del proprietario' };
   const CARICO_BREVE = { esmeralda: 'Esmeralda', parte: 'Cliente', proprietario: 'Proprietario' };
-  const caricoSet = (st, k) => { const d = ((st && st.prezziServizi) || {})[k] || {}; return CARICHI.includes(d.carico) ? d.carico : d.incluso === true ? 'esmeralda' : 'parte'; };
+  // voci delle note spese con prezzo: chiave 'voce:<nome>' in prezziServizi / servizi_acquisto; il carico viene dalle liste
+  // categorieAggiuntive (cliente) e categorieProprietario (proprietario), altrimenti Esmeralda (come per le note spese)
+  const VOCE = 'voce:';
+  const voceKey = nome => VOCE + nome;
+  const isVoceKey = k => String(k || '').startsWith(VOCE);
+  const voceNome = k => String(k || '').slice(VOCE.length);
+  const caricoSet = (st, k) => { if (isVoceKey(k)) { const n = voceNome(k); return ((st && st.categorieAggiuntive) || []).includes(n) ? 'parte' : ((st && st.categorieProprietario) || []).includes(n) ? 'proprietario' : 'esmeralda'; }
+    const d = ((st && st.prezziServizi) || {})[k] || {}; return CARICHI.includes(d.carico) ? d.carico : d.incluso === true ? 'esmeralda' : 'parte'; };
   const caricoDef = (st, villa, k) => villa && (villa.serviziInclusi || []).includes(k) ? 'proprietario' : caricoSet(st, k);
   // dettaglio di una prenotazione: carico salvato, altrimenti il vecchio "incluso" (incluso = a carico di Esmeralda)
   const caricoDi = d => d && CARICHI.includes(d.carico) ? d.carico : d && d.incluso === false ? 'parte' : 'esmeralda';
   const TAR_SETT = { settimanale: 1, bisettimanale: 2, mensile: 4, bimensile: 8 };
-  window.SDB = { CARICHI, CARICO_LABEL, CARICO_BREVE, caricoSet, caricoDef, caricoDi, TAR_SETT, MARGINE_MIN, AGENZIA_DEF, srvUnita, srvSettimane, srvFattore, srvPrezzo, MARE, mareLivello, mareLabel, INCLUSIONI, inclusioniDi, CAMPI_SCHEDA, CAMPI_NASCOSTI_DEFAULT, nascostiDi, periodsFor, autoPeriods, autoPeriodsFor, cambioDi, STATUS_COLOR, PALETTE, inkFor, DAY, MESI, MESI_L, GG, parse, iso, addDays, diffDays, dm, dmy, TARIFFE, STATI, defaultSettings, defaultPeriods, salePrice, priceAt, emptyPricing, money, short, parseMoney, uid };
+  window.SDB = { voceKey, isVoceKey, voceNome, CARICHI, CARICO_LABEL, CARICO_BREVE, caricoSet, caricoDef, caricoDi, TAR_SETT, MARGINE_MIN, AGENZIA_DEF, srvUnita, srvSettimane, srvFattore, srvPrezzo, MARE, mareLivello, mareLabel, INCLUSIONI, inclusioniDi, CAMPI_SCHEDA, CAMPI_NASCOSTI_DEFAULT, nascostiDi, periodsFor, autoPeriods, autoPeriodsFor, cambioDi, STATUS_COLOR, PALETTE, inkFor, DAY, MESI, MESI_L, GG, parse, iso, addDays, diffDays, dm, dmy, TARIFFE, STATI, defaultSettings, defaultPeriods, salePrice, priceAt, emptyPricing, money, short, parseMoney, uid };
 })();
