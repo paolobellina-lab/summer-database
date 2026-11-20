@@ -85,6 +85,11 @@
       const cons = i0 !== null && o0 !== null ? o0 - i0 : null, imp = cons !== null && t0 !== null ? Math.round(cons * t0 * 100) / 100 : null; if (imp !== null) { tot += imp; ok = true; }
       return { k, l, un, i0, o0, t0, tPred: numU(r.tariffa) === null && numU(td[k]) !== null, cons, imp }; });
     return { righe, tot: ok ? Math.round(tot * 100) / 100 : null }; };
+  // servizio "Utenze" della prenotazione: spuntato come incluso nel prezzo = i consumi non si fanno pagare;
+  // a parte o non spuntato = il totale delle utenze va nelle spese aggiuntive da addebitare al cliente
+  const utSrv = () => (CATS.servizi || []).find(z => z.key === 'utenze' || String(z.label || '').trim().toLowerCase() === 'utenze') || null;
+  const utIncluse = b => { const z = utSrv(); return !!(z && b && CTX && CTX.hasSrv && CTX.hasSrv(b, z.key) && CTX.srvDet && CTX.srvDet(b, z.key).incluso); };
+  const utDa = b => { if (!b || !CTX) return 0; const t = utCalc(b, CTX.data().settings).tot; return t && !utIncluse(b) ? t : 0; };
   const PAGAMENTI = [['contanti', 'Contanti'], ['carta', 'Carta di credito'], ['bonifico', 'Bonifico']];
   const pagLabel = k => (PAGAMENTI.find(x => x[0] === k) || [])[1] || '';
   const pagSec = (pre, cur) => `<section class="dsec sec-pag"><h4>Metodo di pagamento</h4><div class="pag-opts">${PAGAMENTI.map(([k, l]) => `<label class="pag-opt"><input type="radio" name="${pre}-pag" value="${k}" ${cur === k ? 'checked' : ''}><span>${l}</span></label>`).join('')}</div></section>`;
@@ -367,7 +372,9 @@
       const depR = sc && typeof sc.deposito === 'number' ? sc.deposito : 0, restW = sommaRest(l);
       const trW = trattDi(depR, l);
       if (depR || restW) tot.push(['Deposito di sicurezza ricevuto', euro(depR)], ['Deposito restituito', haRest(l) ? '−' + euro(restW) : 'non ancora registrato'], ['Deposito trattenuto', haRest(l) ? euro(trW) : '—']);
-      if (sommaAgg(l)) tot.push(['Totale da addebitare al cliente (' + notaAdd(depR, sommaAgg(l), euro) + ')', euro(sommaAgg(l))]);
+      const bW = sc ? (ctx.data().bookings || []).find(b => b.id === pid) : null, utW = utDa(bW), aggW = sommaAgg(l) + utW;
+      if (utW) tot.push(['Utenze (consumi da far pagare)', euro(utW)]);
+      if (aggW) tot.push(['Totale da addebitare al cliente (' + notaAdd(depR, aggW, euro) + ')', euro(aggW)]);
       if (sc && sc.haPrezzo) tot.push([trW ? 'Margine reale (vendita + deposito trattenuto − spese)' : 'Margine reale (vendita − spese)', ctxMoney(sc.totVendita + trW + sommaEntr(l) - somma(l))]);
       B.push({ kv: tot });
       B.push({ p: `Esportato il ${new Date().toLocaleString('it-IT')} da ${store.user || ''}. Foto e allegati sono nel file zip scaricato insieme.`, small: true });
@@ -532,7 +539,7 @@
       // stato del soggiorno: in arrivo, in corso, partiti, conteggi conclusi (partiti e niente più da chiudere)
       const daChiudere = x => { const v = val(x), dep = v.deposito, out = [];
         if (dep && !haRest(x.spese)) out.push('restituzione deposito');
-        const agg = sommaAgg(x.spese), oltre = dep ? sulDeposito(dep, agg).oltre : agg; if (oltre - sommaAddC(x.spese) > 0.5) out.push('addebito cliente');
+        const agg = sommaAgg(x.spese) + utDa(x.b), oltre = dep ? sulDeposito(dep, agg).oltre : agg; if (oltre - sommaAddC(x.spese) > 0.5) out.push('addebito cliente');
         if (sommaPropS(x.spese) - sommaAddP(x.spese) > 0.5) out.push('addebito proprietario');
         if (acq && v.affAcq && !affR(V, x)) out.push('affitto proprietario');
         return out; };
@@ -676,7 +683,7 @@
           + r4('di cui servizi aggiuntivi', 'richiesti durante il soggiorno: da addebitare o trattenere dal deposito', null, on ? sommaAgg(x.spese) : null, 'sub')
           + (haDep ? r4('Deposito trattenuto', depChiuso ? 'ricevuto − restituito' : 'si conta quando registri la restituzione', null, on && depChiuso ? tratt : null) : '')
           + r4('Margine', haDep ? 'vendita + deposito trattenuto − acquisto' : 'vendita − acquisto', marP, marR, 'tot', piuAlto)
-          + r4('Totale da addebitare al cliente', on ? notaAdd(dep, sommaAgg(x.spese), euro) : 'spese aggiuntive', null, on ? sommaAgg(x.spese) : null);
+          + r4('Totale da addebitare al cliente', on ? notaAdd(dep, sommaAgg(x.spese) + utDa(x.b), euro) : 'spese aggiuntive', null, on ? sommaAgg(x.spese) + utDa(x.b) : null);
       } else celle = rowV('Vendita', E(v.vendita), 'affitto + servizi a parte') + rowV('Spese reali servizi offerti', ctx.online ? euro(sommaSrv(x.spese)) : vuoto, 'servizi della prenotazione') + rowV('Altre spese della prenotazione', ctx.online ? euro(sommaAltre(x.spese)) : vuoto, 'categorie non aggiuntive') + rowV('Spese reali servizi aggiuntivi', ctx.online ? euro(sommaAgg(x.spese)) : vuoto, 'da addebitare o trattenere dal deposito') + rowV(haDep ? 'Vendita + deposito trattenuto − spese' : 'Vendita − spese', v.vendita != null && ctx.online ? euro(v.vendita + (haDep ? tratt : 0) - sp) : vuoto);
       // controllo previsto / reale: i valori della prenotazione sono quelli ipotizzati (tranne la vendita), le note spese quelle reali
       let chkHtml = '', quad = false;
@@ -687,7 +694,7 @@
         const spGruppo = grp ? grp.membri.flatMap(m => { const it = V.l.find(y => y.b && y.b.id === m.id); return it ? it.spese : []; }) : x.spese;
         const affReal = grp ? sommaAff(spGruppo) : affR(V, x), qReale = quotaReale(V, x);
         const srvPrev = v.acquisto == null ? null : v.acquisto - (num(v.affAcq) || 0);
-        const srvReal = sommaInc(x.spese), aggReal = sommaAgg(x.spese);
+        const srvReal = sommaInc(x.spese), aggSp = sommaAgg(x.spese), utC = utDa(x.b), aggReal = aggSp + utC;
         const srvNomi = sc ? sc.servizi.filter(r => sc.acq && r[2]).map(r => r[0]) : [];
         const esito = (pr, re, daInserire) => {
           if (pr == null && !re) return ['—', ''];
@@ -766,7 +773,7 @@
               + (propT - addP > 0 ? r2('Ancora da addebitare', 'registralo con la nota "Addebito proprietario"', euro(propT - addP), 'neg') : ''))}</div>`;
           const sdq = sulDeposito(dep, aggReal), oltreC = dep ? sdq.oltre : aggReal, addC = sommaAddC(x.spese), nAddC = x.spese.filter(isAddC).length;
           const q4 = `<div class="card pr-q"><h2>Spese aggiuntive</h2>${tab(
-              agg.map(([c, t]) => r2(esc(c), 'richiesta durante il soggiorno', euro(t))).join('') || r2('Nessuna spesa aggiuntiva', '', euro(0)),
+              (agg.map(([c, t]) => r2(esc(c), 'richiesta durante il soggiorno', euro(t))).join('') + (utC ? r2('Utenze (consumi)', utSrv() && ctx.hasSrv(x.b, utSrv().key) ? 'letture dei contatori · servizio Utenze a parte' : 'letture dei contatori · servizio Utenze non incluso', euro(utC)) : '')) || r2('Nessuna spesa aggiuntiva', '', euro(0)),
               r2('<b>Totale da addebitare al cliente</b>', notaAdd(dep, aggReal, euro), `<b>${euro(aggReal)}</b>`, 'tot')
               + (oltreC || nAddC ? r2('Addebitato al cliente', nAddC ? `${nAddC} ${nAddC === 1 ? 'nota' : 'note'} "Addebito cliente" (oltre il deposito)` : 'nessuna nota "Addebito cliente"', euro(addC)) : '')
               + (haDep ? r2('Deposito di sicurezza trattenuto', depChiuso ? `ricevuto ${dep == null ? '—' : euro(dep)} − restituito ${euro(rest)}` : `ricevuto ${dep == null ? '—' : euro(dep)}: si conta dopo la nota "Restituzione deposito"`, depChiuso ? euro(tratt) : '—', depChiuso && tratt < 0 ? 'neg' : '') : '')
@@ -821,7 +828,7 @@
                   <td class="r" data-utc>${r.cons === null ? '—' : esc(fmtU(r.cons)) + ' ' + esc(r.un)}</td><td class="r">${cel(r.k, 'tariffa', r.tPred ? null : r.t0, r.tPred ? fmtU(r.t0) : '')}</td><td class="r" data-uti>${r.imp === null ? '—' : esc(euro(r.imp))}</td></tr>`).join('')}
                 </tbody><tfoot><tr><td colspan="5"><b>Totale utenze da far pagare</b></td><td class="r"><b id="ut-tot">${uc.tot === null ? '—' : esc(euro(uc.tot))}</b></td></tr></tfoot></table></div>
                 ${ed ? `<div class="actions no-print" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button type="button" class="btn primary" id="ut-save">Salva le letture</button><button type="button" class="btn" id="ut-pred">Usa queste tariffe come predefinite</button><span class="note" id="ut-msg"></span></div>` : ''}
-                <p class="note">Per farle pagare registra una nota spese "Addebito cliente" con il totale (o trattienilo dal deposito).</p></div>`; })() : ''}
+                <p class="note">${utIncluse(x.b) ? '<b>Utenze incluse nel prezzo</b> (servizio Utenze spuntato come incluso): i consumi non si fanno pagare.' : '<b>Il totale va nelle Spese aggiuntive</b> da addebitare al cliente (servizio Utenze a parte o non spuntato): trattienilo dal deposito o registra una nota "Addebito cliente".'}</p></div>`; })() : ''}
             ${x.b ? `<label class="flag pr-concl no-print" style="margin-top:12px"><input type="checkbox" id="pd-concl" ${x.b.conteggiConclusi ? 'checked' : ''} ${ctx.canEdit() ? '' : 'disabled'}><span><b>Conteggi conclusi</b><small>Deposito, addebiti e affitto al proprietario chiusi: nell'elenco la scheda risulta "Conteggi conclusi"</small></span></label>` : ''}</div>
         </div>
         ${quad ? '' : `<div class="card pr-valori"><h2>Valori</h2><div class="tbl-wrap"><table class="prices pr-val-t"><thead><tr><th>Voce</th>${tab4 ? '<th class="r">Previsto</th><th class="r">Reale</th><th class="r">Differenza</th>' : '<th class="r">Importo</th>'}</tr></thead><tbody>${celle}</tbody></table></div>
