@@ -1280,3 +1280,27 @@ dialog.dlg-bil { width: min(900px, calc(100vw - 32px)); }
 .off-ri-c, .off-ri-l, .off-ri-l span { text-align: left; }
 .off-ri-l span, .off-rs-l > span { white-space: nowrap; text-align: left; }
 .off-ri-c { min-width: 220px; }
+/* Servizi e categorie delle spese: ogni riga su due righe, senza barra di scorrimento */
+.srv-tbl { width: 100%; min-width: 0; }
+.srv-tbl thead { display: none; }
+.srv-tbl tbody, .srv-tbl tr { display: block; }
+.srv-tbl tr.srv-tr, .srv-tbl tr.catv-row { display: grid; grid-template-columns: minmax(160px, 1.5fr) auto auto auto minmax(0, 1fr); grid-template-areas: "nome off car pdf ." "un acq ven uso act"; gap: 6px 14px; align-items: center; padding: 8px 6px; border-bottom: 1px solid var(--line); }
+.srv-tbl tr.srv-tr > td, .srv-tbl tr.catv-row > td { display: block; padding: 0; border: 0; }
+.srv-tbl .c-nome { grid-area: nome; } table.prices.srv-tbl td.c-nome input { width: 100%; }
+.srv-tbl .srv-off { grid-area: off; } .srv-tbl .c-car { grid-area: car; } .srv-tbl .srv-pdf { grid-area: pdf; }
+.srv-tbl .srv-un { grid-area: un; } .srv-tbl .c-acq { grid-area: acq; } .srv-tbl .c-ven { grid-area: ven; } .srv-tbl .c-uso { grid-area: uso; } .srv-tbl .col-act { grid-area: act; justify-self: end; }
+.srv-tbl .srv-off, .srv-tbl .srv-pdf { display: flex !important; align-items: center; gap: 6px; font-size: .8rem; color: var(--muted); white-space: nowrap; }
+.srv-tbl .srv-off::after { content: 'In offerta'; } .srv-tbl .srv-pdf::after { content: 'Predefinito'; }
+.srv-tbl .c-acq::before, .srv-tbl .c-ven::before { display: block; font-size: .72rem; color: var(--muted); margin-bottom: 2px; }
+.srv-tbl .c-acq::before { content: 'Acquisto previsto €'; } .srv-tbl .c-ven::before { content: 'Vendita €'; }
+table.prices.srv-tbl td.c-acq input, table.prices.srv-tbl td.c-ven input { width: 110px; }
+.srv-tbl .srv-un { display: flex !important; align-items: center; gap: 8px; flex-wrap: wrap; }
+.srv-tbl .srv-un .srv-volte { display: inline-flex; align-items: center; gap: 4px; }
+table.prices.srv-tbl .srv-un .srv-volte[hidden] { display: none !important; }
+.srv-tbl.srv-noedit .col-act { display: none !important; }
+.srv-tbl tr.srv-grp > td, .srv-tbl tr.srv-sep > td, .srv-tbl tr.srv-tolti > td { display: block; }
+@media (max-width: 720px) { .srv-tbl tr.srv-tr, .srv-tbl tr.catv-row { grid-template-columns: 1fr 1fr; grid-template-areas: "nome nome" "off pdf" "car car" "un un" "acq ven" "uso act"; } }
+table.prices.srv-tbl td input[type="checkbox"] { width: auto; }
+.srv-tbl tr.srv-sep > td, .srv-tbl tr.srv-grp > td { white-space: normal; }
+.srv-tbl .cat-chips { flex-wrap: wrap; }
+.srv-tbl + *, .srv-tbl { max-width: 100%; }
