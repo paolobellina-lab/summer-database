@@ -70,6 +70,7 @@
     if (!o.note) o.note = {};
     if (!o.f || typeof o.f !== 'object') o.f = {};
     if (!o.srv || typeof o.srv !== 'object') o.srv = {};
+    if (!o.srvOre || typeof o.srvOre !== 'object') o.srvOre = {}; // servizi a ore: €/h e ore al giorno cambiati in questa offerta { chiave: { idFigura: { vendita, ore } } }
     if (!o.srvVilla || typeof o.srvVilla !== 'object') o.srvVilla = {}; // prezzi dei servizi scritti per una sola villa nel riepilogo: { villaId: { chiave: '1.200' } }
     // servizi dell'offerta: quelli delle prenotazioni (Impostazioni → Servizi e inclusioni), con prezzo di vendita modificabile qui
     const SRV_EN = { pulizia: 'Final cleaning', cuoco: 'Private chef', transfer: 'Transfer' };
@@ -89,7 +90,7 @@
     // prezzo "di base" (senza modifiche nell'offerta): scheda villa, altrimenti Impostazioni; se settimanale, sulle settimane del periodo
     const prezzoSrvBase = (v, k) => { const pe = v ? perOf(v) : null, notti = pe && pe.from && pe.to ? S.diffDays(pe.from, pe.to) : 0;
       const pv = (v && v.prezziServizi || {})[k]; if (typeof pv === 'number') return S.srvPrezzo(st, k, pv, notti); const d = (st.prezziServizi || {})[k] || {};
-      return S.srvPrezzoV(st, k, typeof d.vendita === 'number' ? d.vendita : null, notti, { villa: v, ospiti: Number(o.ospiti) || 0 }); };
+      return S.srvPrezzoV(st, k, typeof d.vendita === 'number' ? d.vendita : null, notti, { villa: v, ospiti: Number(o.ospiti) || 0, over: o.srvOre[k] }); };
     // ordine: prezzo scritto per questa villa nel riepilogo → prezzo scritto per tutte al punto 3 → base
     const prezzoSrv = (v, k) => { const y = v && (o.srvVilla[v.id] || {})[k]; if (y !== undefined && String(y).trim() !== '') return S.parseMoney(y);
       const x = (o.srv[k] || {}).prezzo; if (x !== undefined && String(x).trim() !== '') return S.parseMoney(x); return prezzoSrvBase(v, k); };
@@ -105,7 +106,9 @@
     const salvaStili = l => { const cur = JSON.parse(JSON.stringify(settings())); cur.stiliMail = l; return Promise.resolve(store.setSettings(cur)); };
     // link alle web brochure (normale e/o anonima) sotto il prezzo di ogni villa
     const linkWb = v => [o.linkWB && vis(v, 'webBrochure') && String(v.webBrochure || '').trim(), o.linkWBA && vis(v, 'webBrochureAnonima') && String(v.webBrochureAnonima || '').trim()].filter(u => u && /^https?:\/\//i.test(u));
-    const srvNome = x => o.lingua === 'en' ? (SRV_EN[x.key] || x.label) : x.label;
+    // servizi a ore (es. cuoco): il nome segue le figure presenti per gli ospiti della villa ("Chef and Butler")
+    const figOff = (k, v) => S.oreCalc(st, k, 7, { villa: v, ospiti: Number(o.ospiti) || 0, over: o.srvOre[k] }).righe;
+    const srvNome = (x, v) => { if (x && S.isOre(st, x.key)) { const n = S.nomeFigure(figOff(x.key, v), o.lingua); if (n) return n; } return o.lingua === 'en' ? (SRV_EN[x.key] || x.label) : x.label; };
     // un servizio è incluso per una villa se "Includi tutti", oppure con "Predefinito" se la scheda villa lo ha tra i servizi compresi nel prezzo
     // compreso nel prezzo della villa: a carico di Esmeralda (già nelle spese servizi del listino) o del proprietario (scheda villa)
     // compreso nel prezzo per questa villa: omaggio di Esmeralda, a carico del proprietario, o del cliente ma Predefinito (già nel listino)
@@ -131,11 +134,15 @@
       if (d.modo === 'inc') return true; const pr = prezzoSrv(v, k), conPrezzo = typeof pr === 'number' && pr > 0;
       return d.modo === 'parte' ? conPrezzo : sch || conPrezzo; };
     // elenco comune: i servizi che hanno tutte le ville dell'offerta (compresi o a pagamento); gli altri vanno sotto le ville che li hanno
-    const inclTutte = () => { const vv = scelte(); return vv.length ? srvList().filter(x => vv.every(v => haServ(v, x.key))).map(x => x.key) : srvAttivi().filter(x => x.modo === 'inc').map(x => x.key); };
+    const inclTutte = () => { const vv = scelte(); return vv.length ? srvList().filter(x => vv.every(v => haServ(v, x.key)) && oreUguale(x.key)).map(x => x.key) : srvAttivi().filter(x => x.modo === 'inc').map(x => x.key); };
     const descrSel = k => { const sel = incSel(); return S.inclusioniDi(st).filter(i => i.servizio === k && sel.includes(i.id)); };
-    const testiSrv = k => { if (S.isVoceKey(k)) return []; const l = descrSel(k).map(i => (o.lingua === 'en' ? i.en : i.it) || i.it || i.en); const x = srvList().find(z => z.key === k); return l.length ? l : S.inclusioniDi(st).some(i => i.servizio === k) ? [] : [srvNome(x || { key: k, label: k })]; };
-    const srvInclusi = () => inclTutte().filter(k => !S.isVoceKey(k) && !S.inclusioniDi(st).some(i => i.servizio === k)).map(k => srvNome(srvList().find(z => z.key === k) || { key: k, label: k }));
-    const inclSoloVilla = v => { const tutti = inclTutte(); return srvList().filter(x => haServ(v, x.key) && !tutti.includes(x.key) && testiSrv(x.key).length); };
+    const testiSrv = (k, v) => { if (S.isVoceKey(k)) return []; let l = descrSel(k).map(i => (o.lingua === 'en' ? i.en : i.it) || i.it || i.en); const x = srvList().find(z => z.key === k);
+      if (l.length && S.isOre(st, k) && figOff(k, v).length > 1) l = [srvNome(x || { key: k, label: k }, v) + ': ' + l.join(', ')];
+      return l.length ? l : S.inclusioniDi(st).some(i => i.servizio === k) ? [] : [srvNome(x || { key: k, label: k }, v)]; };
+    // servizio a ore con nomi diversi tra le ville scelte (capienze diverse): va sotto ogni villa, non nell'elenco comune
+    const oreUguale = k => { if (!S.isOre(st, k)) return true; const vv = scelte(); const n = vv.map(v => S.nomeFigure(figOff(k, v), 'it')); return n.every(z => z === n[0]); };
+    const srvInclusi = () => inclTutte().filter(k => !S.isVoceKey(k) && !S.inclusioniDi(st).some(i => i.servizio === k)).map(k => srvNome(srvList().find(z => z.key === k) || { key: k, label: k }, scelte()[0]));
+    const inclSoloVilla = v => { const tutti = inclTutte(); return srvList().filter(x => haServ(v, x.key) && !tutti.includes(x.key) && testiSrv(x.key, v).length); };
     const st = settings();
     const fmtD = (iso, lang) => new Date(S.parse(iso)).toLocaleDateString(lang === 'en' ? 'en-GB' : 'it-IT', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
     const rangeTxt = (p, lang) => lang === 'en' ? `${fmtD(p.from, lang)} – ${fmtD(p.to, lang)}` : `dal ${fmtD(p.from, lang)} al ${fmtD(p.to, lang)}`;
@@ -304,7 +311,7 @@
     const incSel = () => Array.isArray(o.incSel) ? o.incSel : S.inclusioniDi(st).filter(x => x.on !== false).map(x => x.id);
     // voci collegate a un servizio: attive solo se quel servizio è spuntato come incluso
     const incAttiva = x => { if (!x.servizio) return true; const vv = scelte(); return vv.length ? vv.some(v => haServ(v, x.servizio)) : srvDi(x.servizio).on; };
-    const incTesti = () => { const sel = incSel(); return S.inclusioniDi(st).filter(x => sel.includes(x.id) && (x.servizio ? inclTutte().includes(x.servizio) : true)).map(x => (o.lingua === 'en' ? x.en : x.it) || x.it || x.en).concat(srvInclusi())
+    const incTesti = () => { const sel = incSel(); return S.inclusioniDi(st).filter(x => sel.includes(x.id) && (x.servizio ? inclTutte().includes(x.servizio) : true)).map(x => { const t = (o.lingua === 'en' ? x.en : x.it) || x.it || x.en; const v0 = scelte()[0]; return x.servizio && S.isOre(st, x.servizio) && figOff(x.servizio, v0).length > 1 ? S.nomeFigure(figOff(x.servizio, v0), o.lingua) + ': ' + t : t; }).concat(srvInclusi())
       .concat(String(o.incExtra || '').split('\n').map(t => t.trim()).filter(Boolean)); };
     const chiInclude = k => { const vv = scelte(); if (!vv.length) return 'Secondo la scheda di ogni villa'; const si = vv.filter(v => inclVilla(v, k)).length;
       return si === vv.length ? 'Compreso in tutte le ville scelte' : si ? `Compreso in ${si} ${si === 1 ? 'villa' : 'ville'} su ${vv.length}, a parte ${vv.length - si === 1 ? "nell'altra" : 'nelle altre'}` : 'A parte in tutte le ville scelte'; };
@@ -315,8 +322,12 @@
       $('#off-srv').innerHTML = (pre.length ? tit('Servizi predefiniti') : '') + pre.concat(ext).map((x, i) => { const d = srvDi(x.key); return (i === pre.length && ext.length ? tit('Servizi extra') : '') + `<tr data-ok="${esc(x.key)}" class="${d.on ? 'on' : ''}">
         <td><label class="off-inc"><input type="checkbox" data-son ${d.on ? 'checked' : ''}><span>${esc(x.label)}${x.voce ? ' <small class="note" title="Voce delle note spese: entra nel prezzo, ma non è scritta nella mail">· voce</small>' : ''}</span></label></td>
         <td><div class="seg small" data-smode>${[['pred', 'Predefinito'], ['inc', 'Includi tutti'], ['parte', 'A parte tutti']].map(([m, t]) => `<button type="button" data-m="${m}" class="${d.modo === m ? 'on' : ''}" ${d.on ? '' : 'disabled'}>${t}</button>`).join('')}</div>${d.on && d.modo === 'pred' ? `<small class="note off-srv-who">${esc(chiInclude(x.key))}</small>` : ''}</td>
-        <td><input data-sprz inputmode="numeric" value="${esc(d.prezzo)}" placeholder="da scheda villa" title="Vuoto: per ogni villa il prezzo della sua scheda (o quello di Impostazioni). Scritto: uguale per tutte le ville; 0 = senza prezzo" ${d.on && d.modo !== 'inc' ? '' : 'disabled'} aria-label="Prezzo di ${esc(x.label)}"></td></tr>`; }).join('');
+        <td><input data-sprz inputmode="numeric" value="${esc(d.prezzo)}" placeholder="da scheda villa" title="Vuoto: per ogni villa il prezzo della sua scheda (o quello di Impostazioni). Scritto: uguale per tutte le ville; 0 = senza prezzo" ${d.on && d.modo !== 'inc' ? '' : 'disabled'} aria-label="Prezzo di ${esc(x.label)}"></td></tr>` + oreRow(x, d); }).join('');
     };
+    // servizi a ore: le figure con €/h e ore al giorno modificabili per questa offerta (vuoto = Impostazioni)
+    const oreRow = (x, d) => { if (!S.isOre(st, x.key) || !d.on) return ''; const ov = o.srvOre[x.key] || {}, f2 = v => typeof v === 'number' ? String(v).replace('.', ',') : '';
+      return `<tr class="off-ore-r"><td colspan="3"><div class="off-ore"><span class="note">Personale di questa offerta (vuoto = Impostazioni; entra secondo gli ospiti):</span>${S.figureDi(st, x.key).map(f => { const z = ov[f.id] || {};
+        return `<label class="off-ore-f"><b>${esc(f.it)}</b><small class="note">${f.da > 1 ? 'da ' + f.da + ' ospiti' : 'sempre'}</small><span><input data-ofv="${esc(x.key)}|${esc(f.id)}" inputmode="decimal" value="${esc(z.vendita != null ? String(z.vendita) : '')}" placeholder="${esc(f2(f.vendita))}"> €/h</span><span><input data-ofo="${esc(x.key)}|${esc(f.id)}" inputmode="decimal" value="${esc(z.ore != null ? String(z.ore) : '')}" placeholder="${esc(f2(f.ore))}"> h/giorno</span></label>`; }).join('')}</div></td></tr>`; };
     const drawRiep = () => {
       const vv = scelte();
       $('#off-riep').innerHTML = vv.length ? vv.map(v => { const pr = prezzoDi(v), et = extraTot(v), inc = srvInclVilla(v), ag = srvAparte(v), li = listinoOf(v);
@@ -412,6 +423,8 @@
     $('#off-list').addEventListener('input', e => { const i = e.target.closest('[data-price]'); if (i) { o.prezzi[i.dataset.price] = i.value; drawRiep(); save(); } const n = e.target.closest('[data-nota]'); if (n) { o.note[n.dataset.nota] = n.value; save(); } });
     drawSrv();
     $('#off-osp').addEventListener('input', e => { o.ospiti = Number(String(e.target.value).replace(/\D/g, '')) || null; drawSrv(); drawRiep(); drawTexts(); save(); });
+    $('#off-srv').addEventListener('input', e => { const t = e.target.closest('[data-ofv],[data-ofo]'); if (!t) return; const [k, id] = (t.dataset.ofv || t.dataset.ofo).split('|');
+      const ov = o.srvOre[k] = o.srvOre[k] || {}, z = ov[id] = ov[id] || {}, val = String(t.value).trim(); z[t.dataset.ofv ? 'vendita' : 'ore'] = val === '' ? null : val; drawRiep(); drawTexts(); save(); });
     $('#off-srv').addEventListener('change', e => { const c = e.target.closest('[data-son]'); if (!c) return; const k = c.closest('[data-ok]').dataset.ok; o.srv[k] = Object.assign({}, o.srv[k], { on: c.checked });
       // spuntando il servizio si spuntano anche le sue descrizioni collegate (poi si possono togliere una per una)
       if (c.checked) { const sel = incSel().slice(); S.inclusioniDi(st).filter(i => i.servizio === k).forEach(i => { if (!sel.includes(i.id)) sel.push(i.id); }); o.incSel = sel; } drawSrv(); drawTexts(); save(); });
@@ -486,7 +499,7 @@
           if (vis(v, 'linkSito')) B.push({ p: `${l.sito}: ${v.linkSito}`, small: true });
           const pr = prezzoTot(v); B.push({ price: [l.prezzo, pr === null ? l.richiesta : euro(pr)] });
           linkWb(v).forEach(u => B.push({ p: `${l.webBro}: ${u}`, small: true }));
-          const iv = inclSoloVilla(v); if (iv.length) B.push({ p: `${l.inclVilla}: ${iv.map(x => testiSrv(x.key).join(', ')).join('; ')}`, small: true });
+          const iv = inclSoloVilla(v); if (iv.length) B.push({ p: `${l.inclVilla}: ${iv.map(x => testiSrv(x.key, v).join(', ')).join('; ')}`, small: true });
           if ((o.note[v.id] || '').trim()) B.push({ p: o.note[v.id].trim(), small: true });
         }
         B.push({ pageBreak: true }); o.chiusa.split('\n').forEach(t => B.push({ p: t }));
@@ -514,7 +527,7 @@
           titolo: 'Villa ' + v.name.replace(/^villa\s+/i, '').replace(/\b\w+/g, w => w[0].toUpperCase() + w.slice(1).toLowerCase()),
           codice: vis(v, 'codice') ? String(v.codice).trim() : '', sito: vis(v, 'linkSito') ? String(v.linkSito).trim() : '',
           video: vis(v, 'vimeo') ? String(v.vimeo).trim() : vis(v, 'youtube') ? String(v.youtube).trim() : '', psw: vis(v, 'psw') ? String(v.psw).trim() : '',
-          wb: linkWb(v), incl: iv.length ? iv.map(x => testiSrv(x.key).join(', ')).join('; ') : '' };
+          wb: linkWb(v), incl: iv.length ? iv.map(x => testiSrv(x.key, v).join(', ')).join('; ') : '' };
       });
     }
     // mail: HTML con stili in linea e foto incorporate, copiato negli appunti per incollarlo in Gmail

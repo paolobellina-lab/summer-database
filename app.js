@@ -128,8 +128,7 @@ window.SDBStore.ready.then(function () {
   const speseAuto = (v, t) => { const st = settings(), n = (S.TAR_SETT[t] || 1) * 7, det = []; let tot = 0;
     servizi(st.servizi).concat(vociPrezzo(st)).forEach(x => { if (!inListino(st, v, x.key)) return; const pv = (v.prezziServizi || {})[x.key], d = (st.prezziServizi || {})[x.key] || {};
       // prezzo della scheda villa così com'è; altrimenti quello di Impostazioni adattato alla villa (località, gruppi o fasce su capienza e camere)
-      const base = typeof pv === 'number' ? pv : S.srvAdatta(st, x.key, typeof d.vendita === 'number' ? d.vendita : null, { villa: v }); if (typeof base !== 'number') { det.push([x.label, null]); return; }
-      const pz = S.srvPrezzo(st, x.key, base, n); tot += pz; det.push([x.label, pz]); });
+      const pz = typeof pv === 'number' ? S.srvPrezzo(st, x.key, pv, n) : S.srvPrezzoV(st, x.key, typeof d.vendita === 'number' ? d.vendita : null, n, { villa: v }); if (typeof pz !== 'number') { det.push([x.label, null]); return; } tot += pz; det.push([x.label, pz]); });
     return { tot, det }; };
   const applicaSpese = v => { if (!speseAutoOn() || !v || !v.pricing) return false; let ch = false;
     S.TARIFFE.forEach(t => { const p = v.pricing[t.key]; if (!p) return; const s0 = speseAuto(v, t.key).tot; if (p.spese !== s0) { p.spese = s0; ch = true; } }); return ch; };
@@ -875,14 +874,15 @@ window.SDBStore.ready.then(function () {
     // servizi con prezzo settimanale (Impostazioni): calcolo sulle notti del soggiorno, con "Usa questi" per riscrivere i prezzi
     const srvCalc = n => { $$('#bform .srv-item').forEach(it => { const k = it.dataset.sk, el = it.querySelector('[data-sc]'); if (!el) return;
       const u = S.srvUnita(settings(), k), pr = it.querySelector('.srv-prices');
-      const dS = (settings().prezziServizi || {})[k] || {}, varia = !!((dS.regola && dS.regola.tipo) || (dS.loc && Object.keys(dS.loc).length));
+      const dS = (settings().prezziServizi || {})[k] || {}, varia = !!((dS.regola && dS.regola.tipo) || (dS.loc && Object.keys(dS.loc).length) || dS.unita === 'ore');
       if ((!u.settimanale && !varia) || !pr || pr.hidden || !it.classList.contains('on')) { el.hidden = true; return; }
       const def = (settings().prezziServizi || {})[k] || {}, defA = (data().serviziAcquisto || {})[k];
       const oV = acq => ({ villa: data().villas.find(z => z.id === $('#b-villa').value), ospiti: Number(String($('#b-osp').value).replace(/\D/g, '')) || 0, acq: acq ? (data().serviziAcquisto || {}) : null });
       const v = S.srvPrezzoV(settings(), k, def.vendita, n, oV()), a = canAcq() ? S.srvPrezzoV(settings(), k, defA, n, oV(true)) : null;
       const sw = S.srvSettimane(n), sett = String(Math.round(sw * 100) / 100).replace('.', ','), dopo = Math.round((sw - 1) * 100) / 100;
       el.hidden = false;
-      el.innerHTML = `${u.settimanale ? `Prezzo settimanale: ${sett} sett.${n > 0 ? ` (${n} notti)` : ''} = 1ª settimana${dopo > 0 ? ` + ${String(dopo).replace('.', ',')} × ${String(u.coeff).replace('.', ',')}` : ''}` : 'Prezzo per questa villa e questi ospiti'}${v != null || a != null ? ` = ${a != null ? 'acquisto ' + fmtNum(a) + ' € · ' : ''}${v != null ? 'vendita ' + fmtNum(v) + ' €' : ''} <button type="button" class="btn small" data-scu>Usa questi</button>` : ''}`;
+      const oreTxt = () => { const r = S.oreCalc(settings(), k, n, oV(canAcq())), rv = S.oreCalc(settings(), k, n, oV()); return 'A ore: ' + rv.righe.map((z, i) => `${esc(z.it)} ${canAcq() && r.righe[i].ah != null ? fmtNum(r.righe[i].ah) + ' / ' : ''}${z.vh != null ? fmtNum(z.vh) : '?'} €/h × ${z.ore != null ? fmtNum(z.ore) : '?'} h × ${n} gg`).join(' + ') + ` (${rv.ospiti} ospiti)`; };
+      el.innerHTML = `${dS.unita === 'ore' ? oreTxt() : u.settimanale ? `Prezzo settimanale: ${sett} sett.${n > 0 ? ` (${n} notti)` : ''} = 1ª settimana${dopo > 0 ? ` + ${String(dopo).replace('.', ',')} × ${String(u.coeff).replace('.', ',')}` : ''}` : 'Prezzo per questa villa e questi ospiti'}${v != null || a != null ? ` = ${a != null ? 'acquisto ' + fmtNum(a) + ' € · ' : ''}${v != null ? 'vendita ' + fmtNum(v) + ' €' : ''} <button type="button" class="btn small" data-scu>Usa questi</button>` : ''}`;
       const bu = el.querySelector('[data-scu]'); if (bu) bu.onclick = () => { if (v != null) it.querySelector('[data-sv]').value = fmtNum(v); if (a != null && it.querySelector('[data-sa]')) it.querySelector('[data-sa]').value = fmtNum(a); check(); }; }); };
     // regola: check-out e check-in possono cadere nello stesso giorno (massimo 2 affitti in quel giorno);
     // se due affitti condividono anche una sola notte il salvataggio è bloccato.
@@ -1935,7 +1935,7 @@ window.SDBStore.ready.then(function () {
       const t = r.tipo ? (r.tipo.indexOf('gruppi') === 0 ? `ogni ${r.n || '?'} ${cosa}` : `${(r.fasce || []).length} fasce di ${cosa}`) : ''; return [t, nl ? `${nl} località` : ''].filter(Boolean).join(' · '); };
     // riga 2: riepilogo non modificabile (i prezzi si cambiano nella finestra "Prezzi variabili…")
     const prezziTd = k => { const pz = prezziSrv()[k] || {}; const vt = varTxt(k), u = S.srvUnita(st, k);
-      const un = u.settimanale ? `a settimana${u.coeff !== 1 ? ` · dalla 2ª sett. × ${String(u.coeff).replace('.', ',')}` : ''}` : 'a soggiorno';
+      const un = S.isOre(st, k) ? `a ore · ${S.figureDi(st, k).map(f => f.it + (f.da > 1 ? ` (da ${f.da} ospiti)` : '')).join(', ')}` : u.settimanale ? `a settimana${u.coeff !== 1 ? ` · dalla 2ª sett. × ${String(u.coeff).replace('.', ',')}` : ''}` : 'a soggiorno';
       const eur = x => typeof x === 'number' ? fmtNum(x) + ' €' : '—';
       return `<td class="c-var"><button type="button" class="btn small" data-pvar title="Acquisto e vendita, a soggiorno o a settimana, località, gruppi o fasce di ospiti / camere">Modifica prezzi</button></td><td class="srv-pdf"><input type="checkbox" data-pdf ${S.predefSet(st, k) ? 'checked' : ''} aria-label="Predefinito"></td>
         <td class="srv-sum"><span>${esc(un)}</span>${provaHtml(k)}${vt ? `<span class="note">${esc(vt)}</span>` : ''}</td>`; };
@@ -1943,6 +1943,10 @@ window.SDBStore.ready.then(function () {
     const prova = { villa: '', loc: '', cam: '', osp: '', n: '' };
     const provaHtml = k => { const vill = { location: prova.loc, totalBedrooms: Number(prova.cam) || 0, guests: Number(prova.osp) || 0 }, notti = Number(prova.n) || 7, opz = { villa: vill, ospiti: vill.guests };
       const pz = prezziSrv()[k] || {}, eur = x => typeof x === 'number' ? fmtNum(x) + ' €' : '—';
+      // a ore: la formula di ogni figura e il totale
+      if (S.isOre(st, k)) { const r = S.oreCalc(st, k, notti, Object.assign({}, opz, { acq: canAcq() ? acqSrv : null })), n2 = x => x != null ? fmtNum(x) : '?';
+        const riga = (z, c, h) => `${esc(z.it)} ${n2(z[h])} €/h × ${n2(z.ore)} h × ${z.giorni} gg = ${eur(z[c])}`;
+        return `<span class="srv-pr srv-pr-ore">Prova (${r.ospiti} ospiti, ${notti} notti)${canAcq() ? `<span>Acquisto: ${r.righe.map(z => riga(z, 'a', 'ah')).join(' + ')} = <b>${eur(r.acquisto)}</b></span>` : ''}<span>Vendita: ${r.righe.map(z => riga(z, 'v', 'vh')).join(' + ')} = <b>${eur(r.vendita)}</b></span>${canAcq() && r.vendita != null && r.acquisto != null ? `<span>Margine <b>${eur(r.vendita - r.acquisto)}</b></span>` : ''}</span>`; }
       const fV = S.srvPrezzoV(st, k, typeof pz.vendita === 'number' ? pz.vendita : null, notti, opz), fA = canAcq() ? S.srvPrezzoV(st, k, typeof acqSrv[k] === 'number' ? acqSrv[k] : null, notti, Object.assign({}, opz, { acq: acqSrv })) : null;
       return `<span class="srv-pr">Prova (${notti} notti): ${canAcq() ? `acquisto <b>${eur(fA)}</b> · ` : ''}vendita <b>${eur(fV)}</b>${typeof fV === 'number' && typeof fA === 'number' ? ` · margine <b>${eur(fV - fA)}</b>` : ''}</span>`; };
     const salvaAcq = () => { $('#saved').textContent = 'Modifiche in corso…'; clearTimeout(tAcq); tAcq = setTimeout(() => { Promise.resolve(store.setServiziAcquisto(JSON.parse(JSON.stringify(acqSrv)))).then(() => { $('#saved').textContent = 'Salvato'; }, err => { $('#saved').textContent = ''; toast(err && err.code === 'permission-denied' ? 'Per i prezzi di acquisto predefiniti bisogna pubblicare la nuova regola di Firestore' : 'Errore: ' + (err && err.message || err)); }); }, 500); };
@@ -1979,25 +1983,34 @@ window.SDBStore.ready.then(function () {
       const locs = Array.from(new Set((st.localita && st.localita.length ? st.localita : locList()).map(x => String(x).trim().toUpperCase()).filter(Boolean))).sort();
       const fz = S.fasceDi(r0).map(f => ({ da: f.da, a: f.a, vendita: f.vendita, acquisto: typeof acqSrv[k + '@f:' + f.da] === 'number' ? acqSrv[k + '@f:' + f.da] : acqSrv[k + '@f:' + f.a] }));
       const num = v => { const x = S.parseMoney(v); return typeof x === 'number' ? x : null; }, fmt = x => typeof x === 'number' ? fmtNum(x) : '';
+      const gz = S.figureDi(st, k).map(f => Object.assign({}, f, { acquisto: acqSrv[k + '@h:' + f.id] }));
+      const drawG = () => { d.querySelector('#pv-gl').innerHTML = `<div class="pv-gr pv-gh${acq ? ' acq' : ''}"><span>Figura (italiano)</span><span>English</span><span>da ospiti</span>${acq ? '<span>acquisto €/h</span>' : ''}<span>vendita €/h</span><span>ore al giorno</span><span></span></div>` + gz.map((f, i) => `<div class="pv-gr${acq ? ' acq' : ''}" data-gi="${i}"><input data-git value="${esc(f.it || '')}" placeholder="es. Butler"><input data-gen value="${esc(f.en || '')}" placeholder="es. Butler"><input data-gda inputmode="numeric" value="${f.da != null ? f.da : ''}" placeholder="1">${acq ? `<input data-gac inputmode="decimal" value="${esc(fmt(f.acquisto))}" placeholder="—">` : ''}<input data-gve inputmode="decimal" value="${esc(fmt(f.vendita))}" placeholder="—"><input data-gor inputmode="decimal" value="${esc(fmt(f.ore))}" placeholder="—"><button type="button" class="btn small danger" data-gdel ${gz.length > 1 ? '' : 'disabled'}>Togli</button></div>`).join(''); };
+      const leggiG = () => { d.querySelectorAll('.pv-gr[data-gi]').forEach(rw => { const f = gz[Number(rw.dataset.gi)]; if (!f) return; f.it = rw.querySelector('[data-git]').value.trim(); f.en = rw.querySelector('[data-gen]').value.trim();
+        f.da = Number(String(rw.querySelector('[data-gda]').value).replace(/\D/g, '')) || 1; if (acq) f.acquisto = num(rw.querySelector('[data-gac]').value); f.vendita = num(rw.querySelector('[data-gve]').value);
+        const oz = String(rw.querySelector('[data-gor]').value).trim().replace(',', '.'); f.ore = oz !== '' && Number(oz) >= 0 ? Number(oz) : null; }); };
       const draw = () => { const t = d.querySelector('#pv-t').value, cosa = /Ospiti$/.test(t) ? 'ospiti' : 'camere';
         d.querySelector('#pv-g').hidden = t.indexOf('gruppi') !== 0; d.querySelector('#pv-f').hidden = t.indexOf('fasce') !== 0;
         d.querySelectorAll('.pv-cosa').forEach(z => { z.textContent = cosa; });
         d.querySelector('#pv-fl').innerHTML = fz.map((f, i) => `<div class="pv-fr" data-fi="${i}"><span>da</span><input data-fd inputmode="numeric" value="${f.da != null ? f.da : ''}"><span>a</span><input data-ff inputmode="numeric" value="${f.a != null ? f.a : ''}" placeholder="oltre" title="Vuoto = e oltre"><span class="pv-cosa">${cosa}</span><span>→ vendita €</span><input data-fv inputmode="numeric" value="${esc(fmt(f.vendita))}">${acq ? `<span>acquisto €</span><input data-fa inputmode="numeric" value="${esc(fmt(f.acquisto))}">` : ''}<button type="button" class="btn small danger" data-fdel>Togli</button></div>`).join('') || '<p class="note">Nessuna fascia.</p>'; };
       d.innerHTML = `<form class="dlg" method="dialog"><h3>Prezzi · ${esc(nome)}</h3>
-        <div class="pv-g pv-norm"><span>Prezzo normale</span>${acq ? `<label>acquisto previsto € <input id="pv-na" inputmode="numeric" value="${esc(fmt(acqSrv[k]))}" placeholder="—"></label>` : ''}<label>vendita € <input id="pv-nv" inputmode="numeric" value="${esc(fmt(pz.vendita))}" placeholder="—"></label></div>
-        <p class="note">Il prezzo normale cambia secondo la villa con le regole qui sotto. Ospiti = quelli dell'offerta o della prenotazione, se no la capienza della villa; camere = camere della villa. Si applica prima del calcolo settimanale.</p>
-        <div class="pv-g"><span>Il prezzo vale</span><select id="pv-u"><option value="soggiorno" ${pz.unita === 'settimana' ? '' : 'selected'}>a soggiorno</option><option value="settimana" ${pz.unita === 'settimana' ? 'selected' : ''}>a settimana</option></select>
+        <div class="pv-g"><span>Il prezzo vale</span><select id="pv-u"><option value="soggiorno" ${pz.unita === 'settimana' ? '' : 'selected'}>a soggiorno</option><option value="settimana" ${pz.unita === 'settimana' ? 'selected' : ''}>a settimana</option><option value="ore" ${pz.unita === 'ore' ? 'selected' : ''}>a ore, con il personale (es. cuoco)</option></select>
           <span id="pv-cw" ${pz.unita === 'settimana' ? '' : 'hidden'}>dalla 2ª sett. × <input id="pv-c" inputmode="decimal" value="${esc(String(S.srvUnita(st, k).coeff).replace('.', ','))}" title="Coefficiente delle settimane dopo la prima: 1 = stesso prezzo, 0,8 = 20% in meno"></span></div>
+        <div id="pv-std" ${pz.unita === 'ore' ? 'hidden' : ''}><div class="pv-g pv-norm"><span>Prezzo normale</span>${acq ? `<label>acquisto previsto € <input id="pv-na" inputmode="numeric" value="${esc(fmt(acqSrv[k]))}" placeholder="—"></label>` : ''}<label>vendita € <input id="pv-nv" inputmode="numeric" value="${esc(fmt(pz.vendita))}" placeholder="—"></label></div>
+        <p class="note">Il prezzo normale cambia secondo la villa con le regole qui sotto. Ospiti = quelli dell'offerta o della prenotazione, se no la capienza della villa; camere = camere della villa. Si applica prima del calcolo settimanale.</p>
         <label class="field"><span>Regola</span><select id="pv-t">${S.REGOLE.map(([v0, l]) => `<option value="${v0}" ${r0.tipo === v0 ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
         <div id="pv-g" class="pv-g"><span>Prezzo × gruppi di</span><input id="pv-n" inputmode="numeric" value="${r0.n || ''}" placeholder="6"><span class="pv-cosa">ospiti</span><small class="note">es. ogni 6: da 1 a 6 × 1, da 7 a 12 × 2</small></div>
         <div id="pv-f"><div id="pv-fl"></div><button type="button" class="btn small" id="pv-fadd">+ Fascia</button><p class="note">Esempio fiori: da 1 a 4 camere → 100 €, da 5 camere (lascia vuoto "a" = e oltre) → 250 €. Fuori dalle fasce vale il prezzo normale.</p></div>
         <details class="pv-loc" ${Object.keys(pz.loc || {}).length ? 'open' : ''}><summary>Prezzo per località (es. transfer)</summary>
           <div class="pv-ll">${locs.map(l => `<div class="pv-lr" data-loc="${esc(l)}"><span>${esc(l)}</span><input data-lv inputmode="numeric" value="${esc(fmt(((pz.loc || {})[l] || {}).vendita))}" placeholder="vendita">${acq ? `<input data-la inputmode="numeric" value="${esc(fmt(acqSrv[k + '@loc:' + l]))}" placeholder="acquisto">` : ''}</div>`).join('') || '<p class="note">Nessuna località: si aggiungono in Impostazioni → Generale.</p>'}</div>
-          <p class="note">Vuoto = prezzo normale. Il prezzo della località sostituisce quello normale, poi si applica la regola (es. transfer a Porto Rafael 150 € × gruppi di 6 ospiti).</p></details>
+          <p class="note">Vuoto = prezzo normale. Il prezzo della località sostituisce quello normale, poi si applica la regola (es. transfer a Porto Rafael 150 € × gruppi di 6 ospiti).</p></details></div>
+        <div id="pv-fig" ${pz.unita === 'ore' ? '' : 'hidden'}><p class="note">Ogni figura entra quando gli ospiti sono almeno "da". Totale = Σ figure (€/h × ore al giorno × giorni di soggiorno = notti). Ospiti = quelli dell'offerta o della prenotazione, se no la capienza della villa. Nella mail il nome è quello delle figure presenti (es. "Chef, Butler, extra Waiter and Kitchen Aid").</p>
+          <div id="pv-gl"></div><button type="button" class="btn small" id="pv-gadd">+ Figura</button></div>
         <div class="foot"><button type="button" class="btn" id="pv-no">Annulla</button><button type="button" class="btn primary" id="pv-ok">Salva</button></div></form>`;
       const leggiF = () => { d.querySelectorAll('.pv-fr').forEach(rw => { const f = fz[Number(rw.dataset.fi)]; if (!f) return; const n0 = sel => { const z = Number(String(rw.querySelector(sel).value).replace(/\D/g, '')); return z > 0 ? z : null; }; f.da = n0('[data-fd]'); f.a = n0('[data-ff]'); f.vendita = num(rw.querySelector('[data-fv]').value); if (acq) f.acquisto = num(rw.querySelector('[data-fa]').value); }); };
       d.querySelector('#pv-t').onchange = () => { leggiF(); draw(); };
-      d.querySelector('#pv-u').onchange = e => { d.querySelector('#pv-cw').hidden = e.target.value !== 'settimana'; };
+      d.querySelector('#pv-u').onchange = e => { d.querySelector('#pv-cw').hidden = e.target.value !== 'settimana'; d.querySelector('#pv-std').hidden = e.target.value === 'ore'; d.querySelector('#pv-fig').hidden = e.target.value !== 'ore'; };
+      d.querySelector('#pv-gadd').onclick = () => { leggiG(); gz.push({ id: S.uid('f'), it: '', en: '', da: 1, vendita: null, ore: null }); drawG(); };
+      d.querySelector('#pv-gl').addEventListener('click', e => { if (!e.target.closest('[data-gdel]')) return; leggiG(); gz.splice(Number(e.target.closest('[data-gi]').dataset.gi), 1); drawG(); });
       d.querySelector('#pv-fadd').onclick = () => { leggiF(); const ul = fz[fz.length - 1]; fz.push({ da: ul ? (ul.a != null ? ul.a + 1 : null) : 1, a: null, vendita: null, acquisto: null }); draw(); };
       d.querySelector('#pv-fl').addEventListener('click', e => { if (!e.target.closest('[data-fdel]')) return; leggiF(); fz.splice(Number(e.target.closest('[data-fi]').dataset.fi), 1); draw(); });
       d.querySelector('#pv-no').onclick = () => d.close();
@@ -2011,13 +2024,14 @@ window.SDBStore.ready.then(function () {
         if (Object.keys(loc).length) o0.loc = loc; else delete o0.loc;
         const nv = num(d.querySelector('#pv-nv').value); o0.vendita = typeof nv === 'number' ? nv : null;
         if (acq) { const na = num(d.querySelector('#pv-na').value); if (typeof na === 'number') acqK[k] = na; }
-        const un = d.querySelector('#pv-u').value; o0.unita = un; delete o0.volte; if (un === 'settimana') { const ct = String(d.querySelector('#pv-c').value).trim().replace(',', '.'), cv = Number(ct); o0.coeff = ct !== '' && cv >= 0 ? cv : (typeof o0.coeff === 'number' ? o0.coeff : 1); }
+        const un = d.querySelector('#pv-u').value; o0.unita = un; delete o0.volte;
+        if (un === 'ore') { leggiG(); o0.figure = gz.map(f => ({ id: f.id, it: f.it, en: f.en, da: f.da || 1, vendita: f.vendita, ore: f.ore })); if (acq) gz.forEach(f => { if (typeof f.acquisto === 'number') acqK[k + '@h:' + f.id] = f.acquisto; }); } if (un === 'settimana') { const ct = String(d.querySelector('#pv-c').value).trim().replace(',', '.'), cv = Number(ct); o0.coeff = ct !== '' && cv >= 0 ? cv : (typeof o0.coeff === 'number' ? o0.coeff : 1); }
         return { o0, acqK, err }; };
       d.querySelector('#pv-ok').onclick = () => { const { o0, acqK, err } = leggiTutto();
         if (err) { toast('Le fasce si sovrappongono o "a" è minore di "da": controlla i numeri'); return; }
         if (acq) { Object.keys(acqSrv).forEach(z => { if (z === k || z.indexOf(k + '@') === 0) delete acqSrv[z]; }); Object.assign(acqSrv, acqK); }
         prezziSrv()[k] = o0; save(); if (acq) salvaAcq(); d.close(); if (S.isVoceKey(k)) drawCat(); else drawSrv(); toast('Prezzi salvati'); };
-      draw(); if (d.showModal) d.showModal(); else d.setAttribute('open', ''); };
+      draw(); drawG(); if (d.showModal) d.showModal(); else d.setAttribute('open', ''); };
     $('.srv-tbl').addEventListener('change', e => { if (!e.target.matches('[data-pdf]')) return; const k = e.target.closest('[data-pk]').dataset.pk;
       prezziSrv()[k] = Object.assign({}, prezziSrv()[k], { predef: e.target.checked }); save(); if (S.isVoceKey(k)) drawCat(); else drawSrv(); });
     $('.srv-tbl').addEventListener('change', e => { if (!e.target.matches('[data-pu]')) return; const row = e.target.closest('[data-pk]'), k = row.dataset.pk, sett = e.target.value === 'settimana';

@@ -644,13 +644,13 @@
       V.l.filter(x => (!vf || x.villaId === vf) && inPer(x)).forEach(x => { const per = new Map();
         x.spese.forEach(sp => { const kd = keyDi(sp); if (!kd) return; const r = riga(kd.k, kd.label, kd.voce, kd.fuori); r.note++; per.set(kd.k, (per.get(kd.k) || 0) + (Number(sp.importo) || 0)); });
         const notti = x.from && x.to ? S.diffDays(x.from, x.to) : 0;
-        per.forEach((tot, k) => { const r = R0.get(k); r.pren++; r.reale += tot; const ap = S.srvAdatta(st, k, typeof acqP[k] === 'number' ? acqP[k] : null, { villa: villaDi(x.villaId), ospiti: x.b && x.b.ospiti, acq: acqP }); if (typeof ap === 'number') { r.prev += S.srvPrezzo(st, k, ap, notti); r.realeP += tot; r.nPrev++; } }); });
+        per.forEach((tot, k) => { const r = R0.get(k); r.pren++; r.reale += tot; const pv0 = S.srvPrezzoV(st, k, typeof acqP[k] === 'number' ? acqP[k] : null, notti, { villa: villaDi(x.villaId), ospiti: x.b && x.b.ospiti, acq: acqP }); if (typeof pv0 === 'number') { r.prev += pv0; r.realeP += tot; r.nPrev++; } }); });
       if (!da && !a0) V.generali.filter(x => !vf || x.villaId === vf).forEach(x => x.spese.forEach(sp => { const kd = keyDi(sp); if (!kd) return; const r = riga(kd.k, kd.label, kd.voce, kd.fuori); r.note++; r.gen += Number(sp.importo) || 0; }));
       const righe = [...R0.values()].sort((p, q) => (p.voce - q.voce) || p.label.localeCompare(q.label, 'it'));
       const pctS = (r0, p0) => p0 ? ((r0 - p0) / p0 * 100) : null;
       const pctTxt = v => v == null ? '—' : (v > 0 ? '+' : '') + v.toFixed(1).replace('.', ',') + '%';
       const esito = v => v == null ? '' : Math.abs(v) <= 5 ? 'ok' : v > 0 ? 'oltre' : 'sotto';
-      const unita = k => { const u = S.srvUnita(st, k); return u.settimanale ? `a settimana${u.coeff !== 1 ? ' (dalla 2ª × ' + String(u.coeff).replace('.', ',') + ')' : ''}` : 'a soggiorno'; };
+      const unita = k => { if (S.isOre(st, k)) return 'a ore (personale)'; const u = S.srvUnita(st, k); return u.settimanale ? `a settimana${u.coeff !== 1 ? ' (dalla 2ª × ' + String(u.coeff).replace('.', ',') + ')' : ''}` : 'a soggiorno'; };
       const T = righe.reduce((t, r) => ({ reale: t.reale + r.reale, prev: t.prev + r.prev, realeP: t.realeP + r.realeP, gen: t.gen + r.gen }), { reale: 0, prev: 0, realeP: 0, gen: 0 });
       const ville = [...new Set(V.l.concat(V.generali).map(x => x.villaId))].map(villaDi).sort((p, q) => String(p.name).localeCompare(String(q.name), 'it', { numeric: true }));
       root.innerHTML = `<div class="wrap">

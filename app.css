@@ -1366,3 +1366,16 @@ dialog.dlg-pvar { width: min(660px, calc(100vw - 32px)); }
 .srv-tbl .srv-sum .srv-pr b { color: var(--navy); }
 @media (max-width: 900px) { .srv-intro { grid-template-columns: 1fr; } }
 .srv-tbl .srv-sum .srv-pr { flex-basis: auto; }
+/* prezzi a ore con il personale */
+.dlg-pvar .pv-gr { display: grid; grid-template-columns: 1.3fr 1.1fr 62px repeat(2, 76px) auto; gap: 6px; align-items: center; margin: 4px 0; }
+.dlg-pvar .pv-gr.acq { grid-template-columns: 1.3fr 1.1fr 62px repeat(3, 76px) auto; }
+.dlg-pvar .pv-gh { font-size: .72rem; color: var(--muted); }
+.dlg-pvar .pv-gr input { width: 100%; min-width: 0; }
+.dlg-pvar .pv-gr input[data-gda], .dlg-pvar .pv-gr input[data-gac], .dlg-pvar .pv-gr input[data-gve], .dlg-pvar .pv-gr input[data-gor] { text-align: right; }
+dialog.dlg-pvar:has(#pv-fig:not([hidden])) { width: min(760px, calc(100vw - 32px)); }
+.srv-tbl .srv-sum .srv-pr-ore { display: flex; flex-direction: column; gap: 2px; flex-basis: 100%; }
+@media (max-width: 640px) { .dlg-pvar .pv-gr, .dlg-pvar .pv-gr.acq { grid-template-columns: 1fr 1fr 1fr; } .dlg-pvar .pv-gh { display: none; } }
+.off-ore-r td { padding-top: 0; }
+.off-ore { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; padding: 6px 10px; background: var(--accent-soft); border-radius: 6px; }
+.off-ore-f { display: inline-flex; align-items: center; gap: 6px; }
+.off-ore-f input { width: 64px; text-align: right; }
