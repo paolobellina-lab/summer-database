@@ -98,7 +98,7 @@ window.SDBStore.ready.then(function () {
      I 3 di base si possono rinominare o togliere: settings.serviziBase = { chiave: { label, off } } (il campo nella prenotazione resta).
      tutti = anche quelli tolti (per le prenotazioni che li avevano già). */
   const servizi = (cfgIn, baseIn, tutti) => { const bc = baseIn || (data().settings || {}).serviziBase || {};
-    return EXTRAS.map(([k, l]) => ({ key: k, label: String((bc[k] || {}).label || '').trim() || l, base: true, off: !!(bc[k] || {}).off })).filter(x => tutti || !x.off).concat((Array.isArray(cfgIn) ? cfgIn : ((data().settings || {}).servizi || [])).filter(x => x && x.key).map(x => ({ key: x.key, label: x.label, base: false }))); };
+    return EXTRAS.map(([k, l]) => ({ key: k, label: String((bc[k] || {}).label || '').trim() || l, base: true, off: !!(bc[k] || {}).off })).filter(x => tutti || !x.off).concat((Array.isArray(cfgIn) ? cfgIn : ((data().settings || {}).servizi || [])).filter(x => x && x.key).map(x => ({ key: x.key, label: x.label, base: false, off: !!x.off })).filter(x => tutti || !x.off)); };
   /* Categorie delle note spese: i servizi (automatiche, legate a quanto offerto nella prenotazione: scontrino.servizio = chiave),
      le altre modificabili in Impostazioni → Servizi e inclusioni (settings.categorieSpese) e le fisse con regole proprie. */
   const CAT_LIBERE_DEF = ['Pulizie', 'Manutenzione', 'Lavanderia', 'Spesa e forniture', 'Utenze', 'Giardino e piscina', 'Benvenuto ospiti', 'Commissioni e tasse', 'Altro'];
@@ -1653,11 +1653,11 @@ window.SDBStore.ready.then(function () {
       </section>`)}
       ${pg('servizi', `<section class="card"><h2>Servizi e categorie delle spese</h2>
         <p class="note">Tutte le voci (servizi e voci delle note spese) hanno le stesse regole, scelte con <b>a carico di chi</b>: <b>Esmeralda</b> = lo paghiamo noi (spese offerte; per i servizi la vendita entra nelle "Spese servizi" del listino di ogni villa); <b>Cliente</b> = lo paga il cliente (spese aggiuntive, da addebitare o trattenere dal deposito; un servizio si somma al prezzo dell'offerta); <b>Proprietario</b> = lo paga il proprietario (spese a carico del proprietario). In una prenotazione un servizio spuntato è già compreso in ciò che il cliente ha pagato: le sue spese vanno nelle spese offerte (o a carico del proprietario); un servizio non spuntato è un extra del cliente (spese aggiuntive). Un servizio ha anche i prezzi (si compilano da soli quando lo spunti) e compare nella prenotazione e nelle offerte; per una sola villa i servizi a carico del proprietario si scelgono nella scheda villa ("Servizi compresi nel prezzo"). <b>Prezzo</b>: <b>a soggiorno</b> = uguale qualunque sia la durata (es. pulizia finale); <b>a settimana</b> = si somma per ogni settimana di permanenza, con il coefficiente delle settimane dopo la prima (× 1 = stesso prezzo, × 0,8 = 20% in meno; es. cuoco). Rinominare o togliere una voce non cambia gli scontrini già inseriti.</p>
-        <div class="tbl-wrap"><table class="prices srv-tbl"><thead><tr><th>Voce</th><th>Di norma a carico di</th><th>Prezzo</th>${canAcq() ? '<th>Acquisto €</th>' : ''}<th>Vendita €</th><th>Usato</th><th></th></tr></thead>
+        <div class="tbl-wrap"><table class="prices srv-tbl"><thead><tr><th>Voce</th><th title="Con la spunta la voce è un servizio: compare nella prenotazione e nelle offerte, con i prezzi">In offerta</th><th>Di norma a carico di</th><th>Prezzo</th>${canAcq() ? '<th>Acquisto €</th>' : ''}<th>Vendita €</th><th>Usato</th><th></th></tr></thead>
           <tbody id="srv-list"></tbody>
-          <tbody><tr class="srv-sep"><td colspan="${canAcq() ? 7 : 6}"><b>Altre voci delle note spese</b> <small class="note">senza prezzo: non compaiono nella prenotazione né nelle offerte</small></td></tr></tbody>
+          <tbody><tr class="srv-sep"><td colspan="${canAcq() ? 8 : 7}"><b>Altre voci delle note spese</b> <small class="note">senza prezzo: non compaiono nella prenotazione né nelle offerte</small></td></tr></tbody>
           <tbody id="cat-list"></tbody>
-          <tbody><tr class="srv-sep"><td colspan="${canAcq() ? 7 : 6}"><b>Voci fisse</b> <small class="note">regole proprie, non si cambiano</small> <span class="cat-chips">${CAT_FISSE.map(c => `<span>${esc(c)}</span>`).join('')}</span></td></tr></tbody></table></div>
+          <tbody><tr class="srv-sep"><td colspan="${canAcq() ? 8 : 7}"><b>Voci fisse</b> <small class="note">regole proprie, non si cambiano</small> <span class="cat-chips">${CAT_FISSE.map(c => `<span>${esc(c)}</span>`).join('')}</span></td></tr></tbody></table></div>
         <form class="loc-new" id="srv-add" autocomplete="off"><input id="srv-add-n" placeholder="Nuova voce (es. Baby sitter, Noleggio barca)"><select id="srv-add-t" aria-label="Tipo di voce"><option value="srv">Servizio della prenotazione (con prezzo)</option><option value="cat">Solo voce delle note spese</option></select><button class="btn small">Aggiungi</button></form>
         <div id="cat-srv" hidden></div>
         <form id="cat-add" hidden><input id="cat-add-n"><input type="checkbox" id="cat-add-agg"></form>
@@ -1914,9 +1914,11 @@ window.SDBStore.ready.then(function () {
     let acqSrv = JSON.parse(JSON.stringify(data().serviziAcquisto || {})); let tAcq = null;
     const fmtP = x => typeof x === 'number' ? fmtNum(x) : '';
     const drawSrv = () => {
-      const list = servizi(st.servizi, st.serviziBase || {}); const tolti = servizi(st.servizi, st.serviziBase || {}, true).filter(x => x.off);
+      const list = servizi(st.servizi, st.serviziBase || {}); const giaVoce = n0 => catLibere(st).some(c => c.toLowerCase() === n0.toLowerCase());
+      const tolti = servizi(st.servizi, st.serviziBase || {}, true).filter(x => x.off && !giaVoce(x.label));
       $('#srv-list').innerHTML = list.map(x => { const n = x.base ? srvBaseUsed(x.key) : srvUsed(x.key); const pz = prezziSrv()[x.key] || {}; const inc = pz.incluso !== false; return `<tr class="srv-tr" data-sk="${esc(x.key)}">
         <td><input data-sl value="${esc(x.label)}" aria-label="Nome del servizio"></td>
+        <td class="srv-off"><input type="checkbox" data-voff checked title="Togli la spunta per farla diventare una voce solo delle note spese" aria-label="In offerta e prenotazione"></td>
         <td><div class="seg small srv-car" data-pi>${S.CARICHI.map(c => `<button type="button" data-i="${c}" class="${S.caricoSet(st, x.key) === c ? 'on' : ''}" title="${S.CARICO_LABEL[c]}">${S.CARICO_BREVE[c]}</button>`).join('')}</div></td>
         <td class="srv-un"><select data-pu aria-label="Il prezzo vale"><option value="soggiorno" ${pz.unita === 'settimana' ? '' : 'selected'}>a soggiorno</option><option value="settimana" ${pz.unita === 'settimana' ? 'selected' : ''}>a settimana</option></select>
           <label class="srv-volte" ${pz.unita === 'settimana' ? '' : 'hidden'} title="Coefficiente delle settimane dopo la prima: 1 = stesso prezzo ogni settimana, 0,8 = dalla 2ª settimana il 20% in meno, 0 = la 2ª settimana non costa">dalla 2ª sett. × <input data-pq inputmode="decimal" value="${esc(String(S.srvUnita(st, x.key).coeff).replace('.', ','))}" aria-label="Coefficiente dalla seconda settimana"></label></td>
@@ -1924,7 +1926,7 @@ window.SDBStore.ready.then(function () {
         <td><input data-pv inputmode="numeric" value="${esc(fmtP(pz.vendita))}" placeholder="—" aria-label="Vendita predefinita"></td>
         <td class="note">${n} ${n === 1 ? 'prenot.' : 'prenot.'}</td>
         <td class="loc-act">${x.base || !n ? '<button type="button" class="btn small danger" data-sd>Togli</button>' : ''}</td></tr>`; }).join('')
-        + (tolti.length ? `<tr class="srv-tolti"><td colspan="7" class="note">Tolti: ${tolti.map(x => `${esc(x.label)} <button type="button" class="btn small" data-sr="${esc(x.key)}">Rimetti</button>`).join(' ')}</td></tr>` : '');
+        + (tolti.length ? `<tr class="srv-tolti"><td colspan="8" class="note">Tolti: ${tolti.map(x => `${esc(x.label)} <button type="button" class="btn small" data-sr="${esc(x.key)}">Rimetti</button>`).join(' ')}</td></tr>` : '');
     };
     $('#srv-list').addEventListener('input', e => { const row = e.target.closest('[data-sk]'); if (!row) return; const k = row.dataset.sk;
       if (e.target.matches('[data-pv]')) { const v = S.parseMoney(e.target.value); prezziSrv()[k] = Object.assign({}, prezziSrv()[k], { vendita: typeof v === 'number' ? v : null }); save(); }
@@ -1965,11 +1967,12 @@ window.SDBStore.ready.then(function () {
       // voci delle note spese senza prezzo, nella stessa tabella dei servizi: a carico di Esmeralda (spesa della prenotazione), cliente (aggiuntiva), proprietario
       const carC = c => catAgg(st).includes(c) ? 'parte' : catProp(st).includes(c) ? 'proprietario' : 'esmeralda';
       $('#cat-list').innerHTML = l.map((c, i) => `<tr class="catv-row" data-ci="${i}"><td><input data-cn value="${esc(c)}" aria-label="Nome della voce"></td>
+        <td class="srv-off"><input type="checkbox" data-von title="Spunta per farla diventare un servizio: comparirà nella prenotazione e nelle offerte, con i prezzi" aria-label="In offerta e prenotazione"></td>
         <td><div class="seg small srv-car">${S.CARICHI.map(k => `<button type="button" data-ccar="${k}" class="${carC(c) === k ? 'on' : ''}" title="${S.CARICO_LABEL[k]}">${S.CARICO_BREVE[k]}</button>`).join('')}</div></td>
         <td class="note">—</td>${canAcq() ? '<td class="note">—</td>' : ''}<td class="note">—</td><td class="note">nota spese</td>
-        <td><span class="inc-act"><button type="button" class="btn small" data-cmv="-1" ${i ? '' : 'disabled'} aria-label="Sposta su">↑</button><button type="button" class="btn small" data-cmv="1" ${i < l.length - 1 ? '' : 'disabled'} aria-label="Sposta giù">↓</button><button type="button" class="btn small danger" data-cdel>Togli</button></span></td></tr>`).join('') || `<tr><td colspan="7" class="note">Nessuna voce.</td></tr>`;
+        <td><span class="inc-act"><button type="button" class="btn small" data-cmv="-1" ${i ? '' : 'disabled'} aria-label="Sposta su">↑</button><button type="button" class="btn small" data-cmv="1" ${i < l.length - 1 ? '' : 'disabled'} aria-label="Sposta giù">↓</button><button type="button" class="btn small danger" data-cdel>Togli</button></span></td></tr>`).join('') || `<tr><td colspan="8" class="note">Nessuna voce.</td></tr>`;
     };
-    const catEsiste = (n, salta) => { const t = n.toLowerCase(); return catLibere(st).some((c, i) => i !== salta && c.toLowerCase() === t) || CAT_FISSE.some(c => c.toLowerCase() === t) || servizi(st.servizi, st.serviziBase || {}, true).some(x => x.label.toLowerCase() === t); };
+    const catEsiste = (n, salta) => { const t = n.toLowerCase(); return catLibere(st).some((c, i) => i !== salta && c.toLowerCase() === t) || CAT_FISSE.some(c => c.toLowerCase() === t) || servizi(st.servizi, st.serviziBase || {}).some(x => x.label.toLowerCase() === t); };
     $('#cat-list').addEventListener('change', e => { if (!e.target.matches('[data-cn]')) return; const i = Number(e.target.closest('[data-ci]').dataset.ci); const v = e.target.value.trim(); const l = catLibere(st);
       if (!v || catEsiste(v, i)) { if (v) toast('Esiste già una categoria o un servizio con questo nome'); drawCat(); return; }
       const ag = catAgg(st); const was = l[i]; l[i] = v; st.categorieSpese = l; if (ag.includes(was)) st.categorieAggiuntive = ag.map(x => x === was ? v : x); const pp = catProp(st); if (pp.includes(was)) st.categorieProprietario = pp.map(x => x === was ? v : x); save(); toast('Categoria rinominata'); });
@@ -1993,6 +1996,25 @@ window.SDBStore.ready.then(function () {
       if (EXTRAS.some(([k]) => k === row.dataset.sk)) { const bc = JSON.parse(JSON.stringify(st.serviziBase || {})); bc[row.dataset.sk] = Object.assign({}, bc[row.dataset.sk], { label: v }); st.serviziBase = bc; save(); return; }
       const l = srvCustom(); const x = l.find(y => y.key === row.dataset.sk); if (x) { x.label = v; st.servizi = l; save(); } });
     $('#srv-list').addEventListener('change', e => { const row = e.target.closest('[data-sk]'); if (row && e.target.matches('[data-sl]') && !e.target.value.trim()) drawSrv(); });
+    // voce ↔ servizio: togliendo "In offerta" il servizio si nasconde (prenotazioni e note spese restano) e diventa una voce delle note spese
+    // con lo stesso nome e lo stesso carico; spuntandolo una voce diventa servizio (riattiva quello con lo stesso nome, se c'era)
+    const carDaVoce = c => catAgg(st).includes(c) ? 'parte' : catProp(st).includes(c) ? 'proprietario' : 'esmeralda';
+    const voceOff = k => { const x = servizi(st.servizi, st.serviziBase || {}, true).find(z => z.key === k); if (!x) return; const car = S.caricoSet(st, k);
+      if (x.base) { const bc = JSON.parse(JSON.stringify(st.serviziBase || {})); bc[k] = Object.assign({}, bc[k], { off: true }); st.serviziBase = bc; }
+      else st.servizi = srvCustom().map(y => y.key === k ? Object.assign({}, y, { off: true }) : y);
+      const l = catLibere(st); if (!l.some(c => c.toLowerCase() === x.label.toLowerCase())) l.push(x.label); st.categorieSpese = l;
+      st.categorieAggiuntive = catAgg(st).filter(c => c !== x.label).concat(car === 'parte' ? [x.label] : []); st.categorieProprietario = catProp(st).filter(c => c !== x.label).concat(car === 'proprietario' ? [x.label] : []);
+      save(); drawSrv(); drawInc(); drawCat(); toast(`${x.label}: ora è solo una voce delle note spese`); };
+    const voceOn = nome => { const car = carDaVoce(nome); const t = nome.toLowerCase(); let x = servizi(st.servizi, st.serviziBase || {}, true).find(z => z.label.toLowerCase() === t);
+      if (x && x.base) { const bc = JSON.parse(JSON.stringify(st.serviziBase || {})); bc[x.key] = Object.assign({}, bc[x.key], { off: false }); st.serviziBase = bc; }
+      else if (x) st.servizi = srvCustom().map(y => y.key === x.key ? Object.assign({}, y, { off: false, label: nome }) : y);
+      else { const slug = t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24) || 'servizio';
+        const l0 = srvCustom(); let key = slug, n = 2; while (l0.some(y => y.key === key) || EXTRAS.some(([z]) => z === key)) key = slug + '-' + n++; l0.push({ key, label: nome }); st.servizi = l0; x = { key }; }
+      prezziSrv()[x.key] = Object.assign({}, prezziSrv()[x.key], { carico: car, incluso: car !== 'parte' });
+      st.categorieSpese = catLibere(st).filter(c => c !== nome); st.categorieAggiuntive = catAgg(st).filter(c => c !== nome); st.categorieProprietario = catProp(st).filter(c => c !== nome);
+      save(); drawSrv(); drawInc(); drawCat(); toast(`${nome}: ora è un servizio (prenotazione e offerte)`); };
+    $('#srv-list').addEventListener('change', e => { if (!e.target.matches('[data-voff]') || e.target.checked) return; voceOff(e.target.closest('[data-sk]').dataset.sk); });
+    $('#cat-list').addEventListener('change', e => { if (!e.target.matches('[data-von]') || !e.target.checked) return; voceOn(catLibere(st)[Number(e.target.closest('[data-ci]').dataset.ci)]); });
     $('#srv-list').addEventListener('click', e => {
       const r = e.target.closest('[data-sr]'); if (r) { const bc = JSON.parse(JSON.stringify(st.serviziBase || {})); bc[r.dataset.sr] = Object.assign({}, bc[r.dataset.sr], { off: false }); st.serviziBase = bc; save(); drawSrv(); drawInc(); drawCat(); toast('Servizio rimesso'); return; }
       const row = e.target.closest('[data-sk]'); if (!row || !e.target.closest('[data-sd]')) return; const k = row.dataset.sk;

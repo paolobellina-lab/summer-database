@@ -48,7 +48,10 @@
   // spesa di un servizio che la prenotazione non ha: è un servizio aggiuntivo (richiesto durante il soggiorno)
   const srvNonOfferto = (srv, bk) => !!(srv && bk && CTX && CTX.hasSrv && !CTX.hasSrv(bk, srv.key));
   const bkDi = s => s && s.prenotazioneId && CTX ? CTX.data().bookings.find(b => b.id === s.prenotazioneId && b.villaId === s.villaId) : null;
-  const srvDiSpesa = s => (s && ((s.servizio && CATS.servizi.find(x => x.key === s.servizio)) || CATS.servizi.find(x => x.label === s.categoria))) || null;
+  // servizio di una nota spese: per chiave (scontrino.servizio) o per nome; un servizio tolto dall'offerta (off) conta solo se la prenotazione
+  // lo ha ancora spuntato, altrimenti la nota segue la voce delle note spese con lo stesso nome (il suo "a carico di")
+  const srvDiSpesa = s => { if (!s) return null; const x = (s.servizio && CATS.servizi.find(z => z.key === s.servizio)) || CATS.servizi.find(z => z.label === s.categoria && !z.off) || CATS.servizi.find(z => z.label === s.categoria);
+    if (!x) return null; if (x.off) { const bk = bkDi(s); if (!(bk && CTX && CTX.hasSrv && CTX.hasSrv(bk, x.key))) return null; } return x; };
   const aggPerCat = (cat, srv) => cat === 'Danni villa' ? true : cat === AFF || cat === COMM || cat === REST_DEP || cat === ADD_PROP || cat === ADD_CLI || srv ? false : CATS.agg.includes(cat) ? true : CATS.libere.includes(cat) ? false : null;
   const tipoCat = (cat, srv) => cat === ADD_CLI ? 'Addebitato al cliente oltre il deposito: è un\'entrata come una vendita, si somma al margine' : cat === ADD_PROP ? 'Addebitato al proprietario: è un\'entrata come una vendita, si somma al margine' : srv ? 'Servizio offerto: si confronta con l\'acquisto previsto del servizio' : cat === AFF ? 'Pagato al proprietario: si confronta con l\'acquisto concordato' : cat === REST_DEP ? 'Restituito al cliente: riduce il deposito, non è una spesa' : aggPerCat(cat) ? 'Servizio aggiuntivo: da addebitare al cliente o trattenere dal deposito' : 'Altra spesa della prenotazione: non addebitata al cliente (es. manutenzione)';
   // menu Categoria: <optgroup> servizi (value "srv:chiave") · altre · fisse; cur = scontrino in modifica

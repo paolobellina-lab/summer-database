@@ -1259,3 +1259,5 @@ dialog.dlg-bil { width: min(900px, calc(100vw - 32px)); }
 .srv-tbl tr.srv-sep .cat-chips { display: inline-flex; flex-wrap: wrap; gap: 6px; margin-left: 8px; vertical-align: middle; }
 .srv-tbl tr.catv-row td input[data-cn] { width: 100%; text-align: left; }
 #srv-add select { max-width: 280px; }
+.srv-tbl td.srv-off { text-align: center; }
+.srv-tbl td.srv-off input { width: 18px; height: 18px; }
