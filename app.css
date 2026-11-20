@@ -1331,3 +1331,7 @@ dialog.dlg-pvar { width: min(660px, calc(100vw - 32px)); }
 .dlg-pvar .pv-loc summary { cursor: pointer; font-weight: 600; }
 .off-osp input { width: 120px; }
 .b-osp-f input { width: 110px; }
+.dlg-pvar .pv-fr { flex-wrap: nowrap; gap: 6px; }
+.dlg-pvar .pv-fr input[data-fd], .dlg-pvar .pv-fr input[data-ff] { width: 58px; }
+.dlg-pvar .pv-fr input[data-fv], .dlg-pvar .pv-fr input[data-fa] { width: 84px; }
+@media (max-width: 640px) { .dlg-pvar .pv-fr { flex-wrap: wrap; } }

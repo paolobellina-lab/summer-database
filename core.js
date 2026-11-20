@@ -212,7 +212,7 @@
   const srvSettimane = notti => Math.max(1, (Number(notti) || 0) / 7);
   const srvFattore = (st, k, notti) => { const u = srvUnita(st, k); if (!u.settimanale) return 1; return 1 + (srvSettimane(notti) - 1) * u.coeff; };
   const srvPrezzo = (st, k, base, notti) => typeof base === 'number' ? Math.round(base * srvFattore(st, k, notti)) : null;
-  /* Prezzo che cambia secondo la villa (Impostazioni → "Prezzi variabili" del servizio o della voce), prima del fattore settimanale:
+  /* Prezzo che cambia secondo la villa (fasce: { da, a, vendita }, acquisto '<k>@f:<da>') (Impostazioni → "Prezzi variabili" del servizio o della voce), prima del fattore settimanale:
      prezziServizi[k].loc = { LOCALITÀ: { vendita } } (es. transfer) → sostituisce il prezzo normale nella località della villa;
      prezziServizi[k].regola = { tipo: 'gruppiOspiti'|'gruppiCamere'|'fasceOspiti'|'fasceCamere', n, fasce: [{ fino, vendita }] }:
      gruppi = prezzo × gruppi di n (1–6 ospiti × 1, 7–12 × 2…); fasce = il prezzo della prima fascia con quantità ≤ "fino", oltre l'ultima il prezzo normale.
@@ -227,8 +227,11 @@
     const q = /Ospiti$/.test(r.tipo) ? (Number(opz.ospiti) > 0 ? Number(opz.ospiti) : numCampo(v && v.guests)) : numCampo(v && v.totalBedrooms);
     if (!q) return p;
     if (r.tipo.indexOf('gruppi') === 0) { const n = Number(r.n) || 0; return n > 0 && typeof p === 'number' ? p * Math.ceil(q / n) : p; }
-    const f = (r.fasce || []).filter(x => typeof x.fino === 'number').sort((a, b) => a.fino - b.fino).find(x => q <= x.fino); if (!f) return p;
-    const fv = opz.acq ? opz.acq[k + '@f:' + f.fino] : f.vendita; return typeof fv === 'number' ? fv : p; };
+    const f = fasceDi(r).find(x => q >= x.da && (x.a == null || q <= x.a)); if (!f) return p;
+    const fv = opz.acq ? (typeof opz.acq[k + '@f:' + f.da] === 'number' ? opz.acq[k + '@f:' + f.da] : opz.acq[k + '@f:' + f.a]) : f.vendita; return typeof fv === 'number' ? fv : p; };
+  // fasce "da … a …" (a vuoto = e oltre); le vecchie con solo "fino" partono dalla fine della precedente
+  function fasceDi(r) { let prev = 0; return (r.fasce || []).map(x => Object.assign({}, x)).sort((x, y) => (x.da != null ? x.da : x.fino || 0) - (y.da != null ? y.da : y.fino || 0))
+    .map(x => { const da = typeof x.da === 'number' ? x.da : prev + 1, a = typeof x.a === 'number' ? x.a : typeof x.fino === 'number' ? x.fino : null; prev = a != null ? a : prev; return { da, a, vendita: x.vendita }; }); }
   const srvPrezzoV = (st, k, base, notti, opz) => srvPrezzo(st, k, srvAdatta(st, k, base, opz), notti);
   // a carico di chi è un servizio: 'esmeralda' (incluso, lo paghiamo noi: spese servizi del listino), 'parte' (si somma al prezzo),
   // 'proprietario' (incluso, lo fornisce il proprietario). Di norma da Impostazioni (prezziServizi[k].carico, vecchio "incluso"),
@@ -258,5 +261,5 @@
   // dettaglio di una prenotazione: carico salvato, altrimenti il vecchio "incluso" (incluso = a carico di Esmeralda)
   const caricoDi = d => d && CARICHI.includes(d.carico) ? d.carico : d && d.incluso === false ? 'parte' : 'esmeralda';
   const TAR_SETT = { settimanale: 1, bisettimanale: 2, mensile: 4, bimensile: 8 };
-  window.SDB = { srvAdatta, srvPrezzoV, REGOLE, numCampo, predefSet, migraCarichi, voceKey, isVoceKey, voceNome, CARICHI, CARICO_LABEL, CARICO_BREVE, caricoSet, caricoDef, caricoDi, TAR_SETT, MARGINE_MIN, AGENZIA_DEF, srvUnita, srvSettimane, srvFattore, srvPrezzo, MARE, mareLivello, mareLabel, INCLUSIONI, inclusioniDi, CAMPI_SCHEDA, CAMPI_NASCOSTI_DEFAULT, nascostiDi, periodsFor, autoPeriods, autoPeriodsFor, cambioDi, STATUS_COLOR, PALETTE, inkFor, DAY, MESI, MESI_L, GG, parse, iso, addDays, diffDays, dm, dmy, TARIFFE, STATI, defaultSettings, defaultPeriods, salePrice, priceAt, emptyPricing, money, short, parseMoney, uid };
+  window.SDB = { fasceDi, srvAdatta, srvPrezzoV, REGOLE, numCampo, predefSet, migraCarichi, voceKey, isVoceKey, voceNome, CARICHI, CARICO_LABEL, CARICO_BREVE, caricoSet, caricoDef, caricoDi, TAR_SETT, MARGINE_MIN, AGENZIA_DEF, srvUnita, srvSettimane, srvFattore, srvPrezzo, MARE, mareLivello, mareLabel, INCLUSIONI, inclusioniDi, CAMPI_SCHEDA, CAMPI_NASCOSTI_DEFAULT, nascostiDi, periodsFor, autoPeriods, autoPeriodsFor, cambioDi, STATUS_COLOR, PALETTE, inkFor, DAY, MESI, MESI_L, GG, parse, iso, addDays, diffDays, dm, dmy, TARIFFE, STATI, defaultSettings, defaultPeriods, salePrice, priceAt, emptyPricing, money, short, parseMoney, uid };
 })();
