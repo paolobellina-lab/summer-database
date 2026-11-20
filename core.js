@@ -108,18 +108,19 @@
       cambio: 'domenica',   // giorno di cambio predefinito: 'sabato' o 'domenica'
       periods: defaultPeriods(),
       defaults: {
-        settimanale: { spese: 2500, arrotonda: 5000, margine: 0.2, minimo: 7000 },
-        bisettimanale: { spese: 2500, arrotonda: 5000, margine: 0.2, minimo: 7000 },
-        mensile: { spese: 5000, arrotonda: 5000, margine: 0.2, minimo: 7000 },
-        bimensile: { spese: 5000, arrotonda: 5000, margine: 0.2, minimo: 7000 }
+        settimanale: { spese: 2500, arrotonda: 5000, margine: 0.2, minimo: 7000, agenzia: 0.1 },
+        bisettimanale: { spese: 2500, arrotonda: 5000, margine: 0.2, minimo: 7000, agenzia: 0.1 },
+        mensile: { spese: 5000, arrotonda: 5000, margine: 0.2, minimo: 7000, agenzia: 0.1 },
+        bimensile: { spese: 5000, arrotonda: 5000, margine: 0.2, minimo: 7000, agenzia: 0.1 }
       }
     };
   }
 
-  /* Stessa formula dell'Excel, con un margine minimo in euro:
-     ARROTONDA.ECCESSO( MAX(acquisto / (1 - margine) ; acquisto + minimo) + spese ; arrotonda ) + rettifica
-     minimo: params.minimo (euro); se manca vale MARGINE_MIN (7.000 €) */
-  const MARGINE_MIN = 7000;
+  /* Stessa formula dell'Excel, con un margine minimo in euro e la commissione dell'agenzia:
+     ARROTONDA.ECCESSO( (MAX(acquisto / (1 - margine) ; acquisto + minimo) + spese) × (1 + agenzia) ; arrotonda ) + rettifica
+     minimo: params.minimo (euro), se manca MARGINE_MIN (7.000 €); agenzia: params.agenzia (0,10 = 10%), se manca AGENZIA_DEF.
+     Il listino comprende la commissione massima; se a un'agenzia si dà meno, aumenta il nostro margine. */
+  const MARGINE_MIN = 7000, AGENZIA_DEF = 0.1;
   function salePrice(acq, params, rett, fisso) {
     if (fisso !== null && fisso !== undefined && fisso !== '') return Number(fisso);
     if (acq === null || acq === undefined || acq === '') return null;
@@ -127,7 +128,8 @@
     const a = Number(acq); if (!isFinite(a)) return null;
     const m = Number(params.margine) || 0;
     const mn = params.minimo === undefined || params.minimo === null || params.minimo === '' ? MARGINE_MIN : (Number(params.minimo) || 0);
-    const x = Math.max(a / (1 - m), a + mn) + (Number(params.spese) || 0);
+    const ag = params.agenzia === undefined || params.agenzia === null || params.agenzia === '' ? AGENZIA_DEF : (Number(params.agenzia) || 0);
+    const x = (Math.max(a / (1 - m), a + mn) + (Number(params.spese) || 0)) * (1 + ag);
     const r = Number(params.arrotonda) || 0;
     const base = r > 0 ? Math.ceil(Math.round((x / r) * 1e6) / 1e6) * r : x;
     return base + (Number(rett) || 0);
@@ -154,7 +156,7 @@
     const out = {};
     TARIFFE.forEach(t => {
       const n = settings.periods[t.key].length; const d = settings.defaults[t.key];
-      out[t.key] = { spese: d.spese, arrotonda: d.arrotonda, margine: d.margine, minimo: d.minimo === undefined ? MARGINE_MIN : d.minimo, acquisto: Array(n).fill(null), rettifica: Array(n).fill(0), fisso: Array(n).fill(null) };
+      out[t.key] = { spese: d.spese, arrotonda: d.arrotonda, margine: d.margine, minimo: d.minimo === undefined ? MARGINE_MIN : d.minimo, agenzia: d.agenzia === undefined ? AGENZIA_DEF : d.agenzia, acquisto: Array(n).fill(null), rettifica: Array(n).fill(0), fisso: Array(n).fill(null) };
     });
     return out;
   }
@@ -210,5 +212,5 @@
   const srvSettimane = notti => Math.max(1, (Number(notti) || 0) / 7);
   const srvFattore = (st, k, notti) => { const u = srvUnita(st, k); if (!u.settimanale) return 1; return 1 + (srvSettimane(notti) - 1) * u.coeff; };
   const srvPrezzo = (st, k, base, notti) => typeof base === 'number' ? Math.round(base * srvFattore(st, k, notti)) : null;
-  window.SDB = { MARGINE_MIN, srvUnita, srvSettimane, srvFattore, srvPrezzo, MARE, mareLivello, mareLabel, INCLUSIONI, inclusioniDi, CAMPI_SCHEDA, CAMPI_NASCOSTI_DEFAULT, nascostiDi, periodsFor, autoPeriods, autoPeriodsFor, cambioDi, STATUS_COLOR, PALETTE, inkFor, DAY, MESI, MESI_L, GG, parse, iso, addDays, diffDays, dm, dmy, TARIFFE, STATI, defaultSettings, defaultPeriods, salePrice, priceAt, emptyPricing, money, short, parseMoney, uid };
+  window.SDB = { MARGINE_MIN, AGENZIA_DEF, srvUnita, srvSettimane, srvFattore, srvPrezzo, MARE, mareLivello, mareLabel, INCLUSIONI, inclusioniDi, CAMPI_SCHEDA, CAMPI_NASCOSTI_DEFAULT, nascostiDi, periodsFor, autoPeriods, autoPeriodsFor, cambioDi, STATUS_COLOR, PALETTE, inkFor, DAY, MESI, MESI_L, GG, parse, iso, addDays, diffDays, dm, dmy, TARIFFE, STATI, defaultSettings, defaultPeriods, salePrice, priceAt, emptyPricing, money, short, parseMoney, uid };
 })();
