@@ -734,7 +734,7 @@
           // vendita = solo affitto al cliente + servizi a parte (mai deposito trattenuto né addebiti): la nota mostra le parti
           const venNota = () => { if (!sc) return 'affitto + servizi a parte, prezzo al cliente'; const iv = sc.acq ? 3 : 2;
             const parti = [x.b && typeof x.b.prezzoVendita === 'number' ? 'affitto ' + euro(x.b.prezzoVendita) : null]
-              .concat(sc.servizi.filter(z => z[1] === 'A parte' && z[iv]).map(z => esc(z[0]) + ' ' + z[iv])).filter(Boolean);
+              .concat(sc.servizi.filter(z => z[1] === window.SDB.CARICO_LABEL.parte && z[iv]).map(z => esc(z[0]) + ' ' + z[iv])).filter(Boolean);
             return (parti.length ? parti.join(' + ') : 'affitto + servizi a parte') + ' · senza deposito e addebiti'; };
           const q1 = `<div class="card pr-q"><h2>Riepilogo</h2>${tab(
               r2('Vendita', venNota(), E(v.vendita))
@@ -813,7 +813,7 @@
           const r = sc.righe.filter(([l]) => !/^Prezzo di (vendita|acquisto)/.test(l));
           const iv = sc.acq ? 3 : 2;
           const add = [['Affitto villa al cliente', x.b && typeof x.b.prezzoVendita === 'number' ? euro(x.b.prezzoVendita) : '—']]
-            .concat(sc.servizi.map(z => [z[0], z[1] !== 'A parte' ? 'incluso · ' + z[1].replace(/^A carico/, 'a carico') : (z[iv] || '—')]));
+            .concat(sc.servizi.map(z => [z[0], z[1] !== window.SDB.CARICO_LABEL.parte ? 'incluso · ' + z[1].replace(/^A carico/, 'a carico') : (z[iv] || '—')]));
           let k = r.findIndex(([l]) => /^(Deposito di sicurezza|Pagata al proprietario|Notti pagate libere|Assegnata a|Note)/.test(l)); if (k < 0) k = r.length;
           r.splice(k, 0, ...add); return r; })() : x.gen ? [['Villa', villa.name], ['Località', villa.location || '']] : [['Villa', villa.name], ['Cliente', x.cliente], ['Check-in', dataIt(x.from)], ['Check-out', dataIt(x.to)], ['Stato', 'Non più in calendario']];
       root.innerHTML = `<div class="wrap pr-det">

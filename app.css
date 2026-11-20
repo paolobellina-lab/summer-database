@@ -1255,3 +1255,7 @@ dialog.dlg-bil { width: min(900px, calc(100vw - 32px)); }
 .pr-ag h3 { margin: 0 0 4px; font-size: 15px; letter-spacing: .04em; text-transform: uppercase; }
 .srv-cat-sub { margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--line, #e5dfd2); }
 .srv-cat-sub > h3 { margin: 0 0 6px; font-size: 13px; letter-spacing: .12em; text-transform: uppercase; }
+.srv-tbl tr.srv-sep td { background: var(--soft, #f6f1e6); padding-top: 10px; padding-bottom: 8px; }
+.srv-tbl tr.srv-sep .cat-chips { display: inline-flex; flex-wrap: wrap; gap: 6px; margin-left: 8px; vertical-align: middle; }
+.srv-tbl tr.catv-row td input[data-cn] { width: 100%; text-align: left; }
+#srv-add select { max-width: 280px; }
