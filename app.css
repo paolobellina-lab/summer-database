@@ -1310,3 +1310,10 @@ table.prices.srv-tbl td.srv-un .srv-volte input { width: 56px; }
 table.prices.srv-tbl td.srv-un select { width: auto; }
 .srv-tbl tr.srv-tr, .srv-tbl tr.catv-row { grid-template-columns: minmax(160px, 1.5fr) auto auto auto auto minmax(0, 1fr); grid-template-areas: "nome off car pdf . ." "un un acq ven uso act"; }
 @media (max-width: 720px) { .srv-tbl tr.srv-tr, .srv-tbl tr.catv-row { grid-template-columns: 1fr 1fr; grid-template-areas: "nome nome" "off pdf" "car car" "un un" "acq ven" "uso act"; } }
+/* prima riga di ogni voce come un titolo, con sfondo marroncino */
+.srv-tbl tr.srv-tr, .srv-tbl tr.catv-row { position: relative; padding-top: 0; }
+.srv-tbl tr.srv-tr::before, .srv-tbl tr.catv-row::before { content: ''; grid-column: 1 / -1; grid-row: 1; align-self: stretch; margin: 0 -6px; background: var(--accent-soft); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.srv-tbl tr.srv-tr > td, .srv-tbl tr.catv-row > td { position: relative; z-index: 1; }
+.srv-tbl tr.srv-tr > td.c-nome, .srv-tbl tr.srv-tr > .srv-off, .srv-tbl tr.srv-tr > .c-car, .srv-tbl tr.srv-tr > .srv-pdf,
+.srv-tbl tr.catv-row > td.c-nome, .srv-tbl tr.catv-row > .srv-off, .srv-tbl tr.catv-row > .c-car, .srv-tbl tr.catv-row > .srv-pdf { padding: 6px 0; }
+.srv-tbl tr.srv-tr .c-nome input, .srv-tbl tr.catv-row .c-nome input { font-weight: 600; }
