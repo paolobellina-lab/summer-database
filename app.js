@@ -1651,10 +1651,17 @@ window.SDBStore.ready.then(function () {
         <div id="loc-list" class="loc-admin"></div>
         <div class="loc-new"><input id="loc-add-in" placeholder="Nuova località"><button type="button" class="btn small" id="loc-add">Aggiungi</button></div>
       </section>`)}
-      ${pg('servizi', `<section class="card"><h2>Servizi delle prenotazioni</h2>
+      ${pg('servizi', `<section class="card"><h2>Servizi e categorie delle spese</h2>
         <p class="note">Sono le caselle della sezione Servizi nella finestra della prenotazione. Per ognuno scegli di norma <b>a carico di chi</b> è: <b>Esmeralda</b> = incluso nell'offerta e pagato da noi (la sua vendita entra nelle "Spese servizi" del listino di ogni villa, calcolate da sole); <b>A parte</b> = si somma al prezzo dell'offerta; <b>Proprietario</b> = incluso e fornito dal proprietario (per una sola villa si sceglie nella scheda villa, "Servizi compresi nel prezzo"). Nelle spese: servizio spuntato nella prenotazione → spese offerte (a carico del proprietario → spese a carico del proprietario); servizio non spuntato → spese aggiuntive. I prezzi predefiniti si compilano da soli quando spunti il servizio in una prenotazione. Prezzi di acquisto visibili solo a chi vede gli acquisti. <b>Prezzo</b>: <b>a soggiorno</b> = uguale qualunque sia la durata (es. pulizia finale); <b>a settimana</b> = si somma per ogni settimana di permanenza (es. lavanderia), con il coefficiente delle settimane dopo la prima (× 1 = stesso prezzo, × 0,8 = 20% in meno; es. cuoco). Settimane = notti ÷ 7 (almeno 1); nel listino: settimanale 1, bisettimanale 2, mensile 4, bimensile 8.</p>
         <div class="tbl-wrap"><table class="prices srv-tbl"><thead><tr><th>Servizio</th><th>Di norma a carico di</th><th>Prezzo</th>${canAcq() ? '<th>Acquisto €</th>' : ''}<th>Vendita €</th><th>Usato</th><th></th></tr></thead><tbody id="srv-list"></tbody></table></div>
         <form class="loc-new" id="srv-add" autocomplete="off"><input id="srv-add-n" placeholder="Nuovo servizio (es. Baby sitter)"><button class="btn small">Aggiungi servizio</button></form>
+        <div class="srv-cat-sub"><h3>Categorie delle spese</h3>
+        <p class="note">Sono le voci del menu Categoria nelle note spese (pagina Prenotazioni). <b>Servizi</b>: i servizi della tabella qui sopra sono già categorie (si aggiornano da sole) e legano la spesa al servizio della prenotazione. <b>Altre categorie</b>: le aggiungi e modifichi tu; con <b>Aggiuntiva</b> la spesa è un servizio aggiuntivo (da addebitare al cliente o trattenere dal deposito), con <b>A carico del proprietario</b> va nel totale da addebitare al proprietario, senza spunte è una spesa della prenotazione. Le <b>fisse</b> hanno regole proprie e non si cambiano. Rinominare o togliere una categoria non cambia gli scontrini già inseriti, che restano con il nome di prima.</p>
+        <div id="cat-srv" hidden></div>
+        <div class="cat-grp"><h4>Altre categorie</h4><div id="cat-list" class="cat-admin"></div>
+          <form class="loc-new" id="cat-add" autocomplete="off"><input id="cat-add-n" placeholder="Nuova categoria (es. Noleggio barca)"><label class="cat-agg"><input type="checkbox" id="cat-add-agg" checked> Aggiuntiva</label><button class="btn small">Aggiungi categoria</button></form></div>
+        <div class="cat-grp"><h4>Fisse</h4><div class="cat-chips">${CAT_FISSE.map(c => `<span>${esc(c)}</span>`).join('')}</div></div>
+        </div>
       </section>
       <section class="card"><h2>Tariffe delle utenze</h2>
         <p class="note">Prezzo per unità usato per calcolare le utenze dalle letture dei contatori (riepilogo della prenotazione). In una prenotazione si può scrivere una tariffa diversa.</p>
@@ -1665,13 +1672,6 @@ window.SDBStore.ready.then(function () {
         <p class="note">Le agenzie che portano clienti, con la loro percentuale. Il listino delle ville comprende già la percentuale massima (campo Agenzia % del listino, di norma 10%): se a un'agenzia dai meno, il nostro margine aumenta. Nella prenotazione scegli l'agenzia e vedi quanto riconoscerle.</p>
         <div class="tbl-wrap"><table class="prices ag-tbl"><thead><tr><th>Agenzia</th><th>Percentuale %</th><th>Usata</th><th></th></tr></thead><tbody id="ag-list"></tbody></table></div>
         <form class="loc-new" id="ag-add" autocomplete="off"><input id="ag-add-n" placeholder="Nuova agenzia (es. Agenzia Rossi)"><input id="ag-add-p" inputmode="decimal" placeholder="%" style="max-width:90px"><button class="btn small">Aggiungi agenzia</button></form>
-      </section>
-      <section class="card"><h2>Categorie delle spese</h2>
-        <p class="note">Sono le voci del menu Categoria nelle note spese (pagina Prenotazioni). <b>Servizi</b>: si aggiornano da sole con i servizi qui sopra e legano la spesa al servizio offerto nella prenotazione, per confrontarla con il suo acquisto previsto. <b>Altre categorie</b>: le aggiungi e modifichi tu; con <b>Aggiuntiva</b> la spesa è un servizio aggiuntivo (da addebitare al cliente o trattenere dal deposito), con <b>A carico del proprietario</b> va nel totale da addebitare al proprietario, senza spunte è una spesa della prenotazione. Le <b>fisse</b> hanno regole proprie e non si cambiano. Rinominare o togliere una categoria non cambia gli scontrini già inseriti, che restano con il nome di prima.</p>
-        <div class="cat-grp"><h4>Servizi (automatiche)</h4><div class="cat-chips" id="cat-srv"></div></div>
-        <div class="cat-grp"><h4>Altre categorie</h4><div id="cat-list" class="cat-admin"></div>
-          <form class="loc-new" id="cat-add" autocomplete="off"><input id="cat-add-n" placeholder="Nuova categoria (es. Noleggio barca)"><label class="cat-agg"><input type="checkbox" id="cat-add-agg" checked> Aggiuntiva</label><button class="btn small">Aggiungi categoria</button></form></div>
-        <div class="cat-grp"><h4>Fisse</h4><div class="cat-chips">${CAT_FISSE.map(c => `<span>${esc(c)}</span>`).join('')}</div></div>
       </section>
       <section class="card"><h2>Inclusioni delle offerte</h2>
         <p class="note">Sono le voci "Le tariffe includono" della mail di offerta, in italiano e in inglese. Quelle con la spunta sono già selezionate in ogni nuova offerta; nell'offerta le puoi togliere o aggiungere una alla volta. Puoi <b>collegare una voce a un servizio</b>: nell'offerta quella voce si attiva solo quando spunti il servizio come incluso (es. "Pulizia finale e lavanderia finale standard" con il servizio Pulizia finale).</p>

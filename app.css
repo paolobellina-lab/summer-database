@@ -1253,3 +1253,5 @@ dialog.dlg-bil { width: min(900px, calc(100vw - 32px)); }
 @media print { .pr-ut input.ut-in { border: 0; background: none; } }
 .pr-ag { margin-top: 16px; border-top: 1px solid var(--line, #e5dfd2); padding-top: 12px; }
 .pr-ag h3 { margin: 0 0 4px; font-size: 15px; letter-spacing: .04em; text-transform: uppercase; }
+.srv-cat-sub { margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--line, #e5dfd2); }
+.srv-cat-sub > h3 { margin: 0 0 6px; font-size: 13px; letter-spacing: .12em; text-transform: uppercase; }
