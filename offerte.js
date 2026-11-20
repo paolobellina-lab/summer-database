@@ -153,7 +153,17 @@
     const rangeTxt = (p, lang) => lang === 'en' ? `${fmtD(p.from, lang)} – ${fmtD(p.to, lang)}` : `dal ${fmtD(p.from, lang)} al ${fmtD(p.to, lang)}`;
     const ville = () => data().villas.slice().sort((a, b) => String(a.name).localeCompare(String(b.name), 'it', { numeric: true }));
     const perOf = v => S.periodsFor(st, v, o.tariff)[o.idx] || null;
-    const listinoOf = v => { const x = S.priceAt(v, o.tariff, o.idx, 'listino'); return x; };
+    // listino della villa; se un servizio Predefinito a carico del cliente (già nelle spese servizi del listino) è tolto dall'offerta
+    // o messo "a parte", il listino si rifà con la stessa formula (agenzia e arrotondamento) senza quel servizio
+    const inListinoOff = (v, k) => S.predefSet(st, k) && S.caricoDef(st, v, k) === 'parte';
+    const prezzoListinoSrv = (v, k) => { const n = (S.TAR_SETT[o.tariff] || 1) * 7, pv = (v.prezziServizi || {})[k], d = (st.prezziServizi || {})[k] || {};
+      const z = typeof pv === 'number' ? S.srvPrezzo(st, k, pv, n) : S.srvPrezzoV(st, k, typeof d.vendita === 'number' ? d.vendita : null, n, { villa: v }); return typeof z === 'number' ? z : 0; };
+    const srvToltiListino = v => srvList().filter(x => inListinoOff(v, x.key) && (!srvDi(x.key).on || !inclusoPer(v, x.key)));
+    const listinoOf = v => { const x = S.priceAt(v, o.tariff, o.idx, 'listino'); const p = v.pricing && v.pricing[o.tariff];
+      if (typeof x !== 'number' || !p) return x; const tolti = srvToltiListino(v); if (!tolti.length) return x;
+      const meno = tolti.reduce((t, y) => t + prezzoListinoSrv(v, y.key), 0); if (!meno) return x;
+      const y = S.salePrice(p.acquisto ? p.acquisto[o.idx] : null, Object.assign({}, p, { spese: Math.max(0, (Number(p.spese) || 0) - meno) }), p.rettifica ? p.rettifica[o.idx] : 0, p.fisso ? p.fisso[o.idx] : null);
+      return typeof y === 'number' ? y : x; };
     const stato = v => {
       const p = perOf(v); if (!p) return 'nd';
       const pr = listinoOf(v); if (pr === 'ND') return 'nd';
