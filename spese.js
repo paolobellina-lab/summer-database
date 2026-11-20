@@ -368,14 +368,14 @@
       if (sc) tot.push(['Totale vendita (affitto + servizi a parte)', sc.haPrezzo ? ctxMoney(sc.totVendita) : 'prezzo di vendita non inserito']);
       if (sc && sc.acq && sc.totAcquisto) tot.push(['Acquisto previsto (affitto + servizi a parte)', ctxMoney(sc.totAcquisto)]);
       if (sommaAff(l)) tot.push(['Affitto proprietario reale', euro(sommaAff(l))]);
-      tot.push(['Spese reali servizi offerti', euro(sommaSrv(l))], ['Altre spese della prenotazione', euro(sommaAltre(l))], ['Spese a carico del proprietario', euro(sommaPropS(l))], ['Spese reali servizi aggiuntivi', euro(sommaAgg(l))], ['Acquisto reale (totale spese)', euro(somma(l))]);
+      const bW = sc ? (ctx.data().bookings || []).find(b => b.id === pid) : null, utW = utDa(bW), aggW = sommaAgg(l) + utW;
+      tot.push(['Spese reali servizi offerti', euro(sommaSrv(l))], ['Altre spese della prenotazione', euro(sommaAltre(l))], ['Spese a carico del proprietario', euro(sommaPropS(l))], ['Spese reali servizi aggiuntivi' + (utW ? ' (con le utenze)' : ''), euro(aggW)], ['Acquisto reale (totale spese)', euro(somma(l) + utW)]);
       const depR = sc && typeof sc.deposito === 'number' ? sc.deposito : 0, restW = sommaRest(l);
       const trW = trattDi(depR, l);
       if (depR || restW) tot.push(['Deposito di sicurezza ricevuto', euro(depR)], ['Deposito restituito', haRest(l) ? '−' + euro(restW) : 'non ancora registrato'], ['Deposito trattenuto', haRest(l) ? euro(trW) : '—']);
-      const bW = sc ? (ctx.data().bookings || []).find(b => b.id === pid) : null, utW = utDa(bW), aggW = sommaAgg(l) + utW;
-      if (utW) tot.push(['Utenze (consumi da far pagare)', euro(utW)]);
+      if (utW) tot.push(['di cui utenze (consumi, servizio non incluso)', euro(utW)]);
       if (aggW) tot.push(['Totale da addebitare al cliente (' + notaAdd(depR, aggW, euro) + ')', euro(aggW)]);
-      if (sc && sc.haPrezzo) tot.push([trW ? 'Margine reale (vendita + deposito trattenuto − spese)' : 'Margine reale (vendita − spese)', ctxMoney(sc.totVendita + trW + sommaEntr(l) - somma(l))]);
+      if (sc && sc.haPrezzo) tot.push([trW ? 'Margine reale (vendita + deposito trattenuto − spese)' : 'Margine reale (vendita − spese)', ctxMoney(sc.totVendita + trW + sommaEntr(l) - somma(l) - utW)]);
       B.push({ kv: tot });
       B.push({ p: `Esportato il ${new Date().toLocaleString('it-IT')} da ${store.user || ''}. Foto e allegati sono nel file zip scaricato insieme.`, small: true });
       const nome = X.nomeFile(`Spese ${nomeVilla(villaId)} - ${titolo}${sc ? ' ' + sc.from : old ? ' ' + old.from : ''}`) + '.docx';
@@ -496,7 +496,9 @@
       return ctx.ripDi(g, g.root.ripartizioneReale, affGrp(V, g)).q[x.b.id]; };
     const ripMan = (g, k) => !!ctx.ripDi(g, g.root[k], 0).manuale;
     const affR = (V, x) => { const q = quotaReale(V, x); return q == null ? sommaAff(x.spese) : q; };
-    const spTot = (V, x) => somma(x.spese) - sommaAff(x.spese) + affR(V, x);
+    // spese totali = spese − affitto delle sue note + quota reale dell'affitto + utenze da far pagare (spesa aggiuntiva se il servizio Utenze non è incluso)
+    const spTot = (V, x) => somma(x.spese) - sommaAff(x.spese) + affR(V, x) + utDa(x.b);
+    const aggTot = x => sommaAgg(x.spese) + utDa(x.b);
     const acq = ctx.canAcq();
     const vuoto = '<span class="pc-nd">—</span>';
     const root = document.createElement('div'); main.innerHTML = ''; main.appendChild(root); root.className = 'page';
@@ -563,7 +565,7 @@
             ${x.b ? soggHtml(x) : ''}
             <div class="pc-val">
               ${!x.b ? '' : (() => { const t = totVend(x); return `<div><span>Vendita totale</span><b>${t.tot == null ? vuoto : euro(t.tot)}</b>${t.extra ? `<small>di cui addebiti e trattenute ${euro(t.extra)}</small>` : '<small>affitto + servizi</small>'}</div>`; })()}
-              <div><span>Spese totali</span><b>${ctx.online ? (V.conSpese ? euro(sp) : '…') : vuoto}</b>${ctx.online && V.conSpese ? `<small>${sommaAgg(x.spese) ? `di cui aggiuntive ${euro(sommaAgg(x.spese))}` : `${x.spese.length} ${x.spese.length === 1 ? 'scontrino' : 'scontrini'}`}</small>` : ''}</div>
+              <div><span>Spese totali</span><b>${ctx.online ? (V.conSpese ? euro(sp) : '…') : vuoto}</b>${ctx.online && V.conSpese ? `<small>${aggTot(x) ? `di cui aggiuntive ${euro(aggTot(x))}` : `${x.spese.length} ${x.spese.length === 1 ? 'scontrino' : 'scontrini'}`}</small>` : ''}</div>
               ${!x.b || !ctx.online || !V.conSpese ? '' : (() => { const t = totVend(x); return t.tot == null ? '' : `<div><span>Margine</span><b class="${t.tot - sp < 0 ? 'pc-neg' : ''}">${euro(t.tot - sp)}</b><small>vendita totale − spese</small></div>`; })()}
             </div>
           </div>
@@ -579,7 +581,7 @@
         l.forEach(x => { if (fatti.has(x.chiave)) return; const g0 = x.b && ctx.gruppoAcq ? ctx.gruppoAcq(x.b) : null;
           if (!g0) { out.push(card(x)); return; }
           const ids = g0.membri.map(m => m.id); const vis0 = l.filter(y => y.b && ids.includes(y.b.id)); vis0.forEach(y => fatti.add(y.chiave));
-          const vr = ctx.valori(g0.root, true), ven = g0.membri.reduce((t, m) => t + (ctx.valori(m).vendita || 0), 0), spG = vis0.reduce((t, y) => t + somma(y.spese), 0);
+          const vr = ctx.valori(g0.root, true), ven = g0.membri.reduce((t, m) => t + (ctx.valori(m).vendita || 0), 0), spG = vis0.reduce((t, y) => t + somma(y.spese) + utDa(y.b), 0);
           out.push(`<div class="pr-group"><div class="pr-group-h"><b>Acquisto unico dal proprietario</b><span>${esc(villaDi(g0.root.villaId).name)} · ${g0.membri.length} prenotazioni · pagata ${esc(ggMese(g0.root.pagatoDal || g0.root.from))} → ${esc(ggMese(g0.root.pagatoAl || g0.root.to))}</span>
             <span class="pr-group-v">Vendita ${euro(ven)}${acq ? ` · Acquisto ${vr.acquisto == null ? '—' : euro(vr.acquisto)}` : ''}${ctx.online && V.conSpese ? ` · Spese ${euro(spG)}` : ''}</span></div>
             <div class="vcards">${vis0.map(card).join('')}</div></div>`); });
@@ -665,7 +667,7 @@
           + (acq ? rowV('Acquisto previsto', grp.root.id === x.b.id ? E(v.acquisto) : '<span class="pc-nd">nel gruppo</span>', grp.root.id === x.b.id ? `unico per ${grp.membri.length} prenotazioni` : 'acquisto unico con ' + esc(grp.root.cliente || '')) : '')
           + rowV('Spese reali servizi offerti', ctx.online ? euro(sommaSrv(x.spese)) : vuoto, 'servizi della prenotazione')
           + rowV('Altre spese della prenotazione', ctx.online ? euro(sommaAltre(x.spese)) : vuoto, 'categorie non aggiuntive (es. manutenzione)')
-          + rowV('Spese reali servizi aggiuntivi', ctx.online ? euro(sommaAgg(x.spese)) : vuoto, 'da addebitare o trattenere dal deposito');
+          + rowV('Spese reali servizi aggiuntivi', ctx.online ? euro(aggTot(x)) : vuoto, 'da addebitare o trattenere dal deposito');
       } else if (acq) {
         // tabella previsto / reale: i valori della prenotazione sono ipotizzati (tranne la vendita), le note spese sono reali
         tab4 = true;
@@ -676,11 +678,11 @@
         const num0 = n => typeof n === 'number' ? n : null;
         const piuCaro = d => d > 0 ? 'neg' : 'pos', piuAlto = d => d > 0 ? 'pos' : 'neg';
         celle = r4('Vendita', 'affitto + servizi a parte, prezzo al cliente', v.vendita, v.vendita)
-          + r4('Acquisto', on ? `${affR(V, x) ? `affitto ${euro(affR(V, x))} · ` : ''}offerti ${euro(sommaSrv(x.spese))} · altre ${euro(sommaAltre(x.spese))} · aggiuntivi ${euro(sommaAgg(x.spese))}` : 'affitto + servizi a parte', v.acquisto, on ? sp : null, '', piuCaro)
+          + r4('Acquisto', on ? `${affR(V, x) ? `affitto ${euro(affR(V, x))} · ` : ''}offerti ${euro(sommaSrv(x.spese))} · altre ${euro(sommaAltre(x.spese))} · aggiuntivi ${euro(aggTot(x))}` : 'affitto + servizi a parte', v.acquisto, on ? sp : null, '', piuCaro)
           + r4('di cui affitto proprietario', v.quota ? 'quota dell\'acquisto unico · note spese "Affitto proprietario"' : 'note spese "Affitto proprietario"', num0(v.affAcq), on ? affR(V, x) : null, 'sub', piuCaro)
           + r4('di cui servizi offerti', 'categorie dei servizi della prenotazione (incluso nel prezzo o a parte)', v.acquisto == null ? null : v.acquisto - (num0(v.affAcq) || 0), on ? sommaSrv(x.spese) : null, 'sub', piuCaro)
           + r4('di cui altre spese della prenotazione', 'categorie non aggiuntive (es. manutenzione)', null, on ? sommaAltre(x.spese) : null, 'sub')
-          + r4('di cui servizi aggiuntivi', 'richiesti durante il soggiorno: da addebitare o trattenere dal deposito', null, on ? sommaAgg(x.spese) : null, 'sub')
+          + r4('di cui servizi aggiuntivi', 'richiesti durante il soggiorno (anche le utenze non incluse): da addebitare o trattenere dal deposito', null, on ? aggTot(x) : null, 'sub')
           + (haDep ? r4('Deposito trattenuto', depChiuso ? 'ricevuto − restituito' : 'si conta quando registri la restituzione', null, on && depChiuso ? tratt : null) : '')
           + r4('Margine', haDep ? 'vendita + deposito trattenuto − acquisto' : 'vendita − acquisto', marP, marR, 'tot', piuAlto)
           + r4('Totale da addebitare al cliente', on ? notaAdd(dep, sommaAgg(x.spese) + utDa(x.b), euro) : 'spese aggiuntive', null, on ? sommaAgg(x.spese) + utDa(x.b) : null);
@@ -732,7 +734,7 @@
             return (parti.length ? parti.join(' + ') : 'affitto + servizi a parte') + ' · senza deposito e addebiti'; };
           const q1 = `<div class="card pr-q"><h2>Riepilogo</h2>${tab(
               r2('Vendita', venNota(), E(v.vendita))
-            + r2('Spese totali', 'affitto proprietario + spese offerte + aggiuntive + a carico del proprietario', euro(sp))
+            + r2('Spese totali', 'affitto proprietario + spese offerte + aggiuntive (anche le utenze) + a carico del proprietario', euro(sp))
             + (haDep ? (depChiuso ? r2('Deposito di sicurezza trattenuto', `ricevuto ${dep == null ? '—' : euro(dep)} − restituito ${euro(rest)}`, euro(tratt), tratt < 0 ? 'neg' : '')
                 : r2('Deposito di sicurezza trattenuto', `ricevuto ${dep == null ? '—' : euro(dep)}: si conta dopo la nota "Restituzione deposito"`, '—')) : ''),
               (() => { const ac = sommaAddC(x.spese), n = x.spese.filter(isAddC).length, oltre = dep ? sulDeposito(dep, aggReal).oltre : aggReal;
@@ -773,7 +775,7 @@
               + (propT - addP > 0 ? r2('Ancora da addebitare', 'registralo con la nota "Addebito proprietario"', euro(propT - addP), 'neg') : ''))}</div>`;
           const sdq = sulDeposito(dep, aggReal), oltreC = dep ? sdq.oltre : aggReal, addC = sommaAddC(x.spese), nAddC = x.spese.filter(isAddC).length;
           const q4 = `<div class="card pr-q"><h2>Spese aggiuntive</h2>${tab(
-              (agg.map(([c, t]) => r2(esc(c), 'richiesta durante il soggiorno', euro(t))).join('') + (utC ? r2('Utenze (consumi)', utSrv() && ctx.hasSrv(x.b, utSrv().key) ? 'letture dei contatori · servizio Utenze a parte' : 'letture dei contatori · servizio Utenze non incluso', euro(utC)) : '')) || r2('Nessuna spesa aggiuntiva', '', euro(0)),
+              (agg.map(([c, t]) => r2(esc(c), 'richiesta durante il soggiorno', euro(t))).join('') + (utC ? r2('Utenze (consumi)', utSrv() && ctx.hasSrv(x.b, utSrv().key) ? 'letture dei contatori · servizio Utenze a parte (spesa aggiuntiva)' : 'letture dei contatori · servizio Utenze non offerto (spesa aggiuntiva)', euro(utC)) : '')) || r2('Nessuna spesa aggiuntiva', '', euro(0)),
               r2('<b>Totale da addebitare al cliente</b>', notaAdd(dep, aggReal, euro), `<b>${euro(aggReal)}</b>`, 'tot')
               + (oltreC || nAddC ? r2('Addebitato al cliente', nAddC ? `${nAddC} ${nAddC === 1 ? 'nota' : 'note'} "Addebito cliente" (oltre il deposito)` : 'nessuna nota "Addebito cliente"', euro(addC)) : '')
               + (haDep ? r2('Deposito di sicurezza trattenuto', depChiuso ? `ricevuto ${dep == null ? '—' : euro(dep)} − restituito ${euro(rest)}` : `ricevuto ${dep == null ? '—' : euro(dep)}: si conta dopo la nota "Restituzione deposito"`, depChiuso ? euro(tratt) : '—', depChiuso && tratt < 0 ? 'neg' : '') : '')
@@ -828,7 +830,7 @@
                   <td class="r" data-utc>${r.cons === null ? '—' : esc(fmtU(r.cons)) + ' ' + esc(r.un)}</td><td class="r">${cel(r.k, 'tariffa', r.tPred ? null : r.t0, r.tPred ? fmtU(r.t0) : '')}</td><td class="r" data-uti>${r.imp === null ? '—' : esc(euro(r.imp))}</td></tr>`).join('')}
                 </tbody><tfoot><tr><td colspan="5"><b>Totale utenze da far pagare</b></td><td class="r"><b id="ut-tot">${uc.tot === null ? '—' : esc(euro(uc.tot))}</b></td></tr></tfoot></table></div>
                 ${ed ? `<div class="actions no-print" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button type="button" class="btn primary" id="ut-save">Salva le letture</button><button type="button" class="btn" id="ut-pred">Usa queste tariffe come predefinite</button><span class="note" id="ut-msg"></span></div>` : ''}
-                <p class="note">${utIncluse(x.b) ? '<b>Utenze incluse nel prezzo</b> (servizio Utenze spuntato come incluso): i consumi non si fanno pagare.' : '<b>Il totale va nelle Spese aggiuntive</b> da addebitare al cliente (servizio Utenze a parte o non spuntato): trattienilo dal deposito o registra una nota "Addebito cliente".'}</p></div>`; })() : ''}
+                <p class="note">${utIncluse(x.b) ? '<b>Utenze incluse nel prezzo</b> (servizio Utenze spuntato come incluso): i consumi non si fanno pagare.' : '<b>Il totale è una spesa aggiuntiva</b> (servizio Utenze a parte o non spuntato): conta nelle spese totali e nel totale da addebitare al cliente; trattienilo dal deposito o registra una nota "Addebito cliente".'}</p></div>`; })() : ''}
             ${x.b ? `<label class="flag pr-concl no-print" style="margin-top:12px"><input type="checkbox" id="pd-concl" ${x.b.conteggiConclusi ? 'checked' : ''} ${ctx.canEdit() ? '' : 'disabled'}><span><b>Conteggi conclusi</b><small>Deposito, addebiti e affitto al proprietario chiusi: nell'elenco la scheda risulta "Conteggi conclusi"</small></span></label>` : ''}</div>
         </div>
         ${quad ? '' : `<div class="card pr-valori"><h2>Valori</h2><div class="tbl-wrap"><table class="prices pr-val-t"><thead><tr><th>Voce</th>${tab4 ? '<th class="r">Previsto</th><th class="r">Reale</th><th class="r">Differenza</th>' : '<th class="r">Importo</th>'}</tr></thead><tbody>${celle}</tbody></table></div>
