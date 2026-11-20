@@ -304,7 +304,10 @@
     const chiInclude = k => { const vv = scelte(); if (!vv.length) return 'Secondo la scheda di ogni villa'; const si = vv.filter(v => inclVilla(v, k)).length;
       return si === vv.length ? 'Compreso in tutte le ville scelte' : si ? `Compreso in ${si} ${si === 1 ? 'villa' : 'ville'} su ${vv.length}, a parte ${vv.length - si === 1 ? "nell'altra" : 'nelle altre'}` : 'A parte in tutte le ville scelte'; };
     const drawSrv = () => {
-      $('#off-srv').innerHTML = srvList().map(x => { const d = srvDi(x.key); return `<tr data-ok="${esc(x.key)}" class="${d.on ? 'on' : ''}">
+      // in alto i servizi predefiniti (compresi nel prezzo: Esmeralda o proprietario), sotto gli extra (a parte); l'ordine non cambia con la spunta
+      const lst = srvList(), pre = lst.filter(x => srvDefOn(x.key)), ext = lst.filter(x => !srvDefOn(x.key));
+      const tit = t => `<tr class="off-srv-grp"><td colspan="3">${t}</td></tr>`;
+      $('#off-srv').innerHTML = (pre.length ? tit('Servizi predefiniti') : '') + pre.concat(ext).map((x, i) => { const d = srvDi(x.key); return (i === pre.length && ext.length ? tit('Servizi extra') : '') + `<tr data-ok="${esc(x.key)}" class="${d.on ? 'on' : ''}">
         <td><label class="off-inc"><input type="checkbox" data-son ${d.on ? 'checked' : ''}><span>${esc(x.label)}${x.voce ? ' <small class="note" title="Voce delle note spese: entra nel prezzo, ma non è scritta nella mail">· voce</small>' : ''}</span></label></td>
         <td><div class="seg small" data-smode>${[['pred', 'Predefinito'], ['inc', 'Includi tutti'], ['parte', 'A parte tutti']].map(([m, t]) => `<button type="button" data-m="${m}" class="${d.modo === m ? 'on' : ''}" ${d.on ? '' : 'disabled'}>${t}</button>`).join('')}</div>${d.on && d.modo === 'pred' ? `<small class="note off-srv-who">${esc(chiInclude(x.key))}</small>` : ''}</td>
         <td><input data-sprz inputmode="numeric" value="${esc(d.prezzo)}" placeholder="da scheda villa" title="Vuoto: per ogni villa il prezzo della sua scheda (o quello di Impostazioni). Scritto: uguale per tutte le ville; 0 = senza prezzo" ${d.on && d.modo !== 'inc' ? '' : 'disabled'} aria-label="Prezzo di ${esc(x.label)}"></td></tr>`; }).join('');
