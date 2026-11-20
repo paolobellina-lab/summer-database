@@ -217,6 +217,13 @@
     Object.defineProperty(api, 'needsProtection', { get: () => !protetto() && (Object.values(raw.villas).some(v => v.pricing) || Object.values(raw.bookings).some(b => typeof b.prezzoAcquisto === 'number')) });
     // scritture: aggiorno subito lo stato locale, poi Firestore (che funziona anche offline e sincronizza dopo)
     Object.assign(api, {
+      // listini di vendita salvati (letti dai profili senza prezzi di acquisto): se la formula cambia (es. margine minimo)
+      // chi ha accesso completo li riscrive, solo per le ville il cui listino è davvero diverso
+      riallineaListini() { if (!prof.full) return 0; let n = 0;
+        (state.villas || []).forEach(v => { if (!v.pricing) return; const nuovo = listinoOf(v);
+          const vecchio = protetto() && separati() ? (raw.villasCampi[v.id] || {}).listino : (raw.villas[v.id] || {}).listino;
+          if (JSON.stringify(nuovo) !== JSON.stringify(vecchio || {})) { api.upsertVilla(clone(v)); n++; } });
+        return n; },
       upsertVilla(v) {
         if (protetto()) {
           raw.villas[v.id] = villaPub(v); raw.villasAcq[v.id] = villaPriv(v);

@@ -387,7 +387,10 @@ window.SDBStore.ready.then(function () {
   }
   var promoFatto = false;
   window.addEventListener('hashchange', route);
+  let listiniOk = false;
   store.subscribe((st, origin) => {
+    if (!listiniOk && store.mode === 'online' && origin === 'remote' && isFull() && store.riallineaListini) { listiniOk = true;
+      setTimeout(() => { try { const n = store.riallineaListini(); if (n) console.info('[SDB] listini di vendita aggiornati:', n); } catch (e) { console.warn(e); } }, 6000); }
     if (origin !== 'remote') return;
     const a = document.activeElement;
     if (a && /INPUT|TEXTAREA|SELECT/.test(a.tagName) && main.contains(a)) return;
@@ -1337,7 +1340,8 @@ window.SDBStore.ready.then(function () {
           <label class="field"><span>Spese servizi €</span><input data-p="spese" inputmode="numeric" value="${esc(p.spese)}"><small class="lbl-sub">Netto vendita</small></label>
           <label class="field"><span>Arrotonda a €</span><input data-p="arrotonda" inputmode="numeric" value="${esc(p.arrotonda)}"></label>
           <label class="field"><span>Margine %</span><input data-p="margine" inputmode="decimal" value="${esc(Math.round((Number(p.margine) || 0) * 1000) / 10)}"></label>
-          <div class="formula">Vendita = acquisto ÷ (1 − margine) + spese, arrotondato per eccesso, + rettifica. Scrivi ND se non disponibile.</div>
+          <label class="field"><span>Margine minimo €</span><input data-p="minimo" inputmode="numeric" value="${esc(p.minimo === undefined || p.minimo === null ? S.MARGINE_MIN : p.minimo)}"><small class="lbl-sub">per prenotazione</small></label>
+          <div class="formula">Vendita = acquisto ÷ (1 − margine), ma con un margine di almeno il minimo, + spese, arrotondato per eccesso, + rettifica. Scrivi ND se non disponibile.</div>
         </div>
         <div class="tbl-wrap"><table class="prices"><thead><tr><th>Periodo</th><th>Acquisto (netto)</th><th>Rettifica</th><th style="text-align:right">Vendita (listino)</th><th style="text-align:right">Guadagno</th></tr></thead><tbody>
           ${per.map((pp, i) => `<tr data-i="${i}"><td class="per">${t !== 'settimanale' && v.periodi && v.periodi[t] ? `${esc(pp.label)}<span class="per-edit"><input type="date" data-vp="${i}" data-vk="from" value="${esc(pp.from)}"><input type="date" data-vp="${i}" data-vk="to" value="${esc(pp.to)}"></span>` : `${esc(pp.label)}${pp.label.includes(S.dm(pp.from)) ? '' : `<small>${S.dm(pp.from)} → ${S.dm(pp.to)}</small>`}`}</td>
@@ -1634,8 +1638,8 @@ window.SDBStore.ready.then(function () {
         <div id="sp-state" class="cambio-row"></div>
         <div class="tbl-wrap"><table class="prices ptable"><thead><tr><th>Periodo</th><th>Dal (check-in)</th><th>Al (check-out)</th><th>Notti</th></tr></thead><tbody id="sp-per"></tbody></table></div>
         <p class="note">Sono le date predefinite per tutte le ville. Nella scheda di una villa puoi sostituirle solo per quella villa. Il numero dei periodi resta fisso, così ogni prezzo resta collegato al suo periodo.</p></section>
-      <section class="card"><h2>Valori iniziali per una nuova villa</h2><div class="tbl-wrap"><table class="prices ptable"><thead><tr><th>Tariffa</th><th>Spese servizi €<small class="lbl-sub">Netto vendita</small></th><th>Arrotonda a €</th><th>Margine %</th></tr></thead><tbody>
-        ${S.TARIFFE.map(x => `<tr><td class="per">${x.label}</td><td><input data-d="${x.key}" data-k="spese" value="${esc(st.defaults[x.key].spese)}"></td><td><input data-d="${x.key}" data-k="arrotonda" value="${esc(st.defaults[x.key].arrotonda)}"></td><td><input data-d="${x.key}" data-k="margine" value="${esc(Math.round(st.defaults[x.key].margine * 1000) / 10)}"></td></tr>`).join('')}
+      <section class="card"><h2>Valori iniziali per una nuova villa</h2><div class="tbl-wrap"><table class="prices ptable"><thead><tr><th>Tariffa</th><th>Spese servizi €<small class="lbl-sub">Netto vendita</small></th><th>Arrotonda a €</th><th>Margine %</th><th>Margine minimo €</th></tr></thead><tbody>
+        ${S.TARIFFE.map(x => `<tr><td class="per">${x.label}</td><td><input data-d="${x.key}" data-k="spese" value="${esc(st.defaults[x.key].spese)}"></td><td><input data-d="${x.key}" data-k="arrotonda" value="${esc(st.defaults[x.key].arrotonda)}"></td><td><input data-d="${x.key}" data-k="margine" value="${esc(Math.round(st.defaults[x.key].margine * 1000) / 10)}"></td><td><input data-d="${x.key}" data-k="minimo" value="${esc(st.defaults[x.key].minimo === undefined ? S.MARGINE_MIN : st.defaults[x.key].minimo)}"></td></tr>`).join('')}
       </tbody></table></div></section>`)}
       ${window.SDBReport ? pg('schede', '<section class="card" id="rp-card"></section>') : ''}
       ${pg('dati', `${store.mode === 'online' && isFull() ? `<section class="card" id="ab-card"><h2>Backup automatico su questo dispositivo</h2>

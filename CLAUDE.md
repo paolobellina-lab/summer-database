@@ -61,6 +61,9 @@ Scheda "Storico" nella pagina Offerte (`ui.off.tab`). Ogni "Copia per email" o "
 ## Schede incomplete
 `report.js` (Impostazioni → Schede incomplete, solo accesso completo): per ogni villa i campi vuoti tra quelli scelti (scelta salvata in `localStorage` `sdb-report-campi`), più Foto (copertina in `villas_thumb`), Brochure (`listAllBrochure`) e Prezzi di acquisto; filtro per campo, ricerca, "Scarica Excel" (CSV).
 
+## Formula del listino di vendita
+`S.salePrice` in `core.js`: vendita = ARROTONDA.ECCESSO(MAX(acquisto ÷ (1 − margine); acquisto + minimo) + spese servizi; arrotonda) + rettifica (o prezzo fisso). `pricing[tariffa].minimo` = margine minimo in euro per prenotazione (campo "Margine minimo €" nel Listino prezzi della villa e nei Valori iniziali di Impostazioni; se manca vale `S.MARGINE_MIN` = 7.000 €). I listini salvati per i profili senza acquisto (`villas.listino` o il campo separato `listino`) si riallineano da soli: chi ha accesso completo, all'apertura online, riscrive solo le ville il cui listino calcolato è cambiato (`store.riallineaListini`).
+
 ## Periodi tariffari
 Le ville senza prezzo per la tariffa scelta (né settimanale) sono nascoste nel calendario, ma compaiono se cercate per nome/proprietario/zona nella ricerca, oppure con il link "mostrale" accanto al conteggio (`ui.senzaPrezzo`).
 Nel calendario Disponibilità un **clic** su una riga (anche dove la villa non ha prezzo) apre la prenotazione sulla settimana che contiene il giorno (`settimanaDi` in `app.js`: il periodo settimanale del listino, altrimenti dal giorno di cambio della villa, sabato o domenica, al successivo); **trascinando** si usano le date scelte.
