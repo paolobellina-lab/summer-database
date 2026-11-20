@@ -1365,3 +1365,4 @@ dialog.dlg-pvar { width: min(660px, calc(100vw - 32px)); }
 .srv-tbl .srv-sum .srv-pr { flex-basis: 100%; color: var(--navy); }
 .srv-tbl .srv-sum .srv-pr b { color: var(--navy); }
 @media (max-width: 900px) { .srv-intro { grid-template-columns: 1fr; } }
+.srv-tbl .srv-sum .srv-pr { flex-basis: auto; }

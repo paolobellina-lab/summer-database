@@ -1938,7 +1938,7 @@ window.SDBStore.ready.then(function () {
       const un = u.settimanale ? `a settimana${u.coeff !== 1 ? ` · dalla 2ª sett. × ${String(u.coeff).replace('.', ',')}` : ''}` : 'a soggiorno';
       const eur = x => typeof x === 'number' ? fmtNum(x) + ' €' : '—';
       return `<td class="c-var"><button type="button" class="btn small" data-pvar title="Acquisto e vendita, a soggiorno o a settimana, località, gruppi o fasce di ospiti / camere">Modifica prezzi</button></td><td class="srv-pdf"><input type="checkbox" data-pdf ${S.predefSet(st, k) ? 'checked' : ''} aria-label="Predefinito"></td>
-        <td class="srv-sum"><span>${esc(un)}</span>${canAcq() ? `<span>Acquisto previsto <b>${eur(acqSrv[k])}</b></span>` : ''}<span>Vendita <b>${eur(pz.vendita)}</b></span>${vt ? `<span class="note">${esc(vt)}</span>` : ''}${provaHtml(k)}</td>`; };
+        <td class="srv-sum"><span>${esc(un)}</span>${provaHtml(k)}${vt ? `<span class="note">${esc(vt)}</span>` : ''}</td>`; };
     // riquadro Prova (accanto al testo): le stesse condizioni per tutte le voci, risultato nel riepilogo di ogni riga
     const prova = { villa: '', loc: '', cam: '', osp: '', n: '' };
     const provaHtml = k => { const vill = { location: prova.loc, totalBedrooms: Number(prova.cam) || 0, guests: Number(prova.osp) || 0 }, notti = Number(prova.n) || 7, opz = { villa: vill, ospiti: vill.guests };
