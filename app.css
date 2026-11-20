@@ -1317,3 +1317,17 @@ table.prices.srv-tbl td.srv-un select { width: auto; }
 .srv-tbl tr.srv-tr > td.c-nome, .srv-tbl tr.srv-tr > .srv-off, .srv-tbl tr.srv-tr > .c-car, .srv-tbl tr.srv-tr > .srv-pdf,
 .srv-tbl tr.catv-row > td.c-nome, .srv-tbl tr.catv-row > .srv-off, .srv-tbl tr.catv-row > .c-car, .srv-tbl tr.catv-row > .srv-pdf { padding: 6px 0; }
 .srv-tbl tr.srv-tr .c-nome input, .srv-tbl tr.catv-row .c-nome input { font-weight: 600; }
+/* Prezzi variabili */
+.srv-tbl tr.srv-tr, .srv-tbl tr.catv-row { grid-template-areas: "nome off car pdf var var" "un un acq ven uso act"; }
+.srv-tbl .c-var { grid-area: var; justify-self: end; }
+.srv-tbl .c-var .btn.on { background: var(--navy); color: #fff; border-color: transparent; }
+@media (max-width: 720px) { .srv-tbl tr.srv-tr, .srv-tbl tr.catv-row { grid-template-areas: "nome nome" "off pdf" "car car" "var var" "un un" "acq ven" "uso act"; } .srv-tbl .c-var { justify-self: start; } }
+dialog.dlg-pvar { width: min(660px, calc(100vw - 32px)); }
+.dlg-pvar .pv-g, .dlg-pvar .pv-fr, .dlg-pvar .pv-lr { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 6px 0; }
+.dlg-pvar .pv-g input, .dlg-pvar .pv-fr input { width: 80px; text-align: right; }
+.dlg-pvar .pv-lr span { flex: 1; min-width: 140px; }
+.dlg-pvar .pv-lr input { width: 110px; text-align: right; }
+.dlg-pvar .pv-loc { margin-top: 10px; }
+.dlg-pvar .pv-loc summary { cursor: pointer; font-weight: 600; }
+.off-osp input { width: 120px; }
+.b-osp-f input { width: 110px; }

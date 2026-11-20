@@ -88,7 +88,8 @@
     // prezzo di un servizio per una villa: quello scritto qui nell'offerta (uguale per tutte), altrimenti quello della scheda villa, altrimenti Impostazioni
     // prezzo "di base" (senza modifiche nell'offerta): scheda villa, altrimenti Impostazioni; se settimanale, sulle settimane del periodo
     const prezzoSrvBase = (v, k) => { const pe = v ? perOf(v) : null, notti = pe && pe.from && pe.to ? S.diffDays(pe.from, pe.to) : 0;
-      const pv = (v && v.prezziServizi || {})[k]; if (typeof pv === 'number') return S.srvPrezzo(st, k, pv, notti); const d = (st.prezziServizi || {})[k] || {}; return typeof d.vendita === 'number' ? S.srvPrezzo(st, k, d.vendita, notti) : null; };
+      const pv = (v && v.prezziServizi || {})[k]; if (typeof pv === 'number') return S.srvPrezzo(st, k, pv, notti); const d = (st.prezziServizi || {})[k] || {};
+      return S.srvPrezzoV(st, k, typeof d.vendita === 'number' ? d.vendita : null, notti, { villa: v, ospiti: Number(o.ospiti) || 0 }); };
     // ordine: prezzo scritto per questa villa nel riepilogo → prezzo scritto per tutte al punto 3 → base
     const prezzoSrv = (v, k) => { const y = v && (o.srvVilla[v.id] || {})[k]; if (y !== undefined && String(y).trim() !== '') return S.parseMoney(y);
       const x = (o.srv[k] || {}).prezzo; if (x !== undefined && String(x).trim() !== '') return S.parseMoney(x); return prezzoSrvBase(v, k); };
@@ -196,6 +197,7 @@
         <div id="off-list" class="off-list"></div>
       </section>
       <section class="card"><h2>3 · Servizi e prezzi</h2>
+        <label class="field off-osp"><span>Ospiti <small class="note">per i servizi a gruppi o fasce di ospiti (es. transfer ogni 6 persone); vuoto = capienza di ogni villa</small></span><input id="off-osp" inputmode="numeric" value="${esc(o.ospiti ? String(o.ospiti) : '')}" placeholder="capienza villa"></label>
         <div class="field"><span>Servizi</span><div class="tbl-wrap"><table class="prices off-srv"><thead><tr><th>Servizio</th><th>Nell'offerta</th><th>Prezzo €</th></tr></thead><tbody id="off-srv"></tbody></table></div>
           <small class="note">Spunta i servizi da proporre. <b>Predefinito</b>: incluso nelle ville che lo hanno tra i "Servizi compresi nel prezzo" della scheda, a parte (con il prezzo sommato) nelle altre. <b>Includi tutti</b>: incluso per tutte le ville. <b>A parte tutti</b>: si somma al prezzo di ogni villa. Nella mail il cliente vede i servizi sempre come <b>compresi</b> e un solo prezzo, già con i servizi a parte sommati; un servizio a parte senza prezzo non compare. Con il prezzo vuoto ogni villa usa il prezzo della sua scheda (Listino prezzi → Servizi non compresi), o quello di Impostazioni se la scheda non lo ha; un prezzo scritto qui vale per tutte le ville di questa offerta (0 = senza prezzo).</small></div>
         <div class="field"><span>Le tariffe includono</span><div class="off-incl" id="off-incl"></div>
@@ -409,6 +411,7 @@
     });
     $('#off-list').addEventListener('input', e => { const i = e.target.closest('[data-price]'); if (i) { o.prezzi[i.dataset.price] = i.value; drawRiep(); save(); } const n = e.target.closest('[data-nota]'); if (n) { o.note[n.dataset.nota] = n.value; save(); } });
     drawSrv();
+    $('#off-osp').addEventListener('input', e => { o.ospiti = Number(String(e.target.value).replace(/\D/g, '')) || null; drawSrv(); drawRiep(); drawTexts(); save(); });
     $('#off-srv').addEventListener('change', e => { const c = e.target.closest('[data-son]'); if (!c) return; const k = c.closest('[data-ok]').dataset.ok; o.srv[k] = Object.assign({}, o.srv[k], { on: c.checked });
       // spuntando il servizio si spuntano anche le sue descrizioni collegate (poi si possono togliere una per una)
       if (c.checked) { const sel = incSel().slice(); S.inclusioniDi(st).filter(i => i.servizio === k).forEach(i => { if (!sel.includes(i.id)) sel.push(i.id); }); o.incSel = sel; } drawSrv(); drawTexts(); save(); });
@@ -816,7 +819,7 @@
             srvPre.serviziDett[q.k] = { carico: q.carico, incluso: q.carico !== 'parte', acquisto: null, vendita: q.vendita, note: '' }; if (typeof q.vendita === 'number') venSrv += q.vendita; }); }
         const tot = typeof z.r.prezzo === 'number' ? z.r.prezzo : null, aff = tot == null ? undefined : sp ? Math.max(0, tot - venSrv) : tot;
         ctx.openBooking({ villaId: z.v.id, from, to,
-          pre: Object.assign({ cliente: x.cliente || '', status: stato, prezzoVendita: aff, vociOfferta: Array.isArray(z.r.voci) ? z.r.voci : undefined, note: `Da offerta del ${dataBreve(x.quando)}${x.email ? ' · ' + x.email : ''}${x.telefono ? ' · ' + x.telefono : ''}` }, srvPre),
+          pre: Object.assign({ cliente: x.cliente || '', ospiti: x.stato && Number(x.stato.ospiti) > 0 ? Number(x.stato.ospiti) : null, status: stato, prezzoVendita: aff, vociOfferta: Array.isArray(z.r.voci) ? z.r.voci : undefined, note: `Da offerta del ${dataBreve(x.quando)}${x.email ? ' · ' + x.email : ''}${x.telefono ? ' · ' + x.telefono : ''}` }, srvPre),
           onSaved: bk => { const patch = { prenotazioni: Array.from(new Set((x.prenotazioni || []).concat(bk.id))) };
             const conf = (ctx.stati ? ctx.stati() : []).find(s0 => s0.key === bk.status);
             if (bk.status === 'confermato' || bk.status === 'occupato' || (conf && /conferm/i.test(conf.label))) { patch.esito = 'presa'; patch.esitoIl = new Date().toISOString(); }
