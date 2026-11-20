@@ -80,7 +80,8 @@
       .concat(Object.keys(st.prezziServizi || {}).filter(k => S.isVoceKey(k) && typeof st.prezziServizi[k].vendita === 'number' && (!Array.isArray(st.categorieSpese) || st.categorieSpese.includes(S.voceNome(k)))).map(k => ({ key: k, label: S.voceNome(k), voce: true })));
     const srvDi = k => { const d = (st.prezziServizi || {})[k] || {}; const x = o.srv[k] || {};
       const modo = ['pred', 'inc', 'parte'].includes(x.modo) ? x.modo : x.incluso === true ? 'inc' : x.incluso === false ? 'parte' : 'pred';
-      return { on: !!x.on, modo, prezzo: x.prezzo !== undefined && String(x.prezzo).trim() !== '' ? String(x.prezzo) : '' }; };
+      // non ancora toccato nell'offerta: spuntato di norma se a carico di Esmeralda (Impostazioni → Servizi e categorie delle spese)
+      return { on: x.on === undefined ? S.caricoSet(st, k) === 'esmeralda' : !!x.on, modo, prezzo: x.prezzo !== undefined && String(x.prezzo).trim() !== '' ? String(x.prezzo) : '' }; };
     // prezzo di un servizio per una villa: quello scritto qui nell'offerta (uguale per tutte), altrimenti quello della scheda villa, altrimenti Impostazioni
     // prezzo "di base" (senza modifiche nell'offerta): scheda villa, altrimenti Impostazioni; se settimanale, sulle settimane del periodo
     const prezzoSrvBase = (v, k) => { const pe = v ? perOf(v) : null, notti = pe && pe.from && pe.to ? S.diffDays(pe.from, pe.to) : 0;
