@@ -103,9 +103,11 @@
   const notaAdd = (dep, agg, euro) => { if (!dep) return 'nessun deposito di sicurezza: da far pagare al cliente'; const sd = sulDeposito(dep, agg);
     return sd.oltre ? `da trattenere sul deposito (${euro(sd.tr)}, tutto il deposito) + ${euro(sd.oltre)} da addebitare al cliente (nota "Addebito cliente")` : `da trattenere sul deposito: restituire ${euro(sd.resta)} dei ${euro(Number(dep))} ricevuti`; };
   // dentro le spese non aggiuntive: quelle legate a un servizio offerto e le altre spese della prenotazione (es. manutenzione)
-  const isSrvOff = s => !isRest(s) && !isEntr(s) && !isAff(s) && !isAgg(s) && !!srvDiSpesa(s);
+  // spesa di un servizio che la prenotazione ha "a carico del proprietario": va nelle spese a carico del proprietario
+  const srvProp = s => { const sv = srvDiSpesa(s), bk = sv ? bkDi(s) : null; return !!(sv && bk && CTX && CTX.hasSrv(bk, sv.key) && CTX.srvDet && CTX.srvDet(bk, sv.key).carico === 'proprietario'); };
+  const isSrvOff = s => !isRest(s) && !isEntr(s) && !isAff(s) && !isAgg(s) && !!srvDiSpesa(s) && !srvProp(s);
   // spese a carico del proprietario (categorie con la spunta in Impostazioni): fuori dalle spese offerte, riquadro a parte
-  const isPropS = s => !!s && !isRest(s) && !isEntr(s) && !isAff(s) && !isAgg(s) && !srvDiSpesa(s) && (CATS.prop || []).includes(s.categoria);
+  const isPropS = s => !!s && !isRest(s) && !isEntr(s) && !isAff(s) && !isAgg(s) && ((!srvDiSpesa(s) && (CATS.prop || []).includes(s.categoria)) || srvProp(s));
   const sommaPropS = l => l.reduce((t, s) => t + (isPropS(s) ? Number(s.importo) || 0 : 0), 0);
   const isAltra = s => !isRest(s) && !isEntr(s) && !isAff(s) && !isAgg(s) && !srvDiSpesa(s) && !isPropS(s);
   const sommaSrv = l => l.reduce((t, s) => t + (isSrvOff(s) ? Number(s.importo) || 0 : 0), 0);
@@ -732,7 +734,7 @@
           // vendita = solo affitto al cliente + servizi a parte (mai deposito trattenuto né addebiti): la nota mostra le parti
           const venNota = () => { if (!sc) return 'affitto + servizi a parte, prezzo al cliente'; const iv = sc.acq ? 3 : 2;
             const parti = [x.b && typeof x.b.prezzoVendita === 'number' ? 'affitto ' + euro(x.b.prezzoVendita) : null]
-              .concat(sc.servizi.filter(z => !/^incluso/i.test(z[1]) && z[iv]).map(z => esc(z[0]) + ' ' + z[iv])).filter(Boolean);
+              .concat(sc.servizi.filter(z => z[1] === 'A parte' && z[iv]).map(z => esc(z[0]) + ' ' + z[iv])).filter(Boolean);
             return (parti.length ? parti.join(' + ') : 'affitto + servizi a parte') + ' · senza deposito e addebiti'; };
           const q1 = `<div class="card pr-q"><h2>Riepilogo</h2>${tab(
               r2('Vendita', venNota(), E(v.vendita))
@@ -758,10 +760,10 @@
           // 3. spese offerte: servizi della prenotazione + altre spese non aggiuntive, per categoria
           const off = CATS.servizi.filter(z => ctx.hasSrv && ctx.hasSrv(x.b, z.key));
           const di = k => x.spese.filter(z => isSrvOff(z) && (srvDiSpesa(z) || {}).key === k);
-          const srvR = off.map(z => { const d = ctx.srvDet ? ctx.srvDet(x.b, z.key) : {}; return { z, d, re: somma(di(z.key)) }; });
+          const srvR = off.map(z => { const d = ctx.srvDet ? ctx.srvDet(x.b, z.key) : {}; return { z, d, re: somma(di(z.key)) }; }).filter(r => r.d.carico !== 'proprietario'); // a carico del proprietario: nel suo riquadro
           const altre = perCat(isAltra);
           const q3 = `<div class="card pr-q"><h2>Spese offerte</h2>${(srvR.length || altre.length) ? tab(
-              srvR.map(({ z, d, re }) => r2(esc(z.label), d.incluso ? 'servizio offerto, incluso nel prezzo' : 'servizio offerto, a parte', euro(re))).join('')
+              srvR.map(({ z, d, re }) => r2(esc(z.label), d.carico === 'parte' ? 'servizio offerto, a parte (pagato dal cliente)' : 'servizio offerto, a carico di Esmeralda', euro(re))).join('')
             + altre.map(([c, t]) => r2(esc(c), 'altra spesa della prenotazione', euro(t))).join(''),
               r2('<b>Totale spese offerte</b>', '', `<b>${euro(sommaSrv(x.spese) + sommaAltre(x.spese))}</b>${chip(srvPrev, sommaSrv(x.spese) + sommaAltre(x.spese))}`, 'tot')) : '<p class="note">Nessun servizio nella prenotazione e nessuna spesa.</p>'}
             ${srvR.length ? prev(srvR.map(({ z, d, re }) => riga(esc(z.label), d.incluso ? 'incluso nel prezzo: nessun acquisto previsto' : 'a parte', d.incluso ? null : num(d.acquisto), re, 'da inserire tra le spese')).join('')
@@ -811,7 +813,7 @@
           const r = sc.righe.filter(([l]) => !/^Prezzo di (vendita|acquisto)/.test(l));
           const iv = sc.acq ? 3 : 2;
           const add = [['Affitto villa al cliente', x.b && typeof x.b.prezzoVendita === 'number' ? euro(x.b.prezzoVendita) : '—']]
-            .concat(sc.servizi.map(z => [z[0], /^incluso/i.test(z[1]) ? 'incluso' : (z[iv] || '—')]));
+            .concat(sc.servizi.map(z => [z[0], z[1] !== 'A parte' ? 'incluso · ' + z[1].replace(/^A carico/, 'a carico') : (z[iv] || '—')]));
           let k = r.findIndex(([l]) => /^(Deposito di sicurezza|Pagata al proprietario|Notti pagate libere|Assegnata a|Note)/.test(l)); if (k < 0) k = r.length;
           r.splice(k, 0, ...add); return r; })() : x.gen ? [['Villa', villa.name], ['Località', villa.location || '']] : [['Villa', villa.name], ['Cliente', x.cliente], ['Check-in', dataIt(x.from)], ['Check-out', dataIt(x.to)], ['Stato', 'Non più in calendario']];
       root.innerHTML = `<div class="wrap pr-det">

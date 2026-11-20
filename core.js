@@ -212,5 +212,15 @@
   const srvSettimane = notti => Math.max(1, (Number(notti) || 0) / 7);
   const srvFattore = (st, k, notti) => { const u = srvUnita(st, k); if (!u.settimanale) return 1; return 1 + (srvSettimane(notti) - 1) * u.coeff; };
   const srvPrezzo = (st, k, base, notti) => typeof base === 'number' ? Math.round(base * srvFattore(st, k, notti)) : null;
-  window.SDB = { MARGINE_MIN, AGENZIA_DEF, srvUnita, srvSettimane, srvFattore, srvPrezzo, MARE, mareLivello, mareLabel, INCLUSIONI, inclusioniDi, CAMPI_SCHEDA, CAMPI_NASCOSTI_DEFAULT, nascostiDi, periodsFor, autoPeriods, autoPeriodsFor, cambioDi, STATUS_COLOR, PALETTE, inkFor, DAY, MESI, MESI_L, GG, parse, iso, addDays, diffDays, dm, dmy, TARIFFE, STATI, defaultSettings, defaultPeriods, salePrice, priceAt, emptyPricing, money, short, parseMoney, uid };
+  // a carico di chi è un servizio: 'esmeralda' (incluso, lo paghiamo noi: spese servizi del listino), 'parte' (si somma al prezzo),
+  // 'proprietario' (incluso, lo fornisce il proprietario). Di norma da Impostazioni (prezziServizi[k].carico, vecchio "incluso"),
+  // per la villa "Servizi compresi nel prezzo" (villas.serviziInclusi) = a carico del proprietario. Mai impostato = a parte.
+  const CARICHI = ['esmeralda', 'parte', 'proprietario'];
+  const CARICO_LABEL = { esmeralda: 'A carico di Esmeralda', parte: 'A parte', proprietario: 'A carico del proprietario' };
+  const caricoSet = (st, k) => { const d = ((st && st.prezziServizi) || {})[k] || {}; return CARICHI.includes(d.carico) ? d.carico : d.incluso === true ? 'esmeralda' : 'parte'; };
+  const caricoDef = (st, villa, k) => villa && (villa.serviziInclusi || []).includes(k) ? 'proprietario' : caricoSet(st, k);
+  // dettaglio di una prenotazione: carico salvato, altrimenti il vecchio "incluso" (incluso = a carico di Esmeralda)
+  const caricoDi = d => d && CARICHI.includes(d.carico) ? d.carico : d && d.incluso === false ? 'parte' : 'esmeralda';
+  const TAR_SETT = { settimanale: 1, bisettimanale: 2, mensile: 4, bimensile: 8 };
+  window.SDB = { CARICHI, CARICO_LABEL, caricoSet, caricoDef, caricoDi, TAR_SETT, MARGINE_MIN, AGENZIA_DEF, srvUnita, srvSettimane, srvFattore, srvPrezzo, MARE, mareLivello, mareLabel, INCLUSIONI, inclusioniDi, CAMPI_SCHEDA, CAMPI_NASCOSTI_DEFAULT, nascostiDi, periodsFor, autoPeriods, autoPeriodsFor, cambioDi, STATUS_COLOR, PALETTE, inkFor, DAY, MESI, MESI_L, GG, parse, iso, addDays, diffDays, dm, dmy, TARIFFE, STATI, defaultSettings, defaultPeriods, salePrice, priceAt, emptyPricing, money, short, parseMoney, uid };
 })();

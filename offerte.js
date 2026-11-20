@@ -100,10 +100,12 @@
     const linkWb = v => [o.linkWB && vis(v, 'webBrochure') && String(v.webBrochure || '').trim(), o.linkWBA && vis(v, 'webBrochureAnonima') && String(v.webBrochureAnonima || '').trim()].filter(u => u && /^https?:\/\//i.test(u));
     const srvNome = x => o.lingua === 'en' ? (SRV_EN[x.key] || x.label) : x.label;
     // un servizio è incluso per una villa se "Includi tutti", oppure con "Predefinito" se la scheda villa lo ha tra i servizi compresi nel prezzo
-    const inclusoPer = (v, k) => { const d = srvDi(k); return d.modo === 'inc' || (d.modo === 'pred' && (v.serviziInclusi || []).includes(k)); };
+    // compreso nel prezzo della villa: a carico di Esmeralda (già nelle spese servizi del listino) o del proprietario (scheda villa)
+    const inclVilla = (v, k) => S.caricoDef(settings(), v, k) !== 'parte';
+    const inclusoPer = (v, k) => { const d = srvDi(k); return d.modo === 'inc' || (d.modo === 'pred' && inclVilla(v, k)); };
     const srvAttivi = () => srvList().map(x => Object.assign({}, x, srvDi(x.key))).filter(x => x.on).map(x => Object.assign(x, { eur: S.parseMoney(x.prezzo) }));
     const srvAparte = v => srvAttivi().filter(x => !inclusoPer(v, x.key)).map(x => Object.assign({}, x, { eur: prezzoSrv(v, x.key) }));
-    const srvInclVilla = v => srvList().filter(x => srvDi(x.key).on ? inclusoPer(v, x.key) : (v.serviziInclusi || []).includes(x.key));
+    const srvInclVilla = v => srvList().filter(x => srvDi(x.key).on ? inclusoPer(v, x.key) : inclVilla(v, x.key));
     const extraTot = v => srvAparte(v).reduce((t, x) => t + (typeof x.eur === 'number' ? x.eur : 0), 0);
     // inclusi per tutte le ville scelte: vanno nell'elenco comune "Le tariffe includono"; gli altri inclusi si scrivono sotto la singola villa
     // per il cliente: un servizio a parte con prezzo risulta incluso (il prezzo è già nel totale); a parte senza prezzo non compare
@@ -113,7 +115,7 @@
     const prezzato = x => typeof x.eur === 'number' && x.eur > 0;
     // il cliente "ha" il servizio in questa villa: se non è spuntato nell'offerta, quando la scheda villa lo comprende;
     // se è spuntato: Includi tutti → sì; A parte tutti → se ha un prezzo; Predefinito → se la scheda lo comprende o se ha un prezzo
-    const haServ = (v, k) => { const d = srvDi(k), sch = (v.serviziInclusi || []).includes(k); if (!d.on) return sch;
+    const haServ = (v, k) => { const d = srvDi(k), sch = inclVilla(v, k); if (!d.on) return sch;
       if (d.modo === 'inc') return true; const pr = prezzoSrv(v, k), conPrezzo = typeof pr === 'number' && pr > 0;
       return d.modo === 'parte' ? conPrezzo : sch || conPrezzo; };
     // elenco comune: i servizi che hanno tutte le ville dell'offerta (compresi o a pagamento); gli altri vanno sotto le ville che li hanno
@@ -290,7 +292,7 @@
     const incAttiva = x => { if (!x.servizio) return true; const vv = scelte(); return vv.length ? vv.some(v => haServ(v, x.servizio)) : srvDi(x.servizio).on; };
     const incTesti = () => { const sel = incSel(); return S.inclusioniDi(st).filter(x => sel.includes(x.id) && (x.servizio ? inclTutte().includes(x.servizio) : true)).map(x => (o.lingua === 'en' ? x.en : x.it) || x.it || x.en).concat(srvInclusi())
       .concat(String(o.incExtra || '').split('\n').map(t => t.trim()).filter(Boolean)); };
-    const chiInclude = k => { const vv = scelte(); if (!vv.length) return 'Secondo la scheda di ogni villa'; const si = vv.filter(v => (v.serviziInclusi || []).includes(k)).length;
+    const chiInclude = k => { const vv = scelte(); if (!vv.length) return 'Secondo la scheda di ogni villa'; const si = vv.filter(v => inclVilla(v, k)).length;
       return si === vv.length ? 'Compreso in tutte le ville scelte' : si ? `Compreso in ${si} ${si === 1 ? 'villa' : 'ville'} su ${vv.length}, a parte ${vv.length - si === 1 ? "nell'altra" : 'nelle altre'}` : 'A parte in tutte le ville scelte'; };
     const drawSrv = () => {
       $('#off-srv').innerHTML = srvList().map(x => { const d = srvDi(x.key); return `<tr data-ok="${esc(x.key)}" class="${d.on ? 'on' : ''}">

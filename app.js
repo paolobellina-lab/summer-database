@@ -111,8 +111,26 @@ window.SDBStore.ready.then(function () {
   const srvLabels = b => servizi(null, null, true).filter(x => hasSrv(b, x)).map(x => x.label);
   /* Dettaglio dei servizi nella prenotazione: serviziDett[chiave] = { incluso, acquisto, vendita, note }.
      "incluso" = compreso nel prezzo di vendita dell'affitto; altrimenti ha prezzi propri, sommati al totale. */
-  const srvDet = (b, k) => Object.assign({ incluso: true, acquisto: null, vendita: null, note: '' }, (b.serviziDett || {})[k] || {});
-  const srvTot = b => { let v = 0, a = 0; servizi(null, null, true).forEach(x => { if (!hasSrv(b, x)) return; const d = srvDet(b, x.key); if (d.incluso) return; if (typeof d.vendita === 'number') v += d.vendita; if (typeof d.acquisto === 'number') a += d.acquisto; }); return { vendita: v, acquisto: a }; };
+  // carico: 'esmeralda' (incluso, il costo è nostro), 'parte' (si somma alla vendita), 'proprietario' (incluso, nessun costo per noi); incluso = carico !== 'parte'
+  const srvDet = (b, k) => { const d = Object.assign({ incluso: true, acquisto: null, vendita: null, note: '' }, (b.serviziDett || {})[k] || {}); d.carico = S.caricoDi(d); d.incluso = d.carico !== 'parte'; return d; };
+  // vendita = solo i servizi a parte; acquisto previsto = servizi a parte + a carico di Esmeralda (li paghiamo noi)
+  const srvTot = b => { let v = 0, a = 0; servizi(null, null, true).forEach(x => { if (!hasSrv(b, x)) return; const d = srvDet(b, x.key);
+    if (d.carico === 'parte' && typeof d.vendita === 'number') v += d.vendita; if (d.carico !== 'proprietario' && typeof d.acquisto === 'number') a += d.acquisto; }); return { vendita: v, acquisto: a }; };
+  /* Spese servizi del listino (pricing[tariffa].spese) automatiche: somma dei prezzi di VENDITA dei servizi a carico di Esmeralda
+     per quella villa (Impostazioni → carico; "Servizi compresi nel prezzo" della villa = a carico del proprietario, esclusi),
+     prezzo della scheda villa o di Impostazioni, × settimane della tariffa (1, 2, 4, 8) se il servizio è settimanale.
+     Attive solo se in Impostazioni almeno un servizio è a carico di Esmeralda; altrimenti resta il valore scritto a mano. */
+  const speseAutoOn = () => { const st = settings(); return servizi(st.servizi).some(x => S.caricoSet(st, x.key) === 'esmeralda'); };
+  const speseAuto = (v, t) => { const st = settings(), n = (S.TAR_SETT[t] || 1) * 7, det = []; let tot = 0;
+    servizi(st.servizi).forEach(x => { if (S.caricoDef(st, v, x.key) !== 'esmeralda') return; const pv = (v.prezziServizi || {})[x.key], d = (st.prezziServizi || {})[x.key] || {};
+      const base = typeof pv === 'number' ? pv : typeof d.vendita === 'number' ? d.vendita : null; if (base === null) { det.push([x.label, null]); return; }
+      const pz = S.srvPrezzo(st, x.key, base, n); tot += pz; det.push([x.label, pz]); });
+    return { tot, det }; };
+  const applicaSpese = v => { if (!speseAutoOn() || !v || !v.pricing) return false; let ch = false;
+    S.TARIFFE.forEach(t => { const p = v.pricing[t.key]; if (!p) return; const s0 = speseAuto(v, t.key).tot; if (p.spese !== s0) { p.spese = s0; ch = true; } }); return ch; };
+  const riallineaSpese = () => { if (!isFull() || !speseAutoOn()) return 0; let n = 0;
+    data().villas.forEach(v0 => { if (!v0.pricing) return; const v = JSON.parse(JSON.stringify(v0)); if (applicaSpese(v)) { store.upsertVilla(v); n++; } }); return n; };
+  let tSpese = null; const programmaSpese = () => { clearTimeout(tSpese); tSpese = setTimeout(() => { try { const n = riallineaSpese(); if (n) toast(`Spese servizi aggiornate in ${n} ${n === 1 ? 'villa' : 'ville'}`); } catch (e) { console.warn(e); } }, 1500); };
   const isMobile = () => window.matchMedia('(max-width: 760px)').matches;
 
   /* ---------- preferenze di vista (solo su questo dispositivo) ---------- */
@@ -309,7 +327,7 @@ window.SDBStore.ready.then(function () {
       righe.push(['Notti pagate libere', lib.length ? `${nottiDi(lib)}: ${lib.map(r => S.dm(r.from) + ' → ' + S.dm(r.to)).join(', ')}` : 'nessuna']); }
     if (assegn.length) righe.push(['Assegnata a (app Scontrini)', assegn.join(', ')]);
     if (b.note) righe.push(['Note', b.note]);
-    const srvRighe = servizi(null, null, true).filter(x => hasSrv(b, x)).map(x => { const d = srvDet(b, x.key); return [x.label, d.incluso ? 'Incluso nel prezzo' : 'A parte'].concat(acq ? [d.incluso || typeof d.acquisto !== 'number' ? '' : S.money(d.acquisto)] : [], [d.incluso || typeof d.vendita !== 'number' ? '' : S.money(d.vendita), d.note || '']); });
+    const srvRighe = servizi(null, null, true).filter(x => hasSrv(b, x)).map(x => { const d = srvDet(b, x.key); return [x.label, S.CARICO_LABEL[d.carico]].concat(acq ? [d.carico === 'proprietario' || typeof d.acquisto !== 'number' ? '' : S.money(d.acquisto)] : [], [d.carico !== 'parte' || typeof d.vendita !== 'number' ? '' : S.money(d.vendita), d.note || '']); });
     const sv = srvTot(b);
     const totVendita = (typeof b.prezzoVendita === 'number' ? b.prezzoVendita : 0) + sv.vendita;
     const totAcquisto = acq ? (typeof b.prezzoAcquisto === 'number' ? b.prezzoAcquisto : 0) + sv.acquisto : null;
@@ -398,7 +416,7 @@ window.SDBStore.ready.then(function () {
   let listiniOk = false;
   store.subscribe((st, origin) => {
     if (!listiniOk && store.mode === 'online' && origin === 'remote' && isFull() && store.riallineaListini) { listiniOk = true;
-      setTimeout(() => { try { const n = store.riallineaListini(); if (n) console.info('[SDB] listini di vendita aggiornati:', n); } catch (e) { console.warn(e); } }, 6000); }
+      setTimeout(() => { try { riallineaSpese(); const n = store.riallineaListini(); if (n) console.info('[SDB] listini di vendita aggiornati:', n); } catch (e) { console.warn(e); } }, 6000); }
     if (origin !== 'remote') return;
     const a = document.activeElement;
     if (a && /INPUT|TEXTAREA|SELECT/.test(a.tagName) && main.contains(a)) return;
@@ -771,10 +789,10 @@ window.SDBStore.ready.then(function () {
         ${servizi(null, null, true).filter(x => !x.off || hasSrv(b, x)).map(x => { const d = srvDet(b, x.key); const on = hasSrv(b, x); return `<div class="srv-item${on ? ' on' : ''}" data-sk="${esc(x.key)}">
           <label class="flag"><input type="checkbox" class="srv-cb" ${x.base ? `id="b-${x.key}"` : `data-srv="${esc(x.key)}"`} ${on ? 'checked' : ''}><span><b>${esc(x.label)}</b></span></label>
           <div class="srv-det"${on ? '' : ' hidden'}>
-            <div class="seg small srv-mode"><button type="button" data-inc="1" class="${d.incluso ? 'on' : ''}">Incluso nel prezzo</button><button type="button" data-inc="0" class="${d.incluso ? '' : 'on'}">A parte</button></div>
-            <div class="row srv-prices"${d.incluso ? ' hidden' : ''}>
+            <div class="seg small srv-mode">${S.CARICHI.map(c => `<button type="button" data-car="${c}" class="${d.carico === c ? 'on' : ''}">${S.CARICO_LABEL[c]}</button>`).join('')}</div>
+            <div class="row srv-prices"${d.carico === 'proprietario' || (d.carico === 'esmeralda' && !canAcq()) ? ' hidden' : ''}>
               <label class="field"${canAcq() ? '' : ' hidden'}><span>Acquisto €</span><input data-sa inputmode="numeric" value="${typeof d.acquisto === 'number' ? esc(fmtNum(d.acquisto)) : ''}"></label>
-              <label class="field"><span>Vendita €</span><input data-sv inputmode="numeric" value="${typeof d.vendita === 'number' ? esc(fmtNum(d.vendita)) : ''}"></label>
+              <label class="field srv-vend"${d.carico === 'parte' ? '' : ' hidden'}><span>Vendita €</span><input data-sv inputmode="numeric" value="${typeof d.vendita === 'number' ? esc(fmtNum(d.vendita)) : ''}"></label>
             </div>
             <p class="note srv-calc" data-sc hidden></p>
             <label class="field"><span>Note</span><input data-sn value="${esc(d.note)}" placeholder="es. 3 cene, orari, fornitore"></label>
@@ -824,8 +842,9 @@ window.SDBStore.ready.then(function () {
       const out = JSON.parse(JSON.stringify(b.serviziDett || {}));
       $$('#bform .srv-item').forEach(it => {
         const k = it.dataset.sk; const cb = it.querySelector('.srv-cb');
-        const d = { incluso: it.querySelector('.srv-mode .on').dataset.inc === '1', acquisto: num(it.querySelector('[data-sa]')), vendita: num(it.querySelector('[data-sv]')), note: it.querySelector('[data-sn]').value.trim() };
-        if (!cb.checked && d.incluso && d.acquisto === null && d.vendita === null && !d.note) delete out[k]; else out[k] = d;
+        const car = (it.querySelector('.srv-mode .on') || {}).dataset ? it.querySelector('.srv-mode .on').dataset.car : 'parte';
+        const d = { carico: car, incluso: car !== 'parte', acquisto: num(it.querySelector('[data-sa]')), vendita: num(it.querySelector('[data-sv]')), note: it.querySelector('[data-sn]').value.trim() };
+        if (!cb.checked && d.acquisto === null && d.vendita === null && !d.note) delete out[k]; else out[k] = d;
       });
       return out;
     }
@@ -836,10 +855,12 @@ window.SDBStore.ready.then(function () {
         const pv = S.srvPrezzo(settings(), k, def.vendita, n0), pa = S.srvPrezzo(settings(), k, defA, n0);
         if (!v.value.trim() && typeof pv === 'number') v.value = fmtNum(pv);
         if (canAcq() && !a.value.trim() && typeof pa === 'number') a.value = fmtNum(pa); };
-      const modo = inc => { it.querySelectorAll('.srv-mode button').forEach(z => z.classList.toggle('on', (z.dataset.inc === '1') === inc)); it.querySelector('.srv-prices').hidden = inc; if (!inc) riempi(); };
+      // a carico di: Esmeralda (solo il costo), a parte (costo e vendita, sommati al prezzo), proprietario (niente)
+      const modo = car => { it.querySelectorAll('.srv-mode button').forEach(z => z.classList.toggle('on', z.dataset.car === car));
+        it.querySelector('.srv-prices').hidden = car === 'proprietario' || (car === 'esmeralda' && !canAcq()); it.querySelector('.srv-vend').hidden = car !== 'parte'; if (car !== 'proprietario') riempi(); };
       it.querySelector('.srv-cb').addEventListener('change', e => { it.classList.toggle('on', e.target.checked); it.querySelector('.srv-det').hidden = !e.target.checked;
-        if (e.target.checked && !(b.serviziDett || {})[k]) modo(def.incluso !== false); check(); });
-      it.querySelector('.srv-mode').addEventListener('click', e => { const bt = e.target.closest('button'); if (!bt) return; modo(bt.dataset.inc === '1'); check(); });
+        if (e.target.checked && !(b.serviziDett || {})[k]) { const vl = data().villas.find(z => z.id === $('#b-villa').value); modo(S.caricoDef(settings(), vl, k)); } check(); });
+      it.querySelector('.srv-mode').addEventListener('click', e => { const bt = e.target.closest('button'); if (!bt) return; modo(bt.dataset.car); check(); });
     });
     // servizi con prezzo settimanale (Impostazioni): calcolo sulle notti del soggiorno, con "Usa questi" per riscrivere i prezzi
     const srvCalc = n => { $$('#bform .srv-item').forEach(it => { const k = it.dataset.sk, el = it.querySelector('[data-sc]'); if (!el) return;
@@ -1280,7 +1301,7 @@ window.SDBStore.ready.then(function () {
       </div>
       <section class="card"><h2>Caratteristiche</h2><div class="grid">${FIELDS.caratteristiche.map(([k, l]) => inp(k, l)).join('')}</div></section>
       <section class="card"><h2>Servizi compresi nel prezzo</h2>
-        <p class="note">Spunta i servizi che questa villa ha già compresi nel prezzo d'affitto: nelle Offerte, con "Predefinito", per questa villa risultano inclusi e non si sommano al prezzo.</p>
+        <p class="note">Spunta i servizi che in questa villa sono <b>a carico del proprietario</b> (compresi nel suo prezzo): nelle Offerte risultano inclusi e non si sommano, non entrano nelle spese servizi del listino e nella prenotazione partono come "A carico del proprietario". Gli altri seguono Impostazioni → Servizi (A carico di Esmeralda / A parte).</p>
         <div class="v-srv" id="v-srv">${servizi(settings().servizi).map(x => `<label class="flag"><input type="checkbox" data-vsrv="${esc(x.key)}" ${(v.serviziInclusi || []).includes(x.key) ? 'checked' : ''} ${ro ? 'disabled' : ''}><span><b>${esc(x.label)}</b></span></label>`).join('')}</div>
       </section>
       <section class="card v-media"><h2>Link e media</h2><div class="grid wide">${FIELDS.link.filter(([k]) => !hiddenField(k)).map(([k, l]) => linkInp(k, l)).join('')}</div>
@@ -1314,7 +1335,7 @@ window.SDBStore.ready.then(function () {
       saveT = setTimeout(() => { store.upsertVilla(JSON.parse(JSON.stringify(v))); $('#saved').textContent = 'Salvato'; }, 350);
     };
     $$('[data-vsrv]').forEach(el => el.addEventListener('change', () => {
-      v.serviziInclusi = $$('[data-vsrv]').filter(x => x.checked).map(x => x.dataset.vsrv); save(); if ($('#prices')) drawPrices();
+      v.serviziInclusi = $$('[data-vsrv]').filter(x => x.checked).map(x => x.dataset.vsrv); applicaSpese(v); save(); if ($('#prices')) drawPrices();
     }));
     $$('[data-k]').forEach(el => el.addEventListener('input', () => {
       v[el.dataset.k] = el.value;
@@ -1345,6 +1366,7 @@ window.SDBStore.ready.then(function () {
     if ($('#prices')) drawPrices();
     function drawPrices() {
       if (ro) return drawPricesRO();
+      if (applicaSpese(v)) save(); // spese servizi automatiche (servizi a carico di Esmeralda)
       const box = $('#prices'); const t = villaTab; const p = v.pricing[t]; const per = S.periodsFor(st, v, t);
       const defC = st.cambio || 'domenica';
       box.innerHTML = `<h2>Listino prezzi</h2>
@@ -1354,7 +1376,8 @@ window.SDBStore.ready.then(function () {
         ${t !== 'settimanale' ? `<div class="cambio-row"><span class="lbl">Date dei periodi</span><div class="seg" id="p-perm">${[['def', 'Predefinite'], ['own', 'Personalizzate per questa villa']].map(([k, l]) => `<button type="button" data-m="${k}" class="${(v.periodi && v.periodi[t] ? 'own' : 'def') === k ? 'on' : ''}">${l}</button>`).join('')}</div>
           <span class="note">${v.periodi && v.periodi[t] ? 'Modifica le date direttamente nella tabella.' : 'Uguali per tutte le ville (Impostazioni).'}</span></div>` : ''}
         <div class="params">
-          <label class="field"><span>Spese servizi €</span><input data-p="spese" inputmode="numeric" value="${esc(p.spese)}"><small class="lbl-sub">Netto vendita</small></label>
+          ${speseAutoOn() ? (() => { const sa = speseAuto(v, t); return `<div class="field sp-auto"><span>Spese servizi €</span><b class="sp-auto-v">${S.money(sa.tot) || '0 €'}</b><small class="lbl-sub" title="${esc(sa.det.map(([l, z]) => l + ': ' + (z === null ? 'senza prezzo' : S.money(z))).join(' · '))}">automatiche: ${sa.det.length ? esc(sa.det.map(([l, z]) => l + ' ' + (z === null ? '(senza prezzo)' : S.money(z))).join(' + ')) : 'nessun servizio a carico di Esmeralda'}</small></div>`; })()
+            : `<label class="field"><span>Spese servizi €</span><input data-p="spese" inputmode="numeric" value="${esc(p.spese)}"><small class="lbl-sub">Netto vendita · diventano automatiche scegliendo in Impostazioni i servizi a carico di Esmeralda</small></label>`}
           <label class="field"><span>Arrotonda a €</span><input data-p="arrotonda" inputmode="numeric" value="${esc(p.arrotonda)}"></label>
           <label class="field"><span>Margine %</span><input data-p="margine" inputmode="decimal" value="${esc(Math.round((Number(p.margine) || 0) * 1000) / 10)}"></label>
           <label class="field"><span>Margine minimo €</span><input data-p="minimo" inputmode="numeric" value="${esc(p.minimo === undefined || p.minimo === null ? S.MARGINE_MIN : p.minimo)}"><small class="lbl-sub">per prenotazione</small></label>
@@ -1371,7 +1394,8 @@ window.SDBStore.ready.then(function () {
       per.forEach((_, i) => upd(i));
       $$('[data-vsp]', box).forEach(el => el.addEventListener('input', () => {
         const k = el.dataset.vsp, val = S.parseMoney(el.value); v.prezziServizi = Object.assign({}, v.prezziServizi);
-        if (typeof val === 'number') v.prezziServizi[k] = val; else delete v.prezziServizi[k]; save();
+        if (typeof val === 'number') v.prezziServizi[k] = val; else delete v.prezziServizi[k];
+        if (applicaSpese(v)) { per.forEach((_, i) => upd(i)); const sv = $('.sp-auto-v', box); if (sv) sv.textContent = S.money(v.pricing[t].spese) || '0 €'; } save();
       }));
       const pm = $('#p-perm', box);
       if (pm) pm.addEventListener('click', e => {
@@ -1628,8 +1652,8 @@ window.SDBStore.ready.then(function () {
         <div class="loc-new"><input id="loc-add-in" placeholder="Nuova località"><button type="button" class="btn small" id="loc-add">Aggiungi</button></div>
       </section>`)}
       ${pg('servizi', `<section class="card"><h2>Servizi delle prenotazioni</h2>
-        <p class="note">Sono le caselle della sezione Servizi nella finestra della prenotazione. Qui scegli per ognuno se di norma è <b>incluso</b> nel prezzo dell'affitto o <b>a parte</b>, e i prezzi predefiniti: quando spunti il servizio in una prenotazione si compilano da soli, e lì puoi sempre cambiarli. Tutti si rinominano. I servizi aggiunti si tolgono se nessuna prenotazione li usa; pulizia finale, cuoco e transfer si possono togliere sempre (le prenotazioni che li avevano li tengono) e rimettere quando vuoi.${canAcq() ? ' I prezzi di acquisto li vede solo chi vede gli acquisti. <b>Prezzo</b>: <b>a soggiorno</b> = uguale qualunque sia la durata (es. pulizia finale); <b>a settimana</b> = si somma per ogni settimana di permanenza (es. lavanderia). Per i settimanali scegli il coefficiente delle settimane dopo la prima: × 1 = stesso prezzo ogni settimana, × 0,8 = dalla 2ª settimana il 20% in meno (es. cuoco: il trasloco degli utensili e la pulizia della cucina si pagano una volta). Le settimane sono le notti ÷ 7 (almeno 1).' : ''}</p>
-        <div class="tbl-wrap"><table class="prices srv-tbl"><thead><tr><th>Servizio</th><th>Di norma</th><th>Prezzo</th>${canAcq() ? '<th>Acquisto €</th>' : ''}<th>Vendita €</th><th>Usato</th><th></th></tr></thead><tbody id="srv-list"></tbody></table></div>
+        <p class="note">Sono le caselle della sezione Servizi nella finestra della prenotazione. Per ognuno scegli di norma <b>a carico di chi</b> è: <b>Esmeralda</b> = incluso nell'offerta e pagato da noi (la sua vendita entra nelle "Spese servizi" del listino di ogni villa, calcolate da sole); <b>A parte</b> = si somma al prezzo dell'offerta; <b>Proprietario</b> = incluso e fornito dal proprietario (per una sola villa si sceglie nella scheda villa, "Servizi compresi nel prezzo"). Nelle spese: servizio spuntato nella prenotazione → spese offerte (a carico del proprietario → spese a carico del proprietario); servizio non spuntato → spese aggiuntive. I prezzi predefiniti si compilano da soli quando spunti il servizio in una prenotazione. Prezzi di acquisto visibili solo a chi vede gli acquisti. <b>Prezzo</b>: <b>a soggiorno</b> = uguale qualunque sia la durata (es. pulizia finale); <b>a settimana</b> = si somma per ogni settimana di permanenza (es. lavanderia), con il coefficiente delle settimane dopo la prima (× 1 = stesso prezzo, × 0,8 = 20% in meno; es. cuoco). Settimane = notti ÷ 7 (almeno 1); nel listino: settimanale 1, bisettimanale 2, mensile 4, bimensile 8.</p>
+        <div class="tbl-wrap"><table class="prices srv-tbl"><thead><tr><th>Servizio</th><th>Di norma a carico di</th><th>Prezzo</th>${canAcq() ? '<th>Acquisto €</th>' : ''}<th>Vendita €</th><th>Usato</th><th></th></tr></thead><tbody id="srv-list"></tbody></table></div>
         <form class="loc-new" id="srv-add" autocomplete="off"><input id="srv-add-n" placeholder="Nuovo servizio (es. Baby sitter)"><button class="btn small">Aggiungi servizio</button></form>
       </section>
       <section class="card"><h2>Tariffe delle utenze</h2>
@@ -1698,7 +1722,7 @@ window.SDBStore.ready.then(function () {
     </div></div></div></div>`;
     $('#s-theme').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; ui.theme = b.dataset.v; saveUI(); applyTheme(); $$('#s-theme button').forEach(x => x.classList.toggle('on', x === b)); });
     let t;
-    const save = () => { $('#saved').textContent = 'Modifiche in corso…'; clearTimeout(t); t = setTimeout(() => { store.setSettings(JSON.parse(JSON.stringify(st))); refreshShell('impostazioni'); $('#saved').textContent = 'Salvato'; }, 400); };
+    const save = () => { $('#saved').textContent = 'Modifiche in corso…'; clearTimeout(t); t = setTimeout(() => { store.setSettings(JSON.parse(JSON.stringify(st))); refreshShell('impostazioni'); $('#saved').textContent = 'Salvato'; programmaSpese(); }, 400); };
     if (!isFull()) ['#s-name', '#s-start', '#s-end'].forEach(q => { const el = $(q); if (el) el.disabled = true; });
     $('#s-name').addEventListener('input', e => { st.seasonName = e.target.value; save(); });
     $('#s-start').addEventListener('change', e => { if (e.target.value) { st.seasonStart = e.target.value; save(); } });
@@ -1894,7 +1918,7 @@ window.SDBStore.ready.then(function () {
       const list = servizi(st.servizi, st.serviziBase || {}); const tolti = servizi(st.servizi, st.serviziBase || {}, true).filter(x => x.off);
       $('#srv-list').innerHTML = list.map(x => { const n = x.base ? srvBaseUsed(x.key) : srvUsed(x.key); const pz = prezziSrv()[x.key] || {}; const inc = pz.incluso !== false; return `<tr class="srv-tr" data-sk="${esc(x.key)}">
         <td><input data-sl value="${esc(x.label)}" aria-label="Nome del servizio"></td>
-        <td><div class="seg small" data-pi><button type="button" data-i="1" class="${inc ? 'on' : ''}">Incluso</button><button type="button" data-i="0" class="${inc ? '' : 'on'}">A parte</button></div></td>
+        <td><div class="seg small srv-car" data-pi>${S.CARICHI.map(c => `<button type="button" data-i="${c}" class="${S.caricoSet(st, x.key) === c ? 'on' : ''}" title="${S.CARICO_LABEL[c]}">${{ esmeralda: 'Esmeralda', parte: 'A parte', proprietario: 'Proprietario' }[c]}</button>`).join('')}</div></td>
         <td class="srv-un"><select data-pu aria-label="Il prezzo vale"><option value="soggiorno" ${pz.unita === 'settimana' ? '' : 'selected'}>a soggiorno</option><option value="settimana" ${pz.unita === 'settimana' ? 'selected' : ''}>a settimana</option></select>
           <label class="srv-volte" ${pz.unita === 'settimana' ? '' : 'hidden'} title="Coefficiente delle settimane dopo la prima: 1 = stesso prezzo ogni settimana, 0,8 = dalla 2ª settimana il 20% in meno, 0 = la 2ª settimana non costa">dalla 2ª sett. × <input data-pq inputmode="decimal" value="${esc(String(S.srvUnita(st, x.key).coeff).replace('.', ','))}" aria-label="Coefficiente dalla seconda settimana"></label></td>
         ${canAcq() ? `<td><input data-pa inputmode="numeric" value="${esc(fmtP(acqSrv[x.key]))}" placeholder="—" aria-label="Acquisto predefinito"></td>` : ''}
@@ -1913,7 +1937,7 @@ window.SDBStore.ready.then(function () {
       prezziSrv()[k] = Object.assign({}, prezziSrv()[k], { unita: sett ? 'settimana' : 'soggiorno' }); if (sett && typeof prezziSrv()[k].coeff !== 'number') prezziSrv()[k].coeff = 1; delete prezziSrv()[k].volte;
       row.querySelector('.srv-volte').hidden = !sett; save(); });
     $('#srv-list').addEventListener('click', e => { const bt = e.target.closest('[data-pi] button'); if (!bt) return; const k = bt.closest('[data-sk]').dataset.sk;
-      prezziSrv()[k] = Object.assign({}, prezziSrv()[k], { incluso: bt.dataset.i === '1' }); bt.parentNode.querySelectorAll('button').forEach(z => z.classList.toggle('on', z === bt)); save(); });
+      prezziSrv()[k] = Object.assign({}, prezziSrv()[k], { carico: bt.dataset.i, incluso: bt.dataset.i !== 'parte' }); bt.parentNode.querySelectorAll('button').forEach(z => z.classList.toggle('on', z === bt)); save(); });
     // ---- inclusioni delle offerte (settings.inclusioni) ----
     const incList = () => (st.inclusioni = JSON.parse(JSON.stringify(S.inclusioniDi(st))));
     const drawInc = () => {
