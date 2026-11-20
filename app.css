@@ -1271,3 +1271,4 @@ dialog.dlg-bil { width: min(900px, calc(100vw - 32px)); }
 /* Verifica di stagione */
 .vs-tbl td, .vs-tbl th { white-space: nowrap; }
 .vs-chip { display: inline-block; font-weight: 600; }
+.srv-tbl tr.srv-grp td { padding: 10px 8px 4px; font-size: .78rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--line); }

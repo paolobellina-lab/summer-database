@@ -1924,10 +1924,14 @@ window.SDBStore.ready.then(function () {
     // sposta i prezzi da una chiave all'altra (rinomina di una voce, voce ↔ servizio)
     const muoviPrezzi = (da, a, copia) => { const p0 = prezziSrv(); if (p0[da]) { const o0 = Object.assign({}, p0[da]); if (S.isVoceKey(a)) { delete o0.carico; delete o0.incluso; } p0[a] = Object.assign({}, p0[a], o0); if (!copia) delete p0[da]; }
       if (typeof acqSrv[da] === 'number') { acqSrv[a] = acqSrv[da]; if (!copia) delete acqSrv[da]; salvaAcq(); } };
+    // righe raggruppate per carico: Esmeralda → Proprietario → Cliente (servizi in ordine alfabetico; voci nel loro ordine, frecce dentro il gruppo)
+    const GRP_ORD = ['esmeralda', 'proprietario', 'parte'];
+    const GRP_TIT = { esmeralda: 'A carico di Esmeralda', proprietario: 'A carico del proprietario', parte: 'A carico del cliente' };
+    const grpRow = c => `<tr class="srv-grp"><td colspan="${canAcq() ? 8 : 7}">${GRP_TIT[c]}</td></tr>`;
     const drawSrv = () => {
-      const list = servizi(st.servizi, st.serviziBase || {}); const giaVoce = n0 => catLibere(st).some(c => c.toLowerCase() === n0.toLowerCase());
+      const list = servizi(st.servizi, st.serviziBase || {}).slice().sort((a, b) => (GRP_ORD.indexOf(S.caricoSet(st, a.key)) - GRP_ORD.indexOf(S.caricoSet(st, b.key))) || a.label.localeCompare(b.label, 'it')); const giaVoce = n0 => catLibere(st).some(c => c.toLowerCase() === n0.toLowerCase());
       const tolti = servizi(st.servizi, st.serviziBase || {}, true).filter(x => x.off && !giaVoce(x.label));
-      $('#srv-list').innerHTML = list.map(x => { const n = x.base ? srvBaseUsed(x.key) : srvUsed(x.key); const pz = prezziSrv()[x.key] || {}; const inc = pz.incluso !== false; return `<tr class="srv-tr" data-sk="${esc(x.key)}" data-pk="${esc(x.key)}">
+      $('#srv-list').innerHTML = list.map((x, i) => { const g = S.caricoSet(st, x.key), gh = !i || S.caricoSet(st, list[i - 1].key) !== g ? grpRow(g) : ''; const n = x.base ? srvBaseUsed(x.key) : srvUsed(x.key); const pz = prezziSrv()[x.key] || {}; const inc = pz.incluso !== false; return gh + `<tr class="srv-tr" data-sk="${esc(x.key)}" data-pk="${esc(x.key)}">
         <td><input data-sl value="${esc(x.label)}" aria-label="Nome del servizio"></td>
         <td class="srv-off"><input type="checkbox" data-voff checked title="Togli la spunta per farla diventare una voce solo delle note spese" aria-label="In offerta e prenotazione"></td>
         <td><div class="seg small srv-car" data-pi>${S.CARICHI.map(c => `<button type="button" data-i="${c}" class="${S.caricoSet(st, x.key) === c ? 'on' : ''}" title="${S.CARICO_LABEL[c]}">${S.CARICO_BREVE[c]}</button>`).join('')}</div></td>
@@ -1946,7 +1950,7 @@ window.SDBStore.ready.then(function () {
       prezziSrv()[k] = Object.assign({}, prezziSrv()[k], { unita: sett ? 'settimana' : 'soggiorno' }); if (sett && typeof prezziSrv()[k].coeff !== 'number') prezziSrv()[k].coeff = 1; delete prezziSrv()[k].volte;
       row.querySelector('.srv-volte').hidden = !sett; save(); });
     $('#srv-list').addEventListener('click', e => { const bt = e.target.closest('[data-pi] button'); if (!bt) return; const k = bt.closest('[data-sk]').dataset.sk;
-      prezziSrv()[k] = Object.assign({}, prezziSrv()[k], { carico: bt.dataset.i, incluso: bt.dataset.i !== 'parte' }); bt.parentNode.querySelectorAll('button').forEach(z => z.classList.toggle('on', z === bt)); save(); });
+      prezziSrv()[k] = Object.assign({}, prezziSrv()[k], { carico: bt.dataset.i, incluso: bt.dataset.i !== 'parte' }); save(); drawSrv(); });
     // ---- inclusioni delle offerte (settings.inclusioni) ----
     const incList = () => (st.inclusioni = JSON.parse(JSON.stringify(S.inclusioniDi(st))));
     const drawInc = () => {
@@ -1974,11 +1978,13 @@ window.SDBStore.ready.then(function () {
       const l = catLibere(st);
       // voci delle note spese senza prezzo, nella stessa tabella dei servizi: a carico di Esmeralda (spesa della prenotazione), cliente (aggiuntiva), proprietario
       const carC = c => catAgg(st).includes(c) ? 'parte' : catProp(st).includes(c) ? 'proprietario' : 'esmeralda';
-      $('#cat-list').innerHTML = l.map((c, i) => `<tr class="catv-row" data-ci="${i}" data-pk="${esc(S.voceKey(c))}"><td><input data-cn value="${esc(c)}" aria-label="Nome della voce"></td>
+      const ord = l.map((c, i) => ({ c, i })).sort((a, b) => (GRP_ORD.indexOf(carC(a.c)) - GRP_ORD.indexOf(carC(b.c))) || a.i - b.i);
+      const vicino = (c, i, d) => { const g = carC(c); let j = i + d; while (j >= 0 && j < l.length && carC(l[j]) !== g) j += d; return j >= 0 && j < l.length ? j : -1; };
+      $('#cat-list').innerHTML = ord.map(({ c, i }, n0) => (!n0 || carC(ord[n0 - 1].c) !== carC(c) ? grpRow(carC(c)) : '') + `<tr class="catv-row" data-ci="${i}" data-pk="${esc(S.voceKey(c))}"><td><input data-cn value="${esc(c)}" aria-label="Nome della voce"></td>
         <td class="srv-off"><input type="checkbox" data-von title="Spunta per farla diventare un servizio: comparirà nella prenotazione e nelle offerte, con i prezzi" aria-label="In offerta e prenotazione"></td>
         <td><div class="seg small srv-car">${S.CARICHI.map(k => `<button type="button" data-ccar="${k}" class="${carC(c) === k ? 'on' : ''}" title="${S.CARICO_LABEL[k]}">${S.CARICO_BREVE[k]}</button>`).join('')}</div></td>
         ${prezziTd(S.voceKey(c))}<td class="note">nota spese</td>
-        <td class="col-act"><span class="inc-act"><button type="button" class="btn small" data-cmv="-1" ${i ? '' : 'disabled'} aria-label="Sposta su">↑</button><button type="button" class="btn small" data-cmv="1" ${i < l.length - 1 ? '' : 'disabled'} aria-label="Sposta giù">↓</button><button type="button" class="btn small danger" data-cdel>Togli</button></span></td></tr>`).join('') || `<tr><td colspan="8" class="note">Nessuna voce.</td></tr>`;
+        <td class="col-act"><span class="inc-act"><button type="button" class="btn small" data-cmv="-1" ${vicino(c, i, -1) >= 0 ? '' : 'disabled'} aria-label="Sposta su">↑</button><button type="button" class="btn small" data-cmv="1" ${vicino(c, i, 1) >= 0 ? '' : 'disabled'} aria-label="Sposta giù">↓</button><button type="button" class="btn small danger" data-cdel>Togli</button></span></td></tr>`).join('') || `<tr><td colspan="8" class="note">Nessuna voce.</td></tr>`;
     };
     const catEsiste = (n, salta) => { const t = n.toLowerCase(); return catLibere(st).some((c, i) => i !== salta && c.toLowerCase() === t) || CAT_FISSE.some(c => c.toLowerCase() === t) || servizi(st.servizi, st.serviziBase || {}).some(x => x.label.toLowerCase() === t); };
     $('#srv-ord').addEventListener('click', e => { const on = !$('.srv-tbl').classList.toggle('srv-noedit'); e.currentTarget.setAttribute('aria-pressed', on); e.currentTarget.textContent = on ? 'Fatto' : 'Riordina e togli'; });
@@ -1989,9 +1995,9 @@ window.SDBStore.ready.then(function () {
     $('#cat-list').addEventListener('click', e => { const bt = e.target.closest('[data-ccar]'); if (!bt) return;
       const row = bt.closest('[data-ci]'), c = catLibere(st)[Number(row.dataset.ci)], k = bt.dataset.ccar;
       st.categorieAggiuntive = catAgg(st).filter(x => x !== c).concat(k === 'parte' ? [c] : []); st.categorieProprietario = catProp(st).filter(x => x !== c).concat(k === 'proprietario' ? [c] : []);
-      row.querySelectorAll('[data-ccar]').forEach(z => z.classList.toggle('on', z === bt)); save(); toast(`${c}: ${S.CARICO_LABEL[k].toLowerCase()}`); });
+      save(); drawCat(); toast(`${c}: ${S.CARICO_LABEL[k].toLowerCase()}`); });
     $('#cat-list').addEventListener('click', e => { const row = e.target.closest('[data-ci]'); if (!row) return; const i = Number(row.dataset.ci); const l = catLibere(st);
-      const mv = e.target.closest('[data-cmv]'); if (mv) { const j = i + Number(mv.dataset.cmv); if (j < 0 || j >= l.length) return; [l[i], l[j]] = [l[j], l[i]]; st.categorieSpese = l; save(); drawCat(); return; }
+      const mv = e.target.closest('[data-cmv]'); if (mv) { const g = catAgg(st).includes(l[i]) ? 1 : catProp(st).includes(l[i]) ? 2 : 0, gj = c => catAgg(st).includes(c) ? 1 : catProp(st).includes(c) ? 2 : 0; let j = i + Number(mv.dataset.cmv); while (j >= 0 && j < l.length && gj(l[j]) !== g) j += Number(mv.dataset.cmv); if (j < 0 || j >= l.length) return; [l[i], l[j]] = [l[j], l[i]]; st.categorieSpese = l; save(); drawCat(); return; }
       if (e.target.closest('[data-cdel]')) { const was = l[i]; l.splice(i, 1); delete prezziSrv()[S.voceKey(was)]; if (typeof acqSrv[S.voceKey(was)] === 'number') { delete acqSrv[S.voceKey(was)]; salvaAcq(); } st.categorieSpese = l; st.categorieAggiuntive = catAgg(st).filter(x => x !== was); st.categorieProprietario = catProp(st).filter(x => x !== was); save(); drawCat(); toast('Categoria tolta'); } });
     // un solo modulo per aggiungere: servizio della prenotazione o solo voce delle note spese
     $('#srv-add').addEventListener('submit', e => { if ($('#srv-add-t').value !== 'cat') return; e.preventDefault(); e.stopImmediatePropagation();
