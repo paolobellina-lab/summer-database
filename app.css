@@ -1304,3 +1304,9 @@ table.prices.srv-tbl td input[type="checkbox"] { width: auto; }
 .srv-tbl tr.srv-sep > td, .srv-tbl tr.srv-grp > td { white-space: normal; }
 .srv-tbl .cat-chips { flex-wrap: wrap; }
 .srv-tbl + *, .srv-tbl { max-width: 100%; }
+table.prices.srv-tbl td.srv-un { flex-wrap: nowrap; }
+table.prices.srv-tbl td.srv-un .srv-volte { margin: 0 !important; white-space: nowrap; }
+table.prices.srv-tbl td.srv-un .srv-volte input { width: 56px; }
+table.prices.srv-tbl td.srv-un select { width: auto; }
+.srv-tbl tr.srv-tr, .srv-tbl tr.catv-row { grid-template-columns: minmax(160px, 1.5fr) auto auto auto auto minmax(0, 1fr); grid-template-areas: "nome off car pdf . ." "un un acq ven uso act"; }
+@media (max-width: 720px) { .srv-tbl tr.srv-tr, .srv-tbl tr.catv-row { grid-template-columns: 1fr 1fr; grid-template-areas: "nome nome" "off pdf" "car car" "un un" "acq ven" "uso act"; } }
