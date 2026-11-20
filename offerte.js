@@ -78,10 +78,12 @@
       .concat(((st.servizi) || []).filter(x => x && x.key && !x.off).map(x => ({ key: x.key, label: x.label })))
       // voci delle note spese con un prezzo di vendita in Impostazioni: si possono proporre (prezzo e carico), ma senza testi nella mail
       .concat(Object.keys(st.prezziServizi || {}).filter(k => S.isVoceKey(k) && typeof st.prezziServizi[k].vendita === 'number' && (!Array.isArray(st.categorieSpese) || st.categorieSpese.includes(S.voceNome(k)))).map(k => ({ key: k, label: S.voceNome(k), voce: true })));
+    const srvDefOn = k => S.caricoSet(st, k) !== 'parte' || (o.ville || []).some(id => { const v = (data().villas || []).find(z => z.id === id); return v && S.caricoDef(st, v, k) !== 'parte'; });
     const srvDi = k => { const d = (st.prezziServizi || {})[k] || {}; const x = o.srv[k] || {};
       const modo = ['pred', 'inc', 'parte'].includes(x.modo) ? x.modo : x.incluso === true ? 'inc' : x.incluso === false ? 'parte' : 'pred';
-      // non ancora toccato nell'offerta: spuntato di norma se a carico di Esmeralda (Impostazioni → Servizi e categorie delle spese)
-      return { on: x.on === undefined ? S.caricoSet(st, k) === 'esmeralda' : !!x.on, modo, prezzo: x.prezzo !== undefined && String(x.prezzo).trim() !== '' ? String(x.prezzo) : '' }; };
+      // non ancora toccato nell'offerta: spuntato di norma se compreso nel prezzo (a carico di Esmeralda o del proprietario, in Impostazioni
+      // o nella scheda di una delle ville scelte); togliendo la spunta il servizio non c'è più (né testo né valore)
+      return { on: x.on === undefined ? srvDefOn(k) : !!x.on, modo, prezzo: x.prezzo !== undefined && String(x.prezzo).trim() !== '' ? String(x.prezzo) : '' }; };
     // prezzo di un servizio per una villa: quello scritto qui nell'offerta (uguale per tutte), altrimenti quello della scheda villa, altrimenti Impostazioni
     // prezzo "di base" (senza modifiche nell'offerta): scheda villa, altrimenti Impostazioni; se settimanale, sulle settimane del periodo
     const prezzoSrvBase = (v, k) => { const pe = v ? perOf(v) : null, notti = pe && pe.from && pe.to ? S.diffDays(pe.from, pe.to) : 0;
@@ -111,7 +113,7 @@
     // inclusi divisi per chi li paga: a carico del proprietario (scheda villa o Impostazioni), altrimenti Esmeralda
     const incRighe = (v, inc) => { const pr = inc.filter(x => S.caricoDef(st, v, x.key) === 'proprietario'), es = inc.filter(x => !pr.includes(x));
       return (es.length ? `<small class="off-riep-l">Inclusi Esmeralda: ${esc(es.map(x => x.label).join(', '))}</small>` : '') + (pr.length ? `<small class="off-riep-l">Inclusi proprietario: ${esc(pr.map(x => x.label).join(', '))}</small>` : ''); };
-    const srvInclVilla = v => srvList().filter(x => srvDi(x.key).on ? inclusoPer(v, x.key) : inclVilla(v, x.key));
+    const srvInclVilla = v => srvList().filter(x => srvDi(x.key).on && inclusoPer(v, x.key));
     const extraTot = v => srvAparte(v).reduce((t, x) => t + (typeof x.eur === 'number' ? x.eur : 0), 0);
     // inclusi per tutte le ville scelte: vanno nell'elenco comune "Le tariffe includono"; gli altri inclusi si scrivono sotto la singola villa
     // per il cliente: un servizio a parte con prezzo risulta incluso (il prezzo è già nel totale); a parte senza prezzo non compare
@@ -119,9 +121,9 @@
     const prezzoTot = v => { const pr = prezzoDi(v); return pr === null ? null : pr + extraTot(v); };
     // elenco comune: "Includi tutti", oppure "A parte tutti" con un prezzo; con "Predefinito" il servizio va sempre sotto le singole ville
     const prezzato = x => typeof x.eur === 'number' && x.eur > 0;
-    // il cliente "ha" il servizio in questa villa: se non è spuntato nell'offerta, quando la scheda villa lo comprende;
+    // il cliente "ha" il servizio in questa villa: se non è spuntato nell'offerta, mai (tolto dall'offerta);
     // se è spuntato: Includi tutti → sì; A parte tutti → se ha un prezzo; Predefinito → se la scheda lo comprende o se ha un prezzo
-    const haServ = (v, k) => { const d = srvDi(k), sch = inclVilla(v, k); if (!d.on) return sch;
+    const haServ = (v, k) => { const d = srvDi(k), sch = inclVilla(v, k); if (!d.on) return false;
       if (d.modo === 'inc') return true; const pr = prezzoSrv(v, k), conPrezzo = typeof pr === 'number' && pr > 0;
       return d.modo === 'parte' ? conPrezzo : sch || conPrezzo; };
     // elenco comune: i servizi che hanno tutte le ville dell'offerta (compresi o a pagamento); gli altri vanno sotto le ville che li hanno
@@ -162,7 +164,8 @@
 
     main.innerHTML = `<div class="page"><div class="wrap off-page">
       <div class="head"><div><h1>Offerte</h1><div class="sub">Scegli il periodo e le ville: prepari un documento Word o una mail per il cliente, con foto, informazioni e prezzo</div></div>
-        <div class="seg off-tabs" id="off-tabs"><button type="button" data-tab="nuova" class="${!['storico', 'contatti'].includes(o.tab) ? 'on' : ''}">Nuova offerta</button><button type="button" data-tab="storico" class="${o.tab === 'storico' ? 'on' : ''}">Storico<span id="off-st-n"></span></button><button type="button" data-tab="contatti" class="${o.tab === 'contatti' ? 'on' : ''}">Contatti<span id="off-ct-n"></span></button></div></div>
+        <div class="seg off-tabs" id="off-tabs"><button type="button" data-tab="nuova" class="${!['storico', 'contatti'].includes(o.tab) ? 'on' : ''}">Nuova offerta</button><button type="button" data-tab="storico" class="${o.tab === 'storico' ? 'on' : ''}">Storico<span id="off-st-n"></span></button><button type="button" data-tab="contatti" class="${o.tab === 'contatti' ? 'on' : ''}">Contatti<span id="off-ct-n"></span></button></div>
+        <button type="button" class="btn small" id="off-reset" title="Svuota l'offerta in corso: cliente, ville, prezzi e servizi tornano quelli di partenza (le Impostazioni non cambiano)">Ricomincia da zero</button></div>
       <div id="off-storico" ${o.tab === 'storico' ? '' : 'hidden'}></div>
       <div id="off-contatti" ${o.tab === 'contatti' ? '' : 'hidden'}></div>
       <div id="off-editor" ${['storico', 'contatti'].includes(o.tab) ? 'hidden' : ''}>
@@ -814,6 +817,9 @@
         Object.keys(o).forEach(k => { if (!['tab', 'q', 'f', 'fOpen', 'persOpen'].includes(k)) delete o[k]; }); Object.assign(o, JSON.parse(JSON.stringify(x.stato || {})), { tab: 'nuova', ultima: null }); saveUI(); mount(main, ctx); }
       if (b.dataset.act === 'del') { if (!(await (window.SDBConferma ? window.SDBConferma : t => Promise.resolve(confirm(t)))('L\'offerta verrà tolta dallo storico.', { titolo: "Eliminare l'offerta?", ok: 'Elimina', danger: true }))) return; try { await store.deleteOfferta(id); toast('Offerta eliminata'); } catch (err) { toast('Errore: ' + (err && err.message || err)); } }
     });
+    // le scelte fatte nell'offerta (servizi tolti, prezzi cambiati…) valgono solo per l'offerta in corso: Ricomincia le azzera
+    $('#off-reset').addEventListener('click', async () => { if (!(await (window.SDBConferma ? window.SDBConferma : t => Promise.resolve(confirm(t)))("Cliente, ville, prezzi, servizi e testi dell'offerta in corso tornano quelli di partenza. Le offerte già inviate restano nello storico.", { titolo: 'Ricominciare da zero?', ok: 'Ricomincia' }))) return;
+      Object.keys(o).forEach(k => { if (!['tab', 'q', 'f', 'fOpen', 'persOpen', 'tariff', 'lingua', 'nFoto', 'firma', 'stile', 'soloLibere'].includes(k)) delete o[k]; }); o.tab = 'nuova'; saveUI(); mount(main, ctx); toast('Nuova offerta'); });
     $('#off-tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (!b) return; o.tab = b.dataset.tab; $$('#off-tabs button').forEach(z => z.classList.toggle('on', z === b)); $('#off-storico').hidden = o.tab !== 'storico'; $('#off-contatti').hidden = o.tab !== 'contatti'; $('#off-editor').hidden = ['storico', 'contatti'].includes(o.tab); saveUI(); window.scrollTo(0, 0); });
     if (store.listenOfferte) {
       if (window.__sdbOffOff) { try { window.__sdbOffOff(); } catch (_) {} }
