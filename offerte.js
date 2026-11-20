@@ -108,6 +108,9 @@
     const inclusoPer = (v, k) => { const d = srvDi(k); return d.modo === 'inc' || (d.modo === 'pred' && inclVilla(v, k)); };
     const srvAttivi = () => srvList().map(x => Object.assign({}, x, srvDi(x.key))).filter(x => x.on).map(x => Object.assign(x, { eur: S.parseMoney(x.prezzo) }));
     const srvAparte = v => srvAttivi().filter(x => !inclusoPer(v, x.key)).map(x => Object.assign({}, x, { eur: prezzoSrv(v, x.key) }));
+    // inclusi divisi per chi li paga: a carico del proprietario (scheda villa o Impostazioni), altrimenti Esmeralda
+    const incRighe = (v, inc) => { const pr = inc.filter(x => S.caricoDef(st, v, x.key) === 'proprietario'), es = inc.filter(x => !pr.includes(x));
+      return (es.length ? `<small class="off-riep-l">Inclusi Esmeralda: ${esc(es.map(x => x.label).join(', '))}</small>` : '') + (pr.length ? `<small class="off-riep-l">Inclusi proprietario: ${esc(pr.map(x => x.label).join(', '))}</small>` : ''); };
     const srvInclVilla = v => srvList().filter(x => srvDi(x.key).on ? inclusoPer(v, x.key) : inclVilla(v, x.key));
     const extraTot = v => srvAparte(v).reduce((t, x) => t + (typeof x.eur === 'number' ? x.eur : 0), 0);
     // inclusi per tutte le ville scelte: vanno nell'elenco comune "Le tariffe includono"; gli altri inclusi si scrivono sotto la singola villa
@@ -309,7 +312,7 @@
         const affIn = `<input class="off-rp" data-rp="${esc(v.id)}" inputmode="numeric" value="${esc(o.prezzi[v.id] !== undefined ? o.prezzi[v.id] : typeof li === 'number' ? String(li) : '')}" placeholder="su richiesta">${typeof li === 'number' && pr !== null && pr !== li ? `<small class="note off-mod">listino ${esc(S.money(li))}</small>` : ''}`;
         const srvIn = ag.length ? ag.map(x => { const b0 = prezzoSrvBase(v, x.key), cur = (o.srvVilla[v.id] || {})[x.key]; const val0 = cur !== undefined ? cur : typeof x.eur === 'number' ? String(x.eur) : '';
           return `<label class="off-rs-l"><span>${esc(x.label)}</span><input class="off-rs" data-rs="${esc(v.id)}|${esc(x.key)}" inputmode="numeric" value="${esc(val0)}" placeholder="—">${typeof b0 === 'number' && typeof x.eur === 'number' && x.eur !== b0 ? `<small class="note off-mod">scheda ${esc(S.money(b0))}</small>` : ''}</label>`; }).join('') : '<span class="note">—</span>';
-        return `<tr data-rv="${esc(v.id)}"><td><b>${esc(v.name)}</b>${inc.length ? `<small class="off-riep-l">Inclusi: ${esc(inc.map(x => x.label).join(', '))}</small>` : ''}</td><td>${affIn}</td><td class="off-rs-c">${srvIn}<small class="note" data-rt>${et ? 'totale servizi ' + esc(S.money(et)) : ''}</small></td><td><b data-rtot>${pr === null ? '—' : S.money(pr + et)}</b></td></tr>`; }).join('')
+        return `<tr data-rv="${esc(v.id)}"><td><b>${esc(v.name)}</b>${incRighe(v, inc)}</td><td>${affIn}</td><td class="off-rs-c">${srvIn}<small class="note" data-rt>${et ? 'totale servizi ' + esc(S.money(et)) : ''}</small></td><td><b data-rtot>${pr === null ? '—' : S.money(pr + et)}</b></td></tr>`; }).join('')
         : '<tr><td colspan="4" class="note">Scegli le ville al punto 2.</td></tr>';
     };
     const drawTexts = () => {
