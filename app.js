@@ -1608,6 +1608,11 @@ window.SDBStore.ready.then(function () {
         <div class="tbl-wrap"><table class="prices srv-tbl"><thead><tr><th>Servizio</th><th>Di norma</th><th>Prezzo</th>${canAcq() ? '<th>Acquisto €</th>' : ''}<th>Vendita €</th><th>Usato</th><th></th></tr></thead><tbody id="srv-list"></tbody></table></div>
         <form class="loc-new" id="srv-add" autocomplete="off"><input id="srv-add-n" placeholder="Nuovo servizio (es. Baby sitter)"><button class="btn small">Aggiungi servizio</button></form>
       </section>
+      <section class="card"><h2>Tariffe delle utenze</h2>
+        <p class="note">Prezzo per unità usato per calcolare le utenze dalle letture dei contatori (riepilogo della prenotazione). In una prenotazione si può scrivere una tariffa diversa.</p>
+        <div class="ut-def">${[['acqua', 'Acqua', '€ / m³'], ['gas', 'Gas', '€ / m³'], ['luce', 'Elettricità', '€ / kWh']].map(([k, l, u]) => { const t = (st.tariffeUtenze || {})[k];
+          return `<label class="field"><span>${l} <small class="note">${u}</small></span><input data-utd="${k}" inputmode="decimal" value="${typeof t === 'number' ? esc(String(t).replace('.', ',')) : ''}" placeholder="es. 0,45"></label>`; }).join('')}</div>
+      </section>
       <section class="card"><h2>Categorie delle spese</h2>
         <p class="note">Sono le voci del menu Categoria nelle note spese (pagina Prenotazioni). <b>Servizi</b>: si aggiornano da sole con i servizi qui sopra e legano la spesa al servizio offerto nella prenotazione, per confrontarla con il suo acquisto previsto. <b>Altre categorie</b>: le aggiungi e modifichi tu; con <b>Aggiuntiva</b> la spesa è un servizio aggiuntivo (da addebitare al cliente o trattenere dal deposito), con <b>A carico del proprietario</b> va nel totale da addebitare al proprietario, senza spunte è una spesa della prenotazione. Le <b>fisse</b> hanno regole proprie e non si cambiano. Rinominare o togliere una categoria non cambia gli scontrini già inseriti, che restano con il nome di prima.</p>
         <div class="cat-grp"><h4>Servizi (automatiche)</h4><div class="cat-chips" id="cat-srv"></div></div>
@@ -1937,6 +1942,8 @@ window.SDBStore.ready.then(function () {
       if (EXTRAS.some(([z]) => z === k)) { const bc = JSON.parse(JSON.stringify(st.serviziBase || {})); bc[k] = Object.assign({}, bc[k], { off: true }); st.serviziBase = bc; }
       else st.servizi = srvCustom().filter(y => y.key !== k);
       save(); drawSrv(); drawInc(); drawCat(); toast('Servizio tolto'); });
+    $$('[data-utd]').forEach(i => i.addEventListener('input', () => { const t = i.value.trim().replace(/\s/g, '').replace(',', '.'), n = Number(t);
+      st.tariffeUtenze = Object.assign({}, st.tariffeUtenze); if (t === '') delete st.tariffeUtenze[i.dataset.utd]; else if (isFinite(n) && n >= 0) st.tariffeUtenze[i.dataset.utd] = n; else return; save(); }));
     $('#srv-add').addEventListener('submit', e => {
       e.preventDefault(); const label = $('#srv-add-n').value.trim(); if (!label) { $('#srv-add-n').focus(); return; }
       if (servizi(st.servizi, st.serviziBase || {}, true).some(x => x.label.toLowerCase() === label.toLowerCase())) { toast('Esiste già questo servizio (se è tra i tolti, rimettilo)'); return; }

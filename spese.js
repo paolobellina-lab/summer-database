@@ -829,7 +829,7 @@
                 ${uc.righe.map(r => `<tr data-utr="${r.k}"><td><b>${esc(r.l)}</b> <small class="note">${esc(r.un)}</small></td><td class="r">${cel(r.k, 'in', r.i0)}</td><td class="r">${cel(r.k, 'out', r.o0)}</td>
                   <td class="r" data-utc>${r.cons === null ? '—' : esc(fmtU(r.cons)) + ' ' + esc(r.un)}</td><td class="r">${cel(r.k, 'tariffa', r.tPred ? null : r.t0, r.tPred ? fmtU(r.t0) : '')}</td><td class="r" data-uti>${r.imp === null ? '—' : esc(euro(r.imp))}</td></tr>`).join('')}
                 </tbody><tfoot><tr><td colspan="5"><b>Totale utenze da far pagare</b></td><td class="r"><b id="ut-tot">${uc.tot === null ? '—' : esc(euro(uc.tot))}</b></td></tr></tfoot></table></div>
-                ${ed ? `<div class="actions no-print" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button type="button" class="btn primary" id="ut-save">Salva le letture</button><button type="button" class="btn" id="ut-pred">Usa queste tariffe come predefinite</button><span class="note" id="ut-msg"></span></div>` : ''}
+                ${ed ? `<p class="note no-print" style="margin:6px 0 0"><span id="ut-stato">Si salva da solo quando esci dalla tabella.</span> <span id="ut-msg"></span></p>` : ''}
                 <p class="note">${utIncluse(x.b) ? '<b>Utenze incluse nel prezzo</b> (servizio Utenze spuntato come incluso): i consumi non si fanno pagare.' : '<b>Il totale è una spesa aggiuntiva</b> (servizio Utenze a parte o non spuntato): conta nelle spese totali e nel totale da addebitare al cliente; trattienilo dal deposito o registra una nota "Addebito cliente".'}</p></div>`; })() : ''}
             ${x.b ? `<label class="flag pr-concl no-print" style="margin-top:12px"><input type="checkbox" id="pd-concl" ${x.b.conteggiConclusi ? 'checked' : ''} ${ctx.canEdit() ? '' : 'disabled'}><span><b>Conteggi conclusi</b><small>Deposito, addebiti e affitto al proprietario chiusi: nell'elenco la scheda risulta "Conteggi conclusi"</small></span></label>` : ''}</div>
         </div>
@@ -891,11 +891,13 @@
           $('#ut-tot', root).textContent = uc.tot === null ? '—' : euro(uc.tot);
           const neg = uc.righe.filter(r => r.cons !== null && r.cons < 0).map(r => r.l); $('#ut-msg', root).textContent = neg.length ? `Attenzione: ${neg.join(', ')} con la lettura di uscita più bassa di quella di arrivo.` : ''; };
         utIns.forEach(i => i.addEventListener('input', ricalc));
-        $('#ut-save', root).onclick = () => { const b0 = ctx.data().bookings.find(b => b.id === x.b.id); if (!b0) return;
-          ctx.store.upsertBooking(Object.assign(JSON.parse(JSON.stringify(b0)), { utenze: leggi() })); ctx.toast('Letture salvate'); if (ctx.ridisegna) ctx.ridisegna(); };
-        $('#ut-pred', root).onclick = () => { const u = leggi(), st = JSON.parse(JSON.stringify(ctx.data().settings || {})); st.tariffeUtenze = Object.assign({}, st.tariffeUtenze);
-          let n = 0; UTENZE.forEach(([k]) => { const t = u[k] && u[k].tariffa; if (t !== null && t !== undefined) { st.tariffeUtenze[k] = t; n++; } });
-          if (!n) { $('#ut-msg', root).textContent = 'Scrivi prima almeno una tariffa.'; return; } ctx.store.setSettings(st); ctx.toast('Tariffe predefinite salvate'); }; }
+        // salvataggio automatico quando il cursore esce dalla tabella (non a ogni tasto, per non ridisegnare la pagina mentre si scrive)
+        const box = $('.pr-ut', root); let ultimo = JSON.stringify(leggi());
+        const salva = () => { const u = leggi(), js = JSON.stringify(u); if (js === ultimo) return; const b0 = ctx.data().bookings.find(b => b.id === x.b.id); if (!b0) return;
+          ultimo = js; ctx.store.upsertBooking(Object.assign(JSON.parse(JSON.stringify(b0)), { utenze: u })); const el = $('#ut-stato', root); if (el) el.textContent = 'Letture salvate.'; };
+        box.addEventListener('focusout', e => { if (!box.contains(e.relatedTarget)) salva(); });
+        utIns.forEach(i => i.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); salva(); } }));
+        window.addEventListener('hashchange', salva, { once: true }); }
       const cc = $('#pd-concl', root); if (cc && x.b) cc.onchange = () => { const b0 = ctx.data().bookings.find(b => b.id === x.b.id); if (!b0) return;
         ctx.store.upsertBooking(Object.assign(JSON.parse(JSON.stringify(b0)), { conteggiConclusi: cc.checked })); ctx.toast(cc.checked ? 'Conteggi conclusi' : 'Conteggi riaperti'); };
       if (grpBil || grp) { const g = grpBil || grp, tot0 = typeof g.root.prezzoAcquisto === 'number' ? g.root.prezzoAcquisto : null, ins = $$('.bil-in', root), inR = $$('.bil-re', root), totR0 = affGrp(V, g);
