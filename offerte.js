@@ -689,6 +689,9 @@
           ville: scelte().map(v => { const li = listinoOf(v);
             return { id: v.id, name: v.name, prezzo: prezzoTot(v), affitto: prezzoDi(v), listino: typeof li === 'number' ? li : null,
               voci: srvList().filter(x => x.voce && haServ(v, x.key)).map(x => x.label),
+              // servizi dell'offerta per la prenotazione (Prenota): carico e prezzo di vendita (solo a carico del cliente)
+              srvPren: srvList().filter(x => !x.voce && haServ(v, x.key)).map(x => { const c = S.caricoDef(st, v, x.key), pr = prezzoSrv(v, x.key);
+                return { k: x.key, carico: c, vendita: c === 'parte' && typeof pr === 'number' ? pr : null, incluso: inclusoPer(v, x.key) }; }),
               servizi: srvAparte(v).map(x => { const b0 = prezzoSrvBase(v, x.key); return { k: x.key, label: x.label, prezzo: typeof x.eur === 'number' ? x.eur : null, base: typeof b0 === 'number' ? b0 : null }; }) }; }), html, stato, creatoDa: String(store.user || '').toLowerCase(), quando: new Date().toISOString() };
         // stessa offerta salvata poco fa (stesso testo): aggiorno quella invece di crearne un'altra
         const u = o.ultima; const firma = rec.html.length + '|' + rec.cliente + '|' + rec.email + '|' + rec.telefono + '|' + rec.oggetto + '|' + rec.ville.map(v => v.id + v.prezzo).join(',');
@@ -797,7 +800,7 @@
         <section class="dsec sec-date"><h4>Villa</h4><div class="op-ville">
           ${vl.map((z, i) => `<label class="flag"><input type="radio" name="op-v" value="${esc(z.v.id)}" ${i === 0 ? 'checked' : ''}><span><b>${esc(z.v.name)}</b><small>${z.p ? esc(S.dm(z.p.from)) + ' → ' + esc(S.dm(z.p.to)) : 'date da scegliere'} · ${typeof z.r.prezzo === 'number' ? esc(S.money(z.r.prezzo)) : 'prezzo su richiesta'}</small></span></label>`).join('')}</div></section>
         <section class="dsec sec-st"><h4>Stato</h4><div class="seg" id="op-st">${stList.map(z => `<button type="button" data-st="${esc(z.key)}" class="${z.key === 'opzione' ? 'on' : ''}">${esc(z.label)}</button>`).join('')}</div>
-          <p class="note">Nella finestra che si apre controlli date, prezzo e servizi prima di salvare. Il prezzo è quello dell'offerta (affitto più servizi a parte).</p></section>
+          <p class="note">Nella finestra che si apre controlli date, prezzo e servizi prima di salvare. L'affitto è quello dell'offerta senza i servizi; i servizi dell'offerta si spuntano da soli, ognuno con il suo prezzo di vendita (a carico del cliente) o la scritta a carico di Esmeralda / del proprietario.</p></section>
         <div class="foot"><button type="button" class="btn" id="op-no">Annulla</button><button type="submit" class="btn primary">Continua</button></div></form>`;
       let stato = stList.some(z => z.key === 'opzione') ? 'opzione' : (stList[0] || {}).key || 'occupato';
       $$('#op-st button', d).forEach(bt => bt.onclick = () => { stato = bt.dataset.st; $$('#op-st button', d).forEach(z => z.classList.toggle('on', z === bt)); });
@@ -805,8 +808,15 @@
       $('#op-form').onsubmit = ev => { ev.preventDefault();
         const z = vl.find(y => y.v.id === (d.querySelector('[name="op-v"]:checked') || {}).value) || vl[0]; d.close();
         const from = z.p ? z.p.from : S.iso(new Date()), to = z.p ? z.p.to : S.iso(new Date(Date.now() + 7 * 864e5));
+        // affitto senza i servizi: totale dell'offerta − prezzi di vendita dei servizi a carico del cliente (a parte o compresi nel listino)
+        const sp = Array.isArray(z.r.srvPren) ? z.r.srvPren : null, base = ['pulizia', 'cuoco', 'transfer'];
+        const srvPre = {}; let venSrv = 0;
+        if (sp) { srvPre.serviziDett = {}; srvPre.servizi = [];
+          sp.forEach(q => { if (base.includes(q.k)) srvPre[q.k] = true; else srvPre.servizi.push(q.k);
+            srvPre.serviziDett[q.k] = { carico: q.carico, incluso: q.carico !== 'parte', acquisto: null, vendita: q.vendita, note: '' }; if (typeof q.vendita === 'number') venSrv += q.vendita; }); }
+        const tot = typeof z.r.prezzo === 'number' ? z.r.prezzo : null, aff = tot == null ? undefined : sp ? Math.max(0, tot - venSrv) : tot;
         ctx.openBooking({ villaId: z.v.id, from, to,
-          pre: { cliente: x.cliente || '', status: stato, prezzoVendita: typeof z.r.prezzo === 'number' ? z.r.prezzo : undefined, vociOfferta: Array.isArray(z.r.voci) ? z.r.voci : undefined, note: `Da offerta del ${dataBreve(x.quando)}${x.email ? ' · ' + x.email : ''}${x.telefono ? ' · ' + x.telefono : ''}` },
+          pre: Object.assign({ cliente: x.cliente || '', status: stato, prezzoVendita: aff, vociOfferta: Array.isArray(z.r.voci) ? z.r.voci : undefined, note: `Da offerta del ${dataBreve(x.quando)}${x.email ? ' · ' + x.email : ''}${x.telefono ? ' · ' + x.telefono : ''}` }, srvPre),
           onSaved: bk => { const patch = { prenotazioni: Array.from(new Set((x.prenotazioni || []).concat(bk.id))) };
             const conf = (ctx.stati ? ctx.stati() : []).find(s0 => s0.key === bk.status);
             if (bk.status === 'confermato' || bk.status === 'occupato' || (conf && /conferm/i.test(conf.label))) { patch.esito = 'presa'; patch.esitoIl = new Date().toISOString(); }
