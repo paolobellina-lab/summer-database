@@ -195,7 +195,7 @@
         <div class="field"><span>Le tariffe includono</span><div class="off-incl" id="off-incl"></div>
           <textarea id="off-incx" rows="2" placeholder="Altre voci solo per questa offerta (una per riga)">${esc(o.incExtra || '')}</textarea>
           <small class="note">L'elenco e le voci spuntate di norma si cambiano in Impostazioni → Servizi e inclusioni.</small></div>
-        <div class="field"><span>Riepilogo prezzi per villa</span><div class="tbl-wrap"><table class="prices off-riep"><thead><tr><th>Villa</th><th>Affitto</th><th>Servizi a parte</th><th>Totale</th></tr></thead><tbody id="off-riep"></tbody></table></div></div>
+        <div class="field"><span>Riepilogo prezzi per villa</span><div class="tbl-wrap"><table class="prices off-riep"><thead><tr><th>Villa</th><th>Affitto</th><th title="Valore di vendita dei servizi compresi nel prezzo: solo per riferimento, non si somma al totale">Servizi inclusi</th><th>Servizi a parte</th><th>Totale</th></tr></thead><tbody id="off-riep"></tbody></table></div></div>
       </section>
       <section class="card"><h2>4 · Offerta</h2>
         <div class="row off-row">
@@ -312,8 +312,11 @@
         const affIn = `<input class="off-rp" data-rp="${esc(v.id)}" inputmode="numeric" value="${esc(o.prezzi[v.id] !== undefined ? o.prezzi[v.id] : typeof li === 'number' ? String(li) : '')}" placeholder="su richiesta">${typeof li === 'number' && pr !== null && pr !== li ? `<small class="note off-mod">listino ${esc(S.money(li))}</small>` : ''}`;
         const srvIn = ag.length ? ag.map(x => { const b0 = prezzoSrvBase(v, x.key), cur = (o.srvVilla[v.id] || {})[x.key]; const val0 = cur !== undefined ? cur : typeof x.eur === 'number' ? String(x.eur) : '';
           return `<label class="off-rs-l"><span>${esc(x.label)}</span><input class="off-rs" data-rs="${esc(v.id)}|${esc(x.key)}" inputmode="numeric" value="${esc(val0)}" placeholder="—">${typeof b0 === 'number' && typeof x.eur === 'number' && x.eur !== b0 ? `<small class="note off-mod">scheda ${esc(S.money(b0))}</small>` : ''}</label>`; }).join('') : '<span class="note">—</span>';
-        return `<tr data-rv="${esc(v.id)}"><td><b>${esc(v.name)}</b>${incRighe(v, inc)}</td><td>${affIn}</td><td class="off-rs-c">${srvIn}<small class="note" data-rt>${et ? 'totale servizi ' + esc(S.money(et)) : ''}</small></td><td><b data-rtot>${pr === null ? '—' : S.money(pr + et)}</b></td></tr>`; }).join('')
-        : '<tr><td colspan="4" class="note">Scegli le ville al punto 2.</td></tr>';
+        // valore di vendita dei servizi inclusi (scheda villa o Impostazioni, o il prezzo scritto nell'offerta): solo da vedere, non entra nel totale
+        const incV = inc.map(x => ({ x, eur: prezzoSrv(v, x.key), prop: S.caricoDef(st, v, x.key) === 'proprietario' })), incT = incV.reduce((t, y) => t + (typeof y.eur === 'number' ? y.eur : 0), 0);
+        const incIn = incV.length ? incV.map(y => `<div class="off-ri-l"><span>${esc(y.x.label)}${y.prop ? ' <small class="note">· proprietario</small>' : ''}</span><b>${typeof y.eur === 'number' ? esc(S.money(y.eur)) : '—'}</b></div>`).join('') + (incT ? `<small class="note">valore ${esc(S.money(incT))} · non sommato</small>` : '') : '<span class="note">—</span>';
+        return `<tr data-rv="${esc(v.id)}"><td><b>${esc(v.name)}</b>${incRighe(v, inc)}</td><td>${affIn}</td><td class="off-ri-c">${incIn}</td><td class="off-rs-c">${srvIn}<small class="note" data-rt>${et ? 'totale servizi ' + esc(S.money(et)) : ''}</small></td><td><b data-rtot>${pr === null ? '—' : S.money(pr + et)}</b></td></tr>`; }).join('')
+        : '<tr><td colspan="5" class="note">Scegli le ville al punto 2.</td></tr>';
     };
     const drawTexts = () => {
       if (!o.introMod) o.intro = L().intro(o.cliente.trim(), periodoTxt());

@@ -1272,3 +1272,7 @@ dialog.dlg-bil { width: min(900px, calc(100vw - 32px)); }
 .vs-tbl td, .vs-tbl th { white-space: nowrap; }
 .vs-chip { display: inline-block; font-weight: 600; }
 .srv-tbl tr.srv-grp td { padding: 10px 8px 4px; font-size: .78rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--line); }
+/* Offerte, riepilogo: valore dei servizi inclusi (non sommato) */
+.off-ri-c { min-width: 170px; }
+.off-ri-l { display: flex; justify-content: space-between; gap: 10px; font-size: .85rem; color: var(--muted); }
+.off-ri-l b { font-weight: 600; color: var(--muted); white-space: nowrap; }
