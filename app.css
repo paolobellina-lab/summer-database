@@ -1335,3 +1335,5 @@ dialog.dlg-pvar { width: min(660px, calc(100vw - 32px)); }
 .dlg-pvar .pv-fr input[data-fd], .dlg-pvar .pv-fr input[data-ff] { width: 58px; }
 .dlg-pvar .pv-fr input[data-fv], .dlg-pvar .pv-fr input[data-fa] { width: 84px; }
 @media (max-width: 640px) { .dlg-pvar .pv-fr { flex-wrap: wrap; } }
+.dlg-pvar #pv-c { width: 60px; text-align: right; }
+.dlg-pvar #pv-cw[hidden] { display: none; }
