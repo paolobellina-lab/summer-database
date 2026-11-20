@@ -1243,3 +1243,11 @@ dialog.dlg-bil { width: min(900px, calc(100vw - 32px)); }
 .off-riep .off-mod { color: var(--accent-ink, #9a6a1f); display: block; }
 .off-riep .off-rs-l .off-mod { flex-basis: 100%; text-align: right; }
 .off-rep { margin: 12px 0; }
+/* utenze nel riquadro Prenotazione */
+.pr-ut { margin-top: 16px; border-top: 1px solid var(--line, #e5dfd2); padding-top: 12px; }
+.pr-ut h3 { margin: 0 0 4px; font-size: 15px; letter-spacing: .04em; text-transform: uppercase; }
+.pr-ut .ut-t input.ut-in { width: 72px; text-align: right; padding: 5px 6px; font-size: 14px; }
+.pr-ut .ut-t td, .pr-ut .ut-t th { padding-left: 4px; padding-right: 4px; }
+.pr-ut .ut-t th { font-size: 10px; }
+.pr-ut .ut-t td, .pr-ut .ut-t th { white-space: nowrap; }
+@media print { .pr-ut input.ut-in { border: 0; background: none; } }

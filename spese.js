@@ -72,6 +72,19 @@
   // deposito trattenuto: conta solo dopo aver registrato una "Restituzione deposito sicurezza" (anche di 0 €)
   const haRest = l => l.some(isRest);
   // metodo di pagamento della spesa (scontrini.pagamento): contanti, carta di credito, bonifico; null = non indicato
+  // letture dei contatori: bookings.utenze = { acqua|gas|luce: { in, out, tariffa } }; consumo = out − in, importo = consumo × tariffa
+  // tariffe predefinite in meta/settings.tariffeUtenze = { acqua, gas, luce } (€ per unità)
+  const UTENZE = [['acqua', 'Acqua', 'm³'], ['gas', 'Gas', 'm³'], ['luce', 'Elettricità', 'kWh']];
+  // numeri all'italiana: con la virgola i punti sono migliaia; senza virgola "12.345" = migliaia, "0.45" = decimali
+  const numU = x => { if (typeof x === 'number') return isFinite(x) ? x : null; if (x === null || x === undefined) return null; let t = String(x).trim().replace(/\s/g, ''); if (!t) return null;
+    if (t.includes(',')) t = t.replace(/\./g, '').replace(',', '.'); else if (/^[1-9]\d{0,2}(\.\d{3})+$/.test(t)) t = t.replace(/\./g, '');
+    const n = Number(t); return isFinite(n) ? n : null; };
+  const fmtU = n => n === null || n === undefined ? '' : String(Math.round(n * 1000) / 1000).replace('.', ',');
+  const utCalc = (b, st) => { const u = (b && b.utenze) || {}, td = (st && st.tariffeUtenze) || {}; let tot = 0, ok = false;
+    const righe = UTENZE.map(([k, l, un]) => { const r = u[k] || {}, i0 = numU(r.in), o0 = numU(r.out), t0 = numU(r.tariffa) !== null ? numU(r.tariffa) : numU(td[k]);
+      const cons = i0 !== null && o0 !== null ? o0 - i0 : null, imp = cons !== null && t0 !== null ? Math.round(cons * t0 * 100) / 100 : null; if (imp !== null) { tot += imp; ok = true; }
+      return { k, l, un, i0, o0, t0, tPred: numU(r.tariffa) === null && numU(td[k]) !== null, cons, imp }; });
+    return { righe, tot: ok ? Math.round(tot * 100) / 100 : null }; };
   const PAGAMENTI = [['contanti', 'Contanti'], ['carta', 'Carta di credito'], ['bonifico', 'Bonifico']];
   const pagLabel = k => (PAGAMENTI.find(x => x[0] === k) || [])[1] || '';
   const pagSec = (pre, cur) => `<section class="dsec sec-pag"><h4>Metodo di pagamento</h4><div class="pag-opts">${PAGAMENTI.map(([k, l]) => `<label class="pag-opt"><input type="radio" name="${pre}-pag" value="${k}" ${cur === k ? 'checked' : ''}><span>${l}</span></label>`).join('')}</div></section>`;
@@ -800,6 +813,15 @@
         <div class="pr-top">
           ${media(x.villaId, pill(x))}
           <div class="card pr-info"><h2>${x.gen ? 'Villa' : 'Prenotazione'}</h2><dl class="pr-kv">${info.map(([l, val0]) => `<dt>${esc(l)}</dt><dd>${esc(val0)}</dd>`).join('')}</dl>
+            ${x.b ? (() => { const uc = utCalc(x.b, ctx.data().settings), ed = ctx.canEdit();
+              const cel = (k, f, v0, ph) => ed ? `<input class="ut-in" data-ut="${k}|${f}" inputmode="decimal" value="${esc(fmtU(v0))}"${ph ? ` placeholder="${esc(ph)}"` : ''}>` : esc(fmtU(v0) || '—');
+              return `<div class="pr-ut"><h3>Utenze</h3><p class="note">Letture dei contatori all'arrivo e all'uscita: il consumo × la tariffa dà quanto far pagare al cliente.</p>
+                <div class="tbl-wrap"><table class="prices ut-t"><thead><tr><th></th><th class="r">Check-in</th><th class="r">Check-out</th><th class="r">Consumo</th><th class="r">€ / unità</th><th class="r">Importo</th></tr></thead><tbody>
+                ${uc.righe.map(r => `<tr data-utr="${r.k}"><td><b>${esc(r.l)}</b> <small class="note">${esc(r.un)}</small></td><td class="r">${cel(r.k, 'in', r.i0)}</td><td class="r">${cel(r.k, 'out', r.o0)}</td>
+                  <td class="r" data-utc>${r.cons === null ? '—' : esc(fmtU(r.cons)) + ' ' + esc(r.un)}</td><td class="r">${cel(r.k, 'tariffa', r.tPred ? null : r.t0, r.tPred ? fmtU(r.t0) : '')}</td><td class="r" data-uti>${r.imp === null ? '—' : esc(euro(r.imp))}</td></tr>`).join('')}
+                </tbody><tfoot><tr><td colspan="5"><b>Totale utenze da far pagare</b></td><td class="r"><b id="ut-tot">${uc.tot === null ? '—' : esc(euro(uc.tot))}</b></td></tr></tfoot></table></div>
+                ${ed ? `<div class="actions no-print" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button type="button" class="btn primary" id="ut-save">Salva le letture</button><button type="button" class="btn" id="ut-pred">Usa queste tariffe come predefinite</button><span class="note" id="ut-msg"></span></div>` : ''}
+                <p class="note">Per farle pagare registra una nota spese "Addebito cliente" con il totale (o trattienilo dal deposito).</p></div>`; })() : ''}
             ${x.b ? `<label class="flag pr-concl no-print" style="margin-top:12px"><input type="checkbox" id="pd-concl" ${x.b.conteggiConclusi ? 'checked' : ''} ${ctx.canEdit() ? '' : 'disabled'}><span><b>Conteggi conclusi</b><small>Deposito, addebiti e affitto al proprietario chiusi: nell'elenco la scheda risulta "Conteggi conclusi"</small></span></label>` : ''}</div>
         </div>
         ${quad ? '' : `<div class="card pr-valori"><h2>Valori</h2><div class="tbl-wrap"><table class="prices pr-val-t"><thead><tr><th>Voce</th>${tab4 ? '<th class="r">Previsto</th><th class="r">Reale</th><th class="r">Differenza</th>' : '<th class="r">Importo</th>'}</tr></thead><tbody>${celle}</tbody></table></div>
@@ -851,6 +873,20 @@
         ['cat', 'ord', 'grp'].forEach(k => $('#sp-' + k, root).addEventListener('change', e => { ui['sp' + k[0].toUpperCase() + k.slice(1)] = e.target.value; saveUI(); disegnaSpese(); })); }
       if ($('#pd-new', root)) $('#pd-new', root).onclick = () => A.openNuova(x.villaId, x.b ? x.b.id : '');
       $('#pd-print', root).onclick = () => window.print();
+      // utenze: calcolo mentre si scrive, salvataggio con il tasto
+      const utIns = $$('.ut-in', root);
+      if (utIns.length && x.b) { const st0 = ctx.data().settings || {};
+        const leggi = () => { const u = {}; utIns.forEach(i => { const [k, f] = i.dataset.ut.split('|'); u[k] = u[k] || {}; u[k][f] = numU(i.value); }); return u; };
+        const ricalc = () => { const uc = utCalc({ utenze: leggi() }, st0);
+          uc.righe.forEach(r => { const tr = $(`tr[data-utr="${r.k}"]`, root); if (!tr) return; tr.querySelector('[data-utc]').textContent = r.cons === null ? '—' : fmtU(r.cons) + ' ' + r.un; tr.querySelector('[data-uti]').textContent = r.imp === null ? '—' : euro(r.imp); });
+          $('#ut-tot', root).textContent = uc.tot === null ? '—' : euro(uc.tot);
+          const neg = uc.righe.filter(r => r.cons !== null && r.cons < 0).map(r => r.l); $('#ut-msg', root).textContent = neg.length ? `Attenzione: ${neg.join(', ')} con la lettura di uscita più bassa di quella di arrivo.` : ''; };
+        utIns.forEach(i => i.addEventListener('input', ricalc));
+        $('#ut-save', root).onclick = () => { const b0 = ctx.data().bookings.find(b => b.id === x.b.id); if (!b0) return;
+          ctx.store.upsertBooking(Object.assign(JSON.parse(JSON.stringify(b0)), { utenze: leggi() })); ctx.toast('Letture salvate'); if (ctx.ridisegna) ctx.ridisegna(); };
+        $('#ut-pred', root).onclick = () => { const u = leggi(), st = JSON.parse(JSON.stringify(ctx.data().settings || {})); st.tariffeUtenze = Object.assign({}, st.tariffeUtenze);
+          let n = 0; UTENZE.forEach(([k]) => { const t = u[k] && u[k].tariffa; if (t !== null && t !== undefined) { st.tariffeUtenze[k] = t; n++; } });
+          if (!n) { $('#ut-msg', root).textContent = 'Scrivi prima almeno una tariffa.'; return; } ctx.store.setSettings(st); ctx.toast('Tariffe predefinite salvate'); }; }
       const cc = $('#pd-concl', root); if (cc && x.b) cc.onchange = () => { const b0 = ctx.data().bookings.find(b => b.id === x.b.id); if (!b0) return;
         ctx.store.upsertBooking(Object.assign(JSON.parse(JSON.stringify(b0)), { conteggiConclusi: cc.checked })); ctx.toast(cc.checked ? 'Conteggi conclusi' : 'Conteggi riaperti'); };
       if (grpBil || grp) { const g = grpBil || grp, tot0 = typeof g.root.prezzoAcquisto === 'number' ? g.root.prezzoAcquisto : null, ins = $$('.bil-in', root), inR = $$('.bil-re', root), totR0 = affGrp(V, g);
