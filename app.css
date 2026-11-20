@@ -1329,6 +1329,8 @@ dialog.dlg-pvar { width: min(660px, calc(100vw - 32px)); }
 .dlg-pvar .pv-lr input { width: 110px; text-align: right; }
 .dlg-pvar .pv-loc { margin-top: 10px; }
 .dlg-pvar .pv-loc summary { cursor: pointer; font-weight: 600; }
+.off-osp { display: flex; flex-direction: row; align-items: center; gap: 10px; }
+.off-osp > span { margin: 0; }
 .off-osp input { width: 120px; }
 .b-osp-f input { width: 110px; }
 .dlg-pvar .pv-fr { flex-wrap: nowrap; gap: 6px; }
