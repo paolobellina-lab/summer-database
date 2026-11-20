@@ -1340,3 +1340,8 @@ dialog.dlg-pvar { width: min(660px, calc(100vw - 32px)); }
 .dlg-pvar .pv-norm label { display: inline-flex; align-items: center; gap: 6px; }
 .dlg-pvar .pv-norm input { width: 100px; text-align: right; }
 .dlg-pvar .pv-norm > span { font-weight: 600; }
+/* riga 2 = riepilogo non modificabile */
+.srv-tbl tr.srv-tr, .srv-tbl tr.catv-row { grid-template-areas: "nome off car pdf var var" "sum sum sum sum uso act"; }
+.srv-tbl .srv-sum { grid-area: sum; display: flex !important; flex-wrap: wrap; gap: 4px 22px; align-items: center; font-size: .86rem; color: var(--muted); }
+.srv-tbl .srv-sum b { color: var(--fg); font-weight: 600; }
+@media (max-width: 720px) { .srv-tbl tr.srv-tr, .srv-tbl tr.catv-row { grid-template-areas: "nome nome" "off pdf" "car car" "var var" "sum sum" "uso act"; } }
