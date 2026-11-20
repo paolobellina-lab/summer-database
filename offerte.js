@@ -78,7 +78,8 @@
       .concat(((st.servizi) || []).filter(x => x && x.key && !x.off).map(x => ({ key: x.key, label: x.label })))
       // voci delle note spese con un prezzo di vendita in Impostazioni: si possono proporre (prezzo e carico), ma senza testi nella mail
       .concat(Object.keys(st.prezziServizi || {}).filter(k => S.isVoceKey(k) && typeof st.prezziServizi[k].vendita === 'number' && (!Array.isArray(st.categorieSpese) || st.categorieSpese.includes(S.voceNome(k)))).map(k => ({ key: k, label: S.voceNome(k), voce: true })));
-    const srvDefOn = k => S.caricoSet(st, k) !== 'parte' || (o.ville || []).some(id => { const v = (data().villas || []).find(z => z.id === id); return v && S.caricoDef(st, v, k) !== 'parte'; });
+    // spuntati di norma: i Predefiniti di Impostazioni e quelli compresi nella scheda di una villa scelta (a carico del proprietario)
+    const srvDefOn = k => S.predefSet(st, k) || (o.ville || []).some(id => { const v = (data().villas || []).find(z => z.id === id); return v && (v.serviziInclusi || []).includes(k); });
     const srvDi = k => { const d = (st.prezziServizi || {})[k] || {}; const x = o.srv[k] || {};
       const modo = ['pred', 'inc', 'parte'].includes(x.modo) ? x.modo : x.incluso === true ? 'inc' : x.incluso === false ? 'parte' : 'pred';
       // non ancora toccato nell'offerta: spuntato di norma se compreso nel prezzo (a carico di Esmeralda o del proprietario, in Impostazioni
@@ -106,13 +107,15 @@
     const srvNome = x => o.lingua === 'en' ? (SRV_EN[x.key] || x.label) : x.label;
     // un servizio è incluso per una villa se "Includi tutti", oppure con "Predefinito" se la scheda villa lo ha tra i servizi compresi nel prezzo
     // compreso nel prezzo della villa: a carico di Esmeralda (già nelle spese servizi del listino) o del proprietario (scheda villa)
-    const inclVilla = (v, k) => S.caricoDef(settings(), v, k) !== 'parte';
+    // compreso nel prezzo per questa villa: omaggio di Esmeralda, a carico del proprietario, o del cliente ma Predefinito (già nel listino)
+    const inclVilla = (v, k) => { const c = S.caricoDef(settings(), v, k); return c !== 'parte' || S.predefSet(settings(), k); };
     const inclusoPer = (v, k) => { const d = srvDi(k); return d.modo === 'inc' || (d.modo === 'pred' && inclVilla(v, k)); };
     const srvAttivi = () => srvList().map(x => Object.assign({}, x, srvDi(x.key))).filter(x => x.on).map(x => Object.assign(x, { eur: S.parseMoney(x.prezzo) }));
     const srvAparte = v => srvAttivi().filter(x => !inclusoPer(v, x.key)).map(x => Object.assign({}, x, { eur: prezzoSrv(v, x.key) }));
     // inclusi divisi per chi li paga: a carico del proprietario (scheda villa o Impostazioni), altrimenti Esmeralda
-    const incRighe = (v, inc) => { const pr = inc.filter(x => S.caricoDef(st, v, x.key) === 'proprietario'), es = inc.filter(x => !pr.includes(x));
-      return (es.length ? `<small class="off-riep-l">Inclusi Esmeralda: ${esc(es.map(x => x.label).join(', '))}</small>` : '') + (pr.length ? `<small class="off-riep-l">Inclusi proprietario: ${esc(pr.map(x => x.label).join(', '))}</small>` : ''); };
+    const incRighe = (v, inc) => { const c = x => S.caricoDef(st, v, x.key), pr = inc.filter(x => c(x) === 'proprietario'), om = inc.filter(x => c(x) === 'esmeralda'), cl = inc.filter(x => !pr.includes(x) && !om.includes(x));
+      const r = (t, l) => l.length ? `<small class="off-riep-l">${t}: ${esc(l.map(x => x.label).join(', '))}</small>` : '';
+      return r('Inclusi nel prezzo', cl) + r('Omaggio Esmeralda', om) + r('Inclusi proprietario', pr); };
     const srvInclVilla = v => srvList().filter(x => srvDi(x.key).on && inclusoPer(v, x.key));
     const extraTot = v => srvAparte(v).reduce((t, x) => t + (typeof x.eur === 'number' ? x.eur : 0), 0);
     // inclusi per tutte le ville scelte: vanno nell'elenco comune "Le tariffe includono"; gli altri inclusi si scrivono sotto la singola villa
@@ -319,8 +322,8 @@
         const srvIn = ag.length ? ag.map(x => { const b0 = prezzoSrvBase(v, x.key), cur = (o.srvVilla[v.id] || {})[x.key]; const val0 = cur !== undefined ? cur : typeof x.eur === 'number' ? String(x.eur) : '';
           return `<label class="off-rs-l"><span>${esc(x.label)}</span><input class="off-rs" data-rs="${esc(v.id)}|${esc(x.key)}" inputmode="numeric" value="${esc(val0)}" placeholder="—">${typeof b0 === 'number' && typeof x.eur === 'number' && x.eur !== b0 ? `<small class="note off-mod">scheda ${esc(S.money(b0))}</small>` : ''}</label>`; }).join('') : '<span class="note">—</span>';
         // valore di vendita dei servizi inclusi (scheda villa o Impostazioni, o il prezzo scritto nell'offerta): solo da vedere, non entra nel totale
-        const incV = inc.map(x => ({ x, eur: prezzoSrv(v, x.key), prop: S.caricoDef(st, v, x.key) === 'proprietario' })), incT = incV.reduce((t, y) => t + (typeof y.eur === 'number' ? y.eur : 0), 0);
-        const incIn = incV.length ? incV.map(y => `<div class="off-ri-l"><span>${esc(y.x.label)}${y.prop ? ' <small class="note">· proprietario</small>' : ''}</span><b>${typeof y.eur === 'number' ? esc(S.money(y.eur)) : '—'}</b></div>`).join('') + (incT ? `<small class="note">valore ${esc(S.money(incT))} · non sommato</small>` : '') : '<span class="note">—</span>';
+        const incV = inc.map(x => ({ x, eur: prezzoSrv(v, x.key), prop: S.caricoDef(st, v, x.key) === 'proprietario', om: S.caricoDef(st, v, x.key) === 'esmeralda' })), incT = incV.reduce((t, y) => t + (typeof y.eur === 'number' ? y.eur : 0), 0);
+        const incIn = incV.length ? incV.map(y => `<div class="off-ri-l"><span>${esc(y.x.label)}${y.prop ? ' <small class="note">· proprietario</small>' : y.om ? ' <small class="note">· omaggio</small>' : ''}</span><b>${typeof y.eur === 'number' ? esc(S.money(y.eur)) : '—'}</b></div>`).join('') + (incT ? `<small class="note">valore ${esc(S.money(incT))} · non sommato</small>` : '') : '<span class="note">—</span>';
         return `<tr data-rv="${esc(v.id)}"><td><b>${esc(v.name)}</b>${incRighe(v, inc)}</td><td>${affIn}</td><td class="off-ri-c">${incIn}</td><td class="off-rs-c">${srvIn}<small class="note" data-rt>${et ? 'totale servizi ' + esc(S.money(et)) : ''}</small></td><td><b data-rtot>${pr === null ? '—' : S.money(pr + et)}</b></td></tr>`; }).join('')
         : '<tr><td colspan="5" class="note">Scegli le ville al punto 2.</td></tr>';
     };
@@ -685,6 +688,7 @@
         const rec = { cliente: o.cliente.trim(), email: String(o.email || '').trim().toLowerCase(), telefono: String(o.tel || '').trim(), lingua: o.lingua, oggetto: oggettoMail(), periodo: periodoTxt(), tariffa: o.tariff,
           ville: scelte().map(v => { const li = listinoOf(v);
             return { id: v.id, name: v.name, prezzo: prezzoTot(v), affitto: prezzoDi(v), listino: typeof li === 'number' ? li : null,
+              voci: srvList().filter(x => x.voce && haServ(v, x.key)).map(x => x.label),
               servizi: srvAparte(v).map(x => { const b0 = prezzoSrvBase(v, x.key); return { k: x.key, label: x.label, prezzo: typeof x.eur === 'number' ? x.eur : null, base: typeof b0 === 'number' ? b0 : null }; }) }; }), html, stato, creatoDa: String(store.user || '').toLowerCase(), quando: new Date().toISOString() };
         // stessa offerta salvata poco fa (stesso testo): aggiorno quella invece di crearne un'altra
         const u = o.ultima; const firma = rec.html.length + '|' + rec.cliente + '|' + rec.email + '|' + rec.telefono + '|' + rec.oggetto + '|' + rec.ville.map(v => v.id + v.prezzo).join(',');
@@ -802,7 +806,7 @@
         const z = vl.find(y => y.v.id === (d.querySelector('[name="op-v"]:checked') || {}).value) || vl[0]; d.close();
         const from = z.p ? z.p.from : S.iso(new Date()), to = z.p ? z.p.to : S.iso(new Date(Date.now() + 7 * 864e5));
         ctx.openBooking({ villaId: z.v.id, from, to,
-          pre: { cliente: x.cliente || '', status: stato, prezzoVendita: typeof z.r.prezzo === 'number' ? z.r.prezzo : undefined, note: `Da offerta del ${dataBreve(x.quando)}${x.email ? ' · ' + x.email : ''}${x.telefono ? ' · ' + x.telefono : ''}` },
+          pre: { cliente: x.cliente || '', status: stato, prezzoVendita: typeof z.r.prezzo === 'number' ? z.r.prezzo : undefined, vociOfferta: Array.isArray(z.r.voci) ? z.r.voci : undefined, note: `Da offerta del ${dataBreve(x.quando)}${x.email ? ' · ' + x.email : ''}${x.telefono ? ' · ' + x.telefono : ''}` },
           onSaved: bk => { const patch = { prenotazioni: Array.from(new Set((x.prenotazioni || []).concat(bk.id))) };
             const conf = (ctx.stati ? ctx.stati() : []).find(s0 => s0.key === bk.status);
             if (bk.status === 'confermato' || bk.status === 'occupato' || (conf && /conferm/i.test(conf.label))) { patch.esito = 'presa'; patch.esitoIl = new Date().toISOString(); }

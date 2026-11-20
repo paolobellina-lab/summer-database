@@ -122,9 +122,11 @@ window.SDBStore.ready.then(function () {
      Attive solo se in Impostazioni almeno un servizio è a carico di Esmeralda; altrimenti resta il valore scritto a mano. */
   // voci delle note spese con un prezzo di vendita in Impostazioni (chiave 'voce:<nome>'): come i servizi, ma non nella prenotazione né nei testi dell'offerta
   const vociPrezzo = st => catLibere(st).map(c => ({ key: S.voceKey(c), label: c, voce: true })).filter(x => typeof (((st || {}).prezziServizi || {})[x.key] || {}).vendita === 'number');
-  const speseAutoOn = () => { const st = settings(); return servizi(st.servizi).some(x => S.caricoSet(st, x.key) === 'esmeralda') || vociPrezzo(st).some(x => S.caricoSet(st, x.key) === 'esmeralda'); };
+  // spese servizi del listino = servizi e voci Predefiniti a carico del cliente (il prezzo entra nel listino); Esmeralda = omaggio, non entra
+  const inListino = (st, v, k) => S.predefSet(st, k) && S.caricoDef(st, v, k) === 'parte';
+  const speseAutoOn = () => { const st = settings(); return servizi(st.servizi).concat(vociPrezzo(st)).some(x => inListino(st, null, x.key)); };
   const speseAuto = (v, t) => { const st = settings(), n = (S.TAR_SETT[t] || 1) * 7, det = []; let tot = 0;
-    servizi(st.servizi).concat(vociPrezzo(st)).forEach(x => { if (S.caricoDef(st, v, x.key) !== 'esmeralda') return; const pv = (v.prezziServizi || {})[x.key], d = (st.prezziServizi || {})[x.key] || {};
+    servizi(st.servizi).concat(vociPrezzo(st)).forEach(x => { if (!inListino(st, v, x.key)) return; const pv = (v.prezziServizi || {})[x.key], d = (st.prezziServizi || {})[x.key] || {};
       const base = typeof pv === 'number' ? pv : typeof d.vendita === 'number' ? d.vendita : null; if (base === null) { det.push([x.label, null]); return; }
       const pz = S.srvPrezzo(st, x.key, base, n); tot += pz; det.push([x.label, pz]); });
     return { tot, det }; };
@@ -418,7 +420,7 @@ window.SDBStore.ready.then(function () {
   let listiniOk = false;
   store.subscribe((st, origin) => {
     if (!listiniOk && store.mode === 'online' && origin === 'remote' && isFull() && store.riallineaListini) { listiniOk = true;
-      setTimeout(() => { try { riallineaSpese(); const n = store.riallineaListini(); if (n) console.info('[SDB] listini di vendita aggiornati:', n); } catch (e) { console.warn(e); } }, 6000); }
+      setTimeout(() => { try { if (!settings().caricoV2) store.setSettings(S.migraCarichi(settings())); riallineaSpese(); const n = store.riallineaListini(); if (n) console.info('[SDB] listini di vendita aggiornati:', n); } catch (e) { console.warn(e); } }, 6000); }
     if (origin !== 'remote') return;
     const a = document.activeElement;
     if (a && /INPUT|TEXTAREA|SELECT/.test(a.tagName) && main.contains(a)) return;
@@ -796,6 +798,7 @@ window.SDBStore.ready.then(function () {
               <label class="field"${canAcq() ? '' : ' hidden'}><span>Acquisto €</span><input data-sa inputmode="numeric" value="${typeof d.acquisto === 'number' ? esc(fmtNum(d.acquisto)) : ''}"></label>
               <label class="field srv-vend"${d.carico === 'parte' ? '' : ' hidden'}><span>Vendita €</span><input data-sv inputmode="numeric" value="${typeof d.vendita === 'number' ? esc(fmtNum(d.vendita)) : ''}"></label>
             </div>
+            <p class="note srv-carnota"${d.carico === 'parte' ? ' hidden' : ''}>${d.carico === 'proprietario' ? 'A carico del proprietario' : 'A carico di Esmeralda (omaggio al cliente)'}</p>
             <p class="note srv-calc" data-sc hidden></p>
             <label class="field"><span>Note</span><input data-sn value="${esc(d.note)}" placeholder="es. 3 cene, orari, fornitore"></label>
           </div></div>`; }).join('')}
@@ -859,7 +862,8 @@ window.SDBStore.ready.then(function () {
         if (canAcq() && !a.value.trim() && typeof pa === 'number') a.value = fmtNum(pa); };
       // a carico di: Esmeralda (solo il costo), a parte (costo e vendita, sommati al prezzo), proprietario (niente)
       const modo = car => { it.querySelectorAll('.srv-mode button').forEach(z => z.classList.toggle('on', z.dataset.car === car));
-        it.querySelector('.srv-prices').hidden = car === 'proprietario' || (car === 'esmeralda' && !canAcq()); it.querySelector('.srv-vend').hidden = car !== 'parte'; if (car !== 'proprietario') riempi(); };
+        it.querySelector('.srv-prices').hidden = car === 'proprietario' || (car === 'esmeralda' && !canAcq()); it.querySelector('.srv-vend').hidden = car !== 'parte';
+        const cn = it.querySelector('.srv-carnota'); cn.hidden = car === 'parte'; cn.textContent = car === 'proprietario' ? 'A carico del proprietario' : 'A carico di Esmeralda (omaggio al cliente)'; if (car !== 'proprietario') riempi(); };
       it.querySelector('.srv-cb').addEventListener('change', e => { it.classList.toggle('on', e.target.checked); it.querySelector('.srv-det').hidden = !e.target.checked;
         if (e.target.checked && !(b.serviziDett || {})[k]) { const vl = data().villas.find(z => z.id === $('#b-villa').value); modo(S.caricoDef(settings(), vl, k)); } check(); });
       it.querySelector('.srv-mode').addEventListener('click', e => { const bt = e.target.closest('button'); if (!bt) return; modo(bt.dataset.car); check(); });
@@ -1378,7 +1382,7 @@ window.SDBStore.ready.then(function () {
         ${t !== 'settimanale' ? `<div class="cambio-row"><span class="lbl">Date dei periodi</span><div class="seg" id="p-perm">${[['def', 'Predefinite'], ['own', 'Personalizzate per questa villa']].map(([k, l]) => `<button type="button" data-m="${k}" class="${(v.periodi && v.periodi[t] ? 'own' : 'def') === k ? 'on' : ''}">${l}</button>`).join('')}</div>
           <span class="note">${v.periodi && v.periodi[t] ? 'Modifica le date direttamente nella tabella.' : 'Uguali per tutte le ville (Impostazioni).'}</span></div>` : ''}
         <div class="params">
-          ${speseAutoOn() ? (() => { const sa = speseAuto(v, t); return `<div class="field sp-auto"><span>Spese servizi €</span><b class="sp-auto-v">${S.money(sa.tot) || '0 €'}</b><small class="lbl-sub" title="${esc(sa.det.map(([l, z]) => l + ': ' + (z === null ? 'senza prezzo' : S.money(z))).join(' · '))}">automatiche: ${sa.det.length ? esc(sa.det.map(([l, z]) => l + ' ' + (z === null ? '(senza prezzo)' : S.money(z))).join(' + ')) : 'nessun servizio a carico di Esmeralda'}</small></div>`; })()
+          ${speseAutoOn() ? (() => { const sa = speseAuto(v, t); return `<div class="field sp-auto"><span>Spese servizi €</span><b class="sp-auto-v">${S.money(sa.tot) || '0 €'}</b><small class="lbl-sub" title="${esc(sa.det.map(([l, z]) => l + ': ' + (z === null ? 'senza prezzo' : S.money(z))).join(' · '))}">automatiche: ${sa.det.length ? esc(sa.det.map(([l, z]) => l + ' ' + (z === null ? '(senza prezzo)' : S.money(z))).join(' + ')) : 'nessun servizio predefinito a carico del cliente'}</small></div>`; })()
             : `<label class="field"><span>Spese servizi €</span><input data-p="spese" inputmode="numeric" value="${esc(p.spese)}"><small class="lbl-sub">Netto vendita · diventano automatiche scegliendo in Impostazioni i servizi a carico di Esmeralda</small></label>`}
           <label class="field"><span>Arrotonda a €</span><input data-p="arrotonda" inputmode="numeric" value="${esc(p.arrotonda)}"></label>
           <label class="field"><span>Margine %</span><input data-p="margine" inputmode="decimal" value="${esc(Math.round((Number(p.margine) || 0) * 1000) / 10)}"></label>
@@ -1609,7 +1613,7 @@ window.SDBStore.ready.then(function () {
     ].filter(Boolean).filter(p => isFull() || p[0] === 'generale');
   }
   function viewSettings(sub) {
-    const st = JSON.parse(JSON.stringify(settings()));
+    const st = S.migraCarichi(settings());
     const pages = setPages();
     if (sub && !pages.some(p => p[0] === sub)) { location.hash = 'impostazioni'; return; }
     const cur = sub || 'generale'; const curP = pages.find(p => p[0] === cur);
@@ -1655,11 +1659,11 @@ window.SDBStore.ready.then(function () {
       </section>`)}
       ${pg('servizi', `<section class="card"><div class="h2-bar"><h2>Servizi e categorie delle spese</h2><button type="button" class="btn small" id="srv-ord" aria-pressed="false">Riordina e togli</button></div>
         <p class="note">Tutte le voci (servizi e voci delle note spese) hanno le stesse regole, scelte con <b>a carico di chi</b>: <b>Esmeralda</b> = lo paghiamo noi (spese offerte; per i servizi la vendita entra nelle "Spese servizi" del listino di ogni villa); <b>Cliente</b> = lo paga il cliente (spese aggiuntive, da addebitare o trattenere dal deposito; un servizio si somma al prezzo dell'offerta); <b>Proprietario</b> = lo paga il proprietario (spese a carico del proprietario). In una prenotazione un servizio spuntato è già compreso in ciò che il cliente ha pagato: le sue spese vanno nelle spese offerte (o a carico del proprietario); un servizio non spuntato è un extra del cliente (spese aggiuntive). Un servizio ha anche i prezzi (si compilano da soli quando lo spunti) e compare nella prenotazione e nelle offerte; per una sola villa i servizi a carico del proprietario si scelgono nella scheda villa ("Servizi compresi nel prezzo"). <b>Prezzo</b>: <b>a soggiorno</b> = uguale qualunque sia la durata (es. pulizia finale); <b>a settimana</b> = si somma per ogni settimana di permanenza, con il coefficiente delle settimane dopo la prima (× 1 = stesso prezzo, × 0,8 = 20% in meno; es. cuoco). Le voci delle note spese hanno gli stessi prezzi dei servizi, ma non compaiono nella prenotazione né nei testi dell'offerta. <b>Vendita</b> = prezzo proposto nelle offerte; <b>acquisto previsto</b> = solo per il confronto con le note spese reali nella <b>Verifica di stagione</b> (pagina Prenotazioni), non entra mai nelle spese. Rinominare o togliere una voce non cambia gli scontrini già inseriti.</p>
-        <div class="tbl-wrap"><table class="prices srv-tbl srv-noedit"><thead><tr><th>Voce</th><th title="Con la spunta la voce è un servizio: compare nella prenotazione e nelle offerte, con i prezzi">In offerta</th><th>Di norma a carico di</th><th>Prezzo</th>${canAcq() ? '<th title="Solo per la verifica di fine stagione: non entra nelle spese">Acquisto previsto €</th>' : ''}<th title="Prezzo proposto nelle offerte">Vendita €</th><th>Usato</th><th class="col-act"></th></tr></thead>
+        <div class="tbl-wrap"><table class="prices srv-tbl srv-noedit"><thead><tr><th>Voce</th><th title="Con la spunta la voce è un servizio: compare nella prenotazione e nelle offerte, con i prezzi">In offerta</th><th>Di norma a carico di</th><th title="Predefinito: entra da solo nel prezzo di listino (spese servizi della scheda villa, se a carico del cliente) e nell'offerta parte già spuntato">Predefinito</th><th>Prezzo</th>${canAcq() ? '<th title="Solo per la verifica di fine stagione: non entra nelle spese">Acquisto previsto €</th>' : ''}<th title="Prezzo proposto nelle offerte">Vendita €</th><th>Usato</th><th class="col-act"></th></tr></thead>
           <tbody id="srv-list"></tbody>
-          <tbody><tr class="srv-sep"><td colspan="${canAcq() ? 8 : 7}"><b>Altre voci delle note spese</b> <small class="note">non compaiono nella prenotazione né nei testi dell'offerta; con un prezzo di vendita si possono proporre nell'offerta (punto 3) e, se a carico di Esmeralda, entrano nelle spese servizi del listino</small></td></tr></tbody>
+          <tbody><tr class="srv-sep"><td colspan="${canAcq() ? 9 : 8}"><b>Altre voci delle note spese</b> <small class="note">non compaiono nella prenotazione né nei testi dell'offerta; con un prezzo di vendita si possono proporre nell'offerta (punto 3) e, se a carico di Esmeralda, entrano nelle spese servizi del listino</small></td></tr></tbody>
           <tbody id="cat-list"></tbody>
-          <tbody><tr class="srv-sep"><td colspan="${canAcq() ? 8 : 7}"><b>Voci fisse</b> <small class="note">regole proprie, non si cambiano</small> <span class="cat-chips">${CAT_FISSE.map(c => `<span>${esc(c)}</span>`).join('')}</span></td></tr></tbody></table></div>
+          <tbody><tr class="srv-sep"><td colspan="${canAcq() ? 9 : 8}"><b>Voci fisse</b> <small class="note">regole proprie, non si cambiano</small> <span class="cat-chips">${CAT_FISSE.map(c => `<span>${esc(c)}</span>`).join('')}</span></td></tr></tbody></table></div>
         <form class="loc-new" id="srv-add" autocomplete="off"><input id="srv-add-n" placeholder="Nuova voce (es. Baby sitter, Noleggio barca)"><select id="srv-add-t" aria-label="Tipo di voce"><option value="srv">Servizio della prenotazione (con prezzo)</option><option value="cat">Solo voce delle note spese</option></select><button class="btn small">Aggiungi</button></form>
         <div id="cat-srv" hidden></div>
         <form id="cat-add" hidden><input id="cat-add-n"><input type="checkbox" id="cat-add-agg"></form>
@@ -1916,7 +1920,7 @@ window.SDBStore.ready.then(function () {
     let acqSrv = JSON.parse(JSON.stringify(data().serviziAcquisto || {})); let tAcq = null;
     const fmtP = x => typeof x === 'number' ? fmtNum(x) : '';
     // celle dei prezzi (unità, acquisto, vendita), uguali per servizi e voci delle note spese (chiave 'voce:<nome>')
-    const prezziTd = k => { const pz = prezziSrv()[k] || {}; return `<td class="srv-un"><select data-pu aria-label="Il prezzo vale"><option value="soggiorno" ${pz.unita === 'settimana' ? '' : 'selected'}>a soggiorno</option><option value="settimana" ${pz.unita === 'settimana' ? 'selected' : ''}>a settimana</option></select>
+    const prezziTd = k => { const pz = prezziSrv()[k] || {}; return `<td class="srv-pdf"><input type="checkbox" data-pdf ${S.predefSet(st, k) ? 'checked' : ''} aria-label="Predefinito"></td><td class="srv-un"><select data-pu aria-label="Il prezzo vale"><option value="soggiorno" ${pz.unita === 'settimana' ? '' : 'selected'}>a soggiorno</option><option value="settimana" ${pz.unita === 'settimana' ? 'selected' : ''}>a settimana</option></select>
           <label class="srv-volte" ${pz.unita === 'settimana' ? '' : 'hidden'} title="Coefficiente delle settimane dopo la prima: 1 = stesso prezzo ogni settimana, 0,8 = dalla 2ª settimana il 20% in meno, 0 = la 2ª settimana non costa">dalla 2ª sett. × <input data-pq inputmode="decimal" value="${esc(String(S.srvUnita(st, k).coeff).replace('.', ','))}" aria-label="Coefficiente dalla seconda settimana"></label></td>
         ${canAcq() ? `<td><input data-pa inputmode="numeric" value="${esc(fmtP(acqSrv[k]))}" placeholder="—" aria-label="Acquisto previsto" title="Acquisto previsto: solo per la verifica di fine stagione (non entra nelle spese)"></td>` : ''}
         <td><input data-pv inputmode="numeric" value="${esc(fmtP(pz.vendita))}" placeholder="—" aria-label="Vendita predefinita" title="Vendita: prezzo proposto nelle offerte"></td>`; };
@@ -1927,7 +1931,7 @@ window.SDBStore.ready.then(function () {
     // righe raggruppate per carico: Esmeralda → Proprietario → Cliente (servizi in ordine alfabetico; voci nel loro ordine, frecce dentro il gruppo)
     const GRP_ORD = ['esmeralda', 'proprietario', 'parte'];
     const GRP_TIT = { esmeralda: 'A carico di Esmeralda', proprietario: 'A carico del proprietario', parte: 'A carico del cliente' };
-    const grpRow = c => `<tr class="srv-grp"><td colspan="${canAcq() ? 8 : 7}">${GRP_TIT[c]}</td></tr>`;
+    const grpRow = c => `<tr class="srv-grp"><td colspan="${canAcq() ? 9 : 8}">${GRP_TIT[c]}</td></tr>`;
     const drawSrv = () => {
       const list = servizi(st.servizi, st.serviziBase || {}).slice().sort((a, b) => (GRP_ORD.indexOf(S.caricoSet(st, a.key)) - GRP_ORD.indexOf(S.caricoSet(st, b.key))) || a.label.localeCompare(b.label, 'it')); const giaVoce = n0 => catLibere(st).some(c => c.toLowerCase() === n0.toLowerCase());
       const tolti = servizi(st.servizi, st.serviziBase || {}, true).filter(x => x.off && !giaVoce(x.label));
@@ -1938,7 +1942,7 @@ window.SDBStore.ready.then(function () {
         ${prezziTd(x.key)}
         <td class="note">${n} ${n === 1 ? 'prenot.' : 'prenot.'}</td>
         <td class="loc-act col-act">${x.base || !n ? '<button type="button" class="btn small danger" data-sd>Togli</button>' : ''}</td></tr>`; }).join('')
-        + (tolti.length ? `<tr class="srv-tolti"><td colspan="8" class="note">Tolti: ${tolti.map(x => `${esc(x.label)} <button type="button" class="btn small" data-sr="${esc(x.key)}">Rimetti</button>`).join(' ')}</td></tr>` : '');
+        + (tolti.length ? `<tr class="srv-tolti"><td colspan="9" class="note">Tolti: ${tolti.map(x => `${esc(x.label)} <button type="button" class="btn small" data-sr="${esc(x.key)}">Rimetti</button>`).join(' ')}</td></tr>` : '');
     };
     $('.srv-tbl').addEventListener('input', e => { const row = e.target.closest('[data-pk]'); if (!row) return; const k = row.dataset.pk;
       if (e.target.matches('[data-pv]')) { const v = S.parseMoney(e.target.value); prezziSrv()[k] = Object.assign({}, prezziSrv()[k], { vendita: typeof v === 'number' ? v : null }); save(); }
@@ -1946,6 +1950,8 @@ window.SDBStore.ready.then(function () {
       if (e.target.matches('[data-pa]')) { const v = S.parseMoney(e.target.value); if (typeof v === 'number') acqSrv[k] = v; else delete acqSrv[k];
         salvaAcq(); }
     });
+    $('.srv-tbl').addEventListener('change', e => { if (!e.target.matches('[data-pdf]')) return; const k = e.target.closest('[data-pk]').dataset.pk;
+      prezziSrv()[k] = Object.assign({}, prezziSrv()[k], { predef: e.target.checked }); save(); });
     $('.srv-tbl').addEventListener('change', e => { if (!e.target.matches('[data-pu]')) return; const row = e.target.closest('[data-pk]'), k = row.dataset.pk, sett = e.target.value === 'settimana';
       prezziSrv()[k] = Object.assign({}, prezziSrv()[k], { unita: sett ? 'settimana' : 'soggiorno' }); if (sett && typeof prezziSrv()[k].coeff !== 'number') prezziSrv()[k].coeff = 1; delete prezziSrv()[k].volte;
       row.querySelector('.srv-volte').hidden = !sett; save(); });
@@ -1984,7 +1990,7 @@ window.SDBStore.ready.then(function () {
         <td class="srv-off"><input type="checkbox" data-von title="Spunta per farla diventare un servizio: comparirà nella prenotazione e nelle offerte, con i prezzi" aria-label="In offerta e prenotazione"></td>
         <td><div class="seg small srv-car">${S.CARICHI.map(k => `<button type="button" data-ccar="${k}" class="${carC(c) === k ? 'on' : ''}" title="${S.CARICO_LABEL[k]}">${S.CARICO_BREVE[k]}</button>`).join('')}</div></td>
         ${prezziTd(S.voceKey(c))}<td class="note">nota spese</td>
-        <td class="col-act"><span class="inc-act"><button type="button" class="btn small" data-cmv="-1" ${vicino(c, i, -1) >= 0 ? '' : 'disabled'} aria-label="Sposta su">↑</button><button type="button" class="btn small" data-cmv="1" ${vicino(c, i, 1) >= 0 ? '' : 'disabled'} aria-label="Sposta giù">↓</button><button type="button" class="btn small danger" data-cdel>Togli</button></span></td></tr>`).join('') || `<tr><td colspan="8" class="note">Nessuna voce.</td></tr>`;
+        <td class="col-act"><span class="inc-act"><button type="button" class="btn small" data-cmv="-1" ${vicino(c, i, -1) >= 0 ? '' : 'disabled'} aria-label="Sposta su">↑</button><button type="button" class="btn small" data-cmv="1" ${vicino(c, i, 1) >= 0 ? '' : 'disabled'} aria-label="Sposta giù">↓</button><button type="button" class="btn small danger" data-cdel>Togli</button></span></td></tr>`).join('') || `<tr><td colspan="9" class="note">Nessuna voce.</td></tr>`;
     };
     const catEsiste = (n, salta) => { const t = n.toLowerCase(); return catLibere(st).some((c, i) => i !== salta && c.toLowerCase() === t) || CAT_FISSE.some(c => c.toLowerCase() === t) || servizi(st.servizi, st.serviziBase || {}).some(x => x.label.toLowerCase() === t); };
     $('#srv-ord').addEventListener('click', e => { const on = !$('.srv-tbl').classList.toggle('srv-noedit'); e.currentTarget.setAttribute('aria-pressed', on); e.currentTarget.textContent = on ? 'Fatto' : 'Riordina e togli'; });
