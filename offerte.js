@@ -576,7 +576,7 @@
         for (let i = 0; i < sel.length; i++) {
           const v = sel[i]; msg(`<p class="note">Preparo ${esc(v.name)} (${i + 1} di ${sel.length})…</p>`);
           const fs = await fotoDi(v, 1400, 0.8);
-          B.push({ pageBreak: true }, { h1: nomeOff(v) }); if (!conCod() && codOf(v)) B.push({ p: codOf(v), small: true });
+          B.push({ pageBreak: true }, { h1: nomeOff(v) });
           const p = perOf(v); if (p && nP() < 2) B.push({ p: rangeTxt(p, o.lingua), small: true });
           // copertina grande, poi le altre foto tre per riga: così ogni villa sta in una pagina
           if (fs[0]) B.push({ img: { bytes: X.dataUrlBytes(fs[0].url).bytes, w: fs[0].w, h: fs[0].h, width: 7800 } });
@@ -619,7 +619,7 @@
         const iv = inclSoloVilla(v);
         return Object.assign(z, { nota: (o.note[v.id] || '').trim(),
           titolo: nomeOff(v),
-          codice: conCod() ? '' : codOf(v), sito: !conCod() && vis(v, 'linkSito') ? String(v.linkSito).trim() : '',
+          codice: '', sito: !conCod() && vis(v, 'linkSito') ? String(v.linkSito).trim() : '',
           video: vis(v, 'vimeo') ? String(v.vimeo).trim() : vis(v, 'youtube') ? String(v.youtube).trim() : '', psw: vis(v, 'psw') ? String(v.psw).trim() : '',
           wb: linkWb(v), incl: iv.length ? iv.map(x => testiSrv(x.key, v).join(', ')).join('; ') : '' });
       });
