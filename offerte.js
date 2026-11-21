@@ -239,6 +239,8 @@
           <div class="field"><span>Lingua</span><div class="seg" id="off-lang"><button type="button" data-l="it" class="${o.lingua === 'it' ? 'on' : ''}">Italiano</button><button type="button" data-l="en" class="${o.lingua === 'en' ? 'on' : ''}">English</button></div></div>
           <label class="field"><span>Foto per villa (Word e PDF)</span><select id="off-nf">${[1, 3, 5, 8].map(n => `<option value="${n}" ${Number(o.nFoto) === n ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
         </div>
+        ${(() => { const ag = (st.agenzie || []).filter(a => a && a.id); const cur = ag.find(a => a.id === o.agenziaId);
+          return `<div class="row off-row"><label class="field off-ag-f"><span>Agenzia</span><select id="off-ag"><option value="">Nessuna (cliente diretto)</option>${ag.map(a => `<option value="${esc(a.id)}" ${a.id === o.agenziaId ? 'selected' : ''}>${esc(a.nome)} · ${esc(String(Math.round((Number(a.perc) || 0) * 1000) / 10).replace('.', ','))}%</option>`).join('')}${o.agenziaId && !cur ? '<option value="' + esc(o.agenziaId) + '" selected>agenzia non più in elenco</option>' : ''}</select>${ag.length ? '' : '<small class="note">Nessuna agenzia in Impostazioni → Servizi e inclusioni → Agenzie</small>'}</label></div>`; })()}
         <label class="field off-ogg-f"><span>Oggetto della mail</span><input id="off-ogg-in"></label>
         <div class="off-prevbar"><span class="note" id="off-ogg" hidden></span><div class="off-prevact"><label class="off-st-pick"><span>Stile</span><select id="off-st-sel" aria-label="Stile della mail"></select></label><button type="button" class="btn off-ftog" id="off-pers-t" aria-expanded="${o.persOpen ? 'true' : 'false'}"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z M13 7l4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>Personalizza</button></div></div>
         <div class="off-pers" id="off-pers" ${o.persOpen ? '' : 'hidden'}>
@@ -475,6 +477,7 @@
     $('#off-cli').addEventListener('input', e => { o.cliente = e.target.value; drawTexts(); save(); });
     $('#off-mail').addEventListener('input', e => { o.email = e.target.value.trim(); save(); });
     $('#off-tel').addEventListener('input', e => { o.tel = e.target.value.trim(); save(); });
+    $('#off-ag').addEventListener('change', e => { o.agenziaId = e.target.value || null; save(); });
     $('#off-lang').addEventListener('click', e => { const b = e.target.closest('[data-l]'); if (!b) return; o.lingua = b.dataset.l; o.introMod = false; o.chiusaMod = false; o.oggettoMod = false; $$('#off-lang button').forEach(x => x.classList.toggle('on', x === b)); drawTexts(); save(); });
     $('#off-nf').addEventListener('change', e => { o.nFoto = Number(e.target.value); save(); });
     $('#off-ogg-in').addEventListener('input', e => { o.oggetto = e.target.value; o.oggettoMod = !!e.target.value.trim(); save(); });
@@ -733,7 +736,7 @@
       try {
         html = html || await htmlMail();
         const stato = JSON.parse(JSON.stringify(o)); ['tab', 'q', 'f', 'fOpen', 'persOpen', 'ultima'].forEach(k => delete stato[k]);
-        const rec = { cliente: o.cliente.trim(), email: String(o.email || '').trim().toLowerCase(), telefono: String(o.tel || '').trim(), lingua: o.lingua, oggetto: oggettoMail(), periodo: periodoTxt(), tariffa: o.tariff,
+        const rec = { cliente: o.cliente.trim(), email: String(o.email || '').trim().toLowerCase(), telefono: String(o.tel || '').trim(), agenziaId: o.agenziaId || null, agenzia: (() => { const a = (st.agenzie || []).find(x => x && x.id === o.agenziaId); return a ? a.nome : null; })(), lingua: o.lingua, oggetto: oggettoMail(), periodo: periodoTxt(), tariffa: o.tariff,
           ville: scelte().map(v => { const li = listinoOf(v);
             return { id: v.id, name: v.name, prezzo: prezzoTot(v), affitto: prezzoDi(v), listino: typeof li === 'number' ? li : null,
               voci: srvList().filter(x => x.voce && haServ(v, x.key)).map(x => x.label),
@@ -864,7 +867,7 @@
             srvPre.serviziDett[q.k] = { carico: q.carico, incluso: q.carico !== 'parte', acquisto: null, vendita: q.vendita, note: '' }; if (typeof q.vendita === 'number') venSrv += q.vendita; }); }
         const tot = typeof z.r.prezzo === 'number' ? z.r.prezzo : null, aff = tot == null ? undefined : sp ? Math.max(0, tot - venSrv) : tot;
         ctx.openBooking({ villaId: z.v.id, from, to,
-          pre: Object.assign({ cliente: x.cliente || '', ospiti: (() => { const a = x.stato ? Object.values(x.stato.srvOsp || {}).map(Number).filter(n => n > 0) : []; return a.length ? Math.max(...a) : x.stato && Number(x.stato.ospiti) > 0 ? Number(x.stato.ospiti) : null; })(), status: stato, prezzoVendita: aff, vociOfferta: Array.isArray(z.r.voci) ? z.r.voci : undefined, note: `Da offerta del ${dataBreve(x.quando)}${x.email ? ' · ' + x.email : ''}${x.telefono ? ' · ' + x.telefono : ''}` }, srvPre),
+          pre: Object.assign({ cliente: x.cliente || '', ospiti: (() => { const a = x.stato ? Object.values(x.stato.srvOsp || {}).map(Number).filter(n => n > 0) : []; return a.length ? Math.max(...a) : x.stato && Number(x.stato.ospiti) > 0 ? Number(x.stato.ospiti) : null; })(), status: stato, prezzoVendita: aff, ...((() => { const id = x.agenziaId || (x.stato && x.stato.agenziaId); const a = id && (st.agenzie || []).find(y => y && y.id === id); return a ? { agenziaId: a.id, agenziaPerc: Number(a.perc) || 0 } : {}; })()), vociOfferta: Array.isArray(z.r.voci) ? z.r.voci : undefined, note: `Da offerta del ${dataBreve(x.quando)}${x.email ? ' · ' + x.email : ''}${x.telefono ? ' · ' + x.telefono : ''}` }, srvPre),
           onSaved: bk => { const patch = { prenotazioni: Array.from(new Set((x.prenotazioni || []).concat(bk.id))) };
             const conf = (ctx.stati ? ctx.stati() : []).find(s0 => s0.key === bk.status);
             if (bk.status === 'confermato' || bk.status === 'occupato' || (conf && /conferm/i.test(conf.label))) { patch.esito = 'presa'; patch.esitoIl = new Date().toISOString(); }
