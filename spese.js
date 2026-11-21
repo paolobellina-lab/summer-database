@@ -807,7 +807,7 @@
             + (() => { const reg = x.spese.filter(z => z.categoria === COMM), regT = reg.reduce((t, z) => t + (Number(z.importo) || 0), 0), c = x.b && x.b.agenziaId && ctx.commAgenzia ? ctx.commAgenzia(x.b) : null;
                 if (!reg.length && !c) return ''; const chi = c ? `${esc(c.nome)} ${String(Math.round(c.perc * 1000) / 10).replace('.', ',')}%` : 'agenzia';
                 const da = c && c.importo != null ? c.importo : null;
-                return r2('Commissione agenzia', reg.length ? `${chi} · ${reg.length} ${reg.length === 1 ? 'nota' : 'note'} "${COMM}", già nelle spese totali${da != null && Math.abs(da - regT) >= 1 ? ` · da riconoscere ${euro(da)}` : ''}` : `${chi} · da riconoscere ${da != null ? euro(da) : '—'}: registrala con una nuova spesa "${COMM}" (entra nelle spese e nel margine)`, reg.length ? euro(regT) : '—'); })()
+                return r2('Commissione agenzia', reg.length ? `${chi} · ${reg.length} ${reg.length === 1 ? 'nota' : 'note'} "${COMM}", già nelle spese totali${da != null && Math.abs(da - regT) >= 1 ? ` · da riconoscere ${euro(da)}` : ''}` : `${chi} · da riconoscere ${da != null ? euro(da) : '—'}`, reg.length ? euro(regT) : '—'); })()
             + (haDep ? (depChiuso ? r2('Deposito di sicurezza trattenuto', `ricevuto ${dep == null ? '—' : euro(dep)} − restituito ${euro(rest)}`, euro(tratt), tratt < 0 ? 'neg' : '')
                 : r2('Deposito di sicurezza trattenuto', `ricevuto ${dep == null ? '—' : euro(dep)}: si conta dopo la nota "Restituzione deposito"`, '—')) : ''),
               (() => { const ac = sommaAddC(x.spese), n = x.spese.filter(isAddC).length, oltre = dep ? sulDeposito(dep, aggReal).oltre : aggReal;
@@ -900,7 +900,7 @@
               return `<div class="pr-ag"><h3>Agenzia</h3><dl class="pr-kv"><dt>Agenzia</dt><dd>${esc(c.nome)} · ${esc(String(Math.round(c.perc * 1000) / 10).replace('.', ','))}%</dd>
                 <dt>Da riconoscere</dt><dd><b>${c.importo === null ? '—' : esc(euro(c.importo))}</b> <small class="note">${c.base === null ? 'manca la vendita' : `sulla vendita ${esc(euro(Math.round(c.base)))}`}</small></dd>
                 <dt>Registrata</dt><dd>${reg.length ? esc(euro(regT)) + ` <small class="note">${reg.length} ${reg.length === 1 ? 'nota' : 'note'} "${COMM}"</small>` : '<span class="note">non ancora</span>'}</dd></dl>
-                ${!reg.length ? `<p class="note no-print" style="margin:6px 0 0">Si registra con <b>+ Nuova spesa</b>, categoria "${COMM}", come l'affitto del proprietario.</p>` : ''}</div>`; })() : ''}
+</div>`; })() : ''}
             ${x.b ? (() => { const uc = utCalc(x.b, ctx.data().settings), ed = ctx.canEdit();
               const cel = (k, f, v0, ph) => ed ? `<input class="ut-in" data-ut="${k}|${f}" inputmode="decimal" value="${esc(fmtU(v0))}"${ph ? ` placeholder="${esc(ph)}"` : ''}>` : esc(fmtU(v0) || '—');
               return `<div class="pr-ut"><h3>Utenze</h3><p class="note">Letture dei contatori all'arrivo e all'uscita: il consumo × la tariffa dà quanto far pagare al cliente.</p>
