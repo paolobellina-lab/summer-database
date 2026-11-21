@@ -907,7 +907,7 @@
             ${x.b && ctx.commAgenzia && x.b.agenziaId ? (() => { const c = ctx.commAgenzia(x.b), reg = x.spese.filter(s => s.categoria === COMM), regT = reg.reduce((t, s) => t + (Number(s.importo) || 0), 0);
               return `<div class="pr-ag"><h3>Agenzia</h3><dl class="pr-kv"><dt>Agenzia</dt><dd>${esc(c.nome)} · ${esc(String(Math.round(c.perc * 1000) / 10).replace('.', ','))}%</dd>
                 <dt>Da riconoscere</dt><dd><b>${c.importo === null ? '—' : esc(euro(c.importo))}</b> <small class="note">${c.base === null ? 'manca la vendita' : `sulla vendita ${esc(euro(Math.round(c.base)))}`}</small></dd>
-                <dt>Registrata</dt><dd>${reg.length ? esc(euro(regT)) + ` <small class="note">${reg.length} ${reg.length === 1 ? 'nota' : 'note'} "${COMM}"</small>` : '<span class="note">non ancora</span>'}</dd></dl>
+                ${reg.length ? `<dt>Registrata</dt><dd>${esc(euro(regT))} <small class="note">${reg.length} ${reg.length === 1 ? 'nota' : 'note'} "${COMM}"</small></dd>` : ''}</dl>
 </div>`; })() : ''}
             ${x.b ? (() => { const uc = utCalc(x.b, ctx.data().settings), ed = ctx.canEdit();
               const cel = (k, f, v0, ph) => ed ? `<input class="ut-in" data-ut="${k}|${f}" inputmode="decimal" value="${esc(fmtU(v0))}"${ph ? ` placeholder="${esc(ph)}"` : ''}>` : esc(fmtU(v0) || '—');
