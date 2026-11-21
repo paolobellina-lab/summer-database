@@ -70,6 +70,7 @@
     if (!o.note) o.note = {};
     if (!o.f || typeof o.f !== 'object') o.f = {};
     if (!o.srv || typeof o.srv !== 'object') o.srv = {};
+    if (!o.srvOsp || typeof o.srvOsp !== 'object') o.srvOsp = {}; // ospiti occupanti per servizio (gruppi/fasce di ospiti, personale a ore); vuoto = capienza della villa
     if (!o.srvOre || typeof o.srvOre !== 'object') o.srvOre = {}; // servizi a ore: €/h e ore al giorno cambiati in questa offerta { chiave: { idFigura: { vendita, ore } } }
     if (!o.srvVilla || typeof o.srvVilla !== 'object') o.srvVilla = {}; // prezzi dei servizi scritti per una sola villa nel riepilogo: { villaId: { chiave: '1.200' } }
     // servizi dell'offerta: quelli delle prenotazioni (Impostazioni → Servizi e inclusioni), con prezzo di vendita modificabile qui
@@ -90,8 +91,12 @@
     // prezzo "di base" (senza modifiche nell'offerta): scheda villa, altrimenti Impostazioni; se settimanale, sulle settimane del periodo
     const prezzoSrvBase = (v, k) => { const pe = v ? perOf(v) : null, notti = pe && pe.from && pe.to ? S.diffDays(pe.from, pe.to) : 0;
       const pv = (v && v.prezziServizi || {})[k]; if (typeof pv === 'number') return S.srvPrezzo(st, k, pv, notti); const d = (st.prezziServizi || {})[k] || {};
-      return S.srvPrezzoV(st, k, typeof d.vendita === 'number' ? d.vendita : null, notti, { villa: v, ospiti: Number(o.ospiti) || 0, over: o.srvOre[k], giorni: giorniOre(k, pe) }); };
+      return S.srvPrezzoV(st, k, typeof d.vendita === 'number' ? d.vendita : null, notti, { villa: v, ospiti: ospK(k), over: o.srvOre[k], giorni: giorniOre(k, pe) }); };
     // servizi a ore: giorni della settimana in cui c'è il servizio (o.srvOre[k]._gg = [0..6], 0 = domenica; mancante = tutti) → giorni del soggiorno che cadono in quei giorni
+    // ospiti occupanti scritti sotto il servizio che li usa (vuoto = capienza della villa)
+    const ospK = k => Number((o.srvOsp || {})[k]) || 0;
+    const usaOspiti = k => { const d = (st.prezziServizi || {})[k] || {}; if (S.isOre(st, k)) return S.figureDi(st, k).some(f => Number(f.da) > 1); return !!(d.regola && /Ospiti$/.test(d.regola.tipo || '')); };
+    const ospIn = k => `<label class="off-ospk"><span>Ospiti occupanti</span><input data-oosp="${esc(k)}" inputmode="numeric" value="${esc(ospK(k) ? String(ospK(k)) : '')}" placeholder="capienza villa" title="Per calcolare il prezzo di questo servizio; vuoto = capienza di ogni villa"></label>`;
     const GG = [[1, 'L'], [2, 'M'], [3, 'M'], [4, 'G'], [5, 'V'], [6, 'S'], [0, 'D']];
     const ggSel = k => { const g = (o.srvOre[k] || {})._gg; return Array.isArray(g) ? g : [0, 1, 2, 3, 4, 5, 6]; };
     const giorniOre = (k, pe) => { const nn = (o.srvOre[k] || {})._n; if (nn != null && nn !== '' && Number(nn) >= 0) return Number(nn); const g = ggSel(k); if (g.length === 7 || !pe || !pe.from || !pe.to) return g.length === 7 ? null : pe && pe.from && pe.to ? 0 : null; let n = 0;
@@ -112,7 +117,7 @@
     // link alle web brochure (normale e/o anonima) sotto il prezzo di ogni villa
     const linkWb = v => [o.linkWB && vis(v, 'webBrochure') && String(v.webBrochure || '').trim(), o.linkWBA && vis(v, 'webBrochureAnonima') && String(v.webBrochureAnonima || '').trim()].filter(u => u && /^https?:\/\//i.test(u));
     // servizi a ore (es. cuoco): il nome segue le figure presenti per gli ospiti della villa ("Chef and Butler")
-    const figOff = (k, v) => S.oreCalc(st, k, 7, { villa: v, ospiti: Number(o.ospiti) || 0, over: o.srvOre[k] }).righe;
+    const figOff = (k, v) => S.oreCalc(st, k, 7, { villa: v, ospiti: ospK(k), over: o.srvOre[k] }).righe;
     const srvNome = (x, v) => { if (x && S.isOre(st, x.key)) { const n = S.nomeFigure(figOff(x.key, v), o.lingua); if (n) return n; } return o.lingua === 'en' ? (SRV_EN[x.key] || x.label) : x.label; };
     // un servizio è incluso per una villa se "Includi tutti", oppure con "Predefinito" se la scheda villa lo ha tra i servizi compresi nel prezzo
     // compreso nel prezzo della villa: a carico di Esmeralda (già nelle spese servizi del listino) o del proprietario (scheda villa)
@@ -219,7 +224,6 @@
         <div id="off-list" class="off-list"></div>
       </section>
       <section class="card"><h2>3 · Servizi e prezzi</h2>
-        <label class="field off-osp"><span title="Per i servizi a gruppi o fasce di ospiti; vuoto = capienza di ogni villa">Ospiti occupanti</span><input id="off-osp" inputmode="numeric" value="${esc(o.ospiti ? String(o.ospiti) : '')}" placeholder="capienza villa"></label>
         <div class="field"><span>Servizi</span><div class="tbl-wrap"><table class="prices off-srv"><thead><tr><th>Servizio</th><th>Nell'offerta</th><th>Prezzo €</th></tr></thead><tbody id="off-srv"></tbody></table></div>
           <small class="note off-srv-note">Spunta i servizi da proporre. <b>Predefinito</b>: incluso nelle ville che lo hanno tra i "Servizi compresi nel prezzo" della scheda, a parte (con il prezzo sommato) nelle altre. <b>Includi tutti</b>: incluso per tutte le ville. <b>A parte tutti</b>: si somma al prezzo di ogni villa. Nella mail il cliente vede i servizi sempre come <b>compresi</b> e un solo prezzo, già con i servizi a parte sommati; un servizio a parte senza prezzo non compare. Con il prezzo vuoto ogni villa usa il prezzo della sua scheda (Listino prezzi → Servizi non compresi), o quello di Impostazioni se la scheda non lo ha; un prezzo scritto qui vale per tutte le ville di questa offerta (0 = senza prezzo).</small></div>
         <div class="field"><span>Le tariffe includono</span><div class="off-incl" id="off-incl"></div>
@@ -337,11 +341,13 @@
       $('#off-srv').innerHTML = (pre.length ? tit('Servizi predefiniti') : '') + pre.concat(ext).map((x, i) => { const d = srvDi(x.key); return (i === pre.length && ext.length ? tit('Servizi extra') : '') + `<tr data-ok="${esc(x.key)}" class="${d.on ? 'on' : ''}">
         <td><label class="off-inc"><input type="checkbox" data-son ${d.on ? 'checked' : ''}><span>${esc(x.label)}${x.voce ? ' <small class="note" title="Voce delle note spese: entra nel prezzo, ma non è scritta nella mail">· voce</small>' : ''}</span></label></td>
         <td><div class="seg small" data-smode>${[['pred', 'Predefinito'], ['inc', 'Includi tutti'], ['parte', 'A parte tutti']].map(([m, t]) => `<button type="button" data-m="${m}" class="${d.modo === m ? 'on' : ''}" ${d.on ? '' : 'disabled'}>${t}</button>`).join('')}</div>${d.on && d.modo === 'pred' ? `<small class="note off-srv-who">${esc(chiInclude(x.key))}</small>` : ''}</td>
-        <td><input data-sprz inputmode="numeric" value="${esc(d.prezzo)}" placeholder="da scheda villa" title="Vuoto: per ogni villa il prezzo della sua scheda (o quello di Impostazioni). Scritto: uguale per tutte le ville; 0 = senza prezzo" ${d.on && d.modo !== 'inc' ? '' : 'disabled'} aria-label="Prezzo di ${esc(x.label)}"></td></tr>` + oreRow(x, d); }).join('');
+        <td><input data-sprz inputmode="numeric" value="${esc(d.prezzo)}" placeholder="da scheda villa" title="Vuoto: per ogni villa il prezzo della sua scheda (o quello di Impostazioni). Scritto: uguale per tutte le ville; 0 = senza prezzo" ${d.on && d.modo !== 'inc' ? '' : 'disabled'} aria-label="Prezzo di ${esc(x.label)}"></td></tr>` + oreRow(x, d) + ospRow(x, d); }).join('');
     };
+    // servizi a gruppi o fasce di ospiti (non a ore): sotto la riga la casella degli ospiti occupanti
+    const ospRow = (x, d) => !d.on || S.isOre(st, x.key) || !usaOspiti(x.key) ? '' : `<tr class="off-ore-r"><td colspan="3"><div class="off-ore"><div class="off-ore-h"><span class="note">Il prezzo cambia con gli ospiti</span>${ospIn(x.key)}</div></div></td></tr>`;
     // servizi a ore: le figure con €/h e ore al giorno modificabili per questa offerta (vuoto = Impostazioni)
     const oreRow = (x, d) => { if (!S.isOre(st, x.key) || !d.on) return ''; const ov = o.srvOre[x.key] || {}, f2 = v => typeof v === 'number' ? String(v).replace('.', ',') : '', g = ggSel(x.key);
-      return `<tr class="off-ore-r"><td colspan="3"><div class="off-ore"><div class="off-ore-h"><span class="note">Personale di questa offerta (vuoto = Impostazioni; entra secondo gli ospiti)</span>
+      return `<tr class="off-ore-r"><td colspan="3"><div class="off-ore"><div class="off-ore-h"><span class="note">Personale di questa offerta (vuoto = Impostazioni; entra secondo gli ospiti)</span>${usaOspiti(x.key) ? ospIn(x.key) : ''}
         <span class="off-gg" data-ogg="${esc(x.key)}">${(() => { const v0 = scelte()[0], pe = v0 ? perOf(v0) : null, tot = pe && pe.from && pe.to ? S.diffDays(pe.from, pe.to) : null, n0 = giorniOre(x.key, pe);
           return `<span class="off-ggn"><input data-ogn="${esc(x.key)}" inputmode="numeric" value="${esc(String(n0 != null ? n0 : tot != null ? tot : ''))}" title="Giorni con il servizio: si calcola dai giorni scelti, oppure scrivilo tu">gg / ${tot != null ? tot : '—'}gg</span>`; })()}<button type="button" class="btn small" data-gwe>Solo weekend</button><button type="button" class="btn small" data-gall>Tutti</button></span></div>
         ${S.figureDi(st, x.key).map(f => { const z = ov[f.id] || {};
@@ -440,7 +446,9 @@
     });
     $('#off-list').addEventListener('input', e => { const i = e.target.closest('[data-price]'); if (i) { o.prezzi[i.dataset.price] = i.value; drawRiep(); save(); } const n = e.target.closest('[data-nota]'); if (n) { o.note[n.dataset.nota] = n.value; save(); } });
     drawSrv();
-    $('#off-osp').addEventListener('input', e => { o.ospiti = Number(String(e.target.value).replace(/\D/g, '')) || null; drawSrv(); drawRiep(); drawTexts(); save(); });
+    $('#off-srv').addEventListener('input', e => { const t = e.target.closest('[data-oosp]'); if (!t) return; const n = Number(String(t.value).replace(/\D/g, '')) || 0;
+      if (n) o.srvOsp[t.dataset.oosp] = n; else delete o.srvOsp[t.dataset.oosp]; drawRiep(); drawTexts(); save(); });
+    $('#off-srv').addEventListener('change', e => { if (e.target.closest('[data-oosp]')) drawSrv(); });
     $('#off-srv').addEventListener('click', e => { const box = e.target.closest('[data-ogg]'); if (!box) return; const k = box.dataset.ogg, ov = o.srvOre[k] = o.srvOre[k] || {}; let g = ggSel(k).slice();
       const b = e.target.closest('[data-gg]'); if (b) { const n = Number(b.dataset.gg); g = g.includes(n) ? g.filter(z => z !== n) : g.concat(n); if (!g.length) return; }
       else if (e.target.closest('[data-gwe]')) g = [6, 0]; else if (e.target.closest('[data-gall]')) g = [0, 1, 2, 3, 4, 5, 6]; else return;
@@ -856,7 +864,7 @@
             srvPre.serviziDett[q.k] = { carico: q.carico, incluso: q.carico !== 'parte', acquisto: null, vendita: q.vendita, note: '' }; if (typeof q.vendita === 'number') venSrv += q.vendita; }); }
         const tot = typeof z.r.prezzo === 'number' ? z.r.prezzo : null, aff = tot == null ? undefined : sp ? Math.max(0, tot - venSrv) : tot;
         ctx.openBooking({ villaId: z.v.id, from, to,
-          pre: Object.assign({ cliente: x.cliente || '', ospiti: x.stato && Number(x.stato.ospiti) > 0 ? Number(x.stato.ospiti) : null, status: stato, prezzoVendita: aff, vociOfferta: Array.isArray(z.r.voci) ? z.r.voci : undefined, note: `Da offerta del ${dataBreve(x.quando)}${x.email ? ' · ' + x.email : ''}${x.telefono ? ' · ' + x.telefono : ''}` }, srvPre),
+          pre: Object.assign({ cliente: x.cliente || '', ospiti: (() => { const a = x.stato ? Object.values(x.stato.srvOsp || {}).map(Number).filter(n => n > 0) : []; return a.length ? Math.max(...a) : x.stato && Number(x.stato.ospiti) > 0 ? Number(x.stato.ospiti) : null; })(), status: stato, prezzoVendita: aff, vociOfferta: Array.isArray(z.r.voci) ? z.r.voci : undefined, note: `Da offerta del ${dataBreve(x.quando)}${x.email ? ' · ' + x.email : ''}${x.telefono ? ' · ' + x.telefono : ''}` }, srvPre),
           onSaved: bk => { const patch = { prenotazioni: Array.from(new Set((x.prenotazioni || []).concat(bk.id))) };
             const conf = (ctx.stati ? ctx.stati() : []).find(s0 => s0.key === bk.status);
             if (bk.status === 'confermato' || bk.status === 'occupato' || (conf && /conferm/i.test(conf.label))) { patch.esito = 'presa'; patch.esitoIl = new Date().toISOString(); }

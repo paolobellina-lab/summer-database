@@ -1401,3 +1401,5 @@ dialog.dlg-contr { width: min(980px, calc(100vw - 32px)); }
 .ct-h small { text-transform: none; letter-spacing: 0; font-weight: 400; margin-left: 6px; }
 .ct-vers { margin: 0; padding-left: 18px; font-size: 13px; }
 #ct-card .card + .card { margin-top: 14px; }
+.off-ospk { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.off-ospk input { width: 120px; text-transform: none; letter-spacing: 0; }
