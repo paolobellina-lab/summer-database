@@ -804,6 +804,10 @@
           const q1 = `<div class="card pr-q"><h2>Riepilogo</h2>${tab(
               r2('Vendita', venNota(), E(v.vendita))
             + r2('Spese totali', 'affitto proprietario + spese offerte + aggiuntive (anche le utenze) + a carico del proprietario', euro(sp))
+            + (() => { const reg = x.spese.filter(z => z.categoria === COMM), regT = reg.reduce((t, z) => t + (Number(z.importo) || 0), 0), c = x.b && x.b.agenziaId && ctx.commAgenzia ? ctx.commAgenzia(x.b) : null;
+                if (!reg.length && !c) return ''; const chi = c ? `${esc(c.nome)} ${String(Math.round(c.perc * 1000) / 10).replace('.', ',')}%` : 'agenzia';
+                const da = c && c.importo != null ? c.importo : null;
+                return r2('Commissione agenzia', reg.length ? `${chi} · ${reg.length} ${reg.length === 1 ? 'nota' : 'note'} "${COMM}", già nelle spese totali${da != null && Math.abs(da - regT) >= 1 ? ` · da riconoscere ${euro(da)}` : ''}` : `${chi} · da riconoscere ${da != null ? euro(da) : '—'}: registrala con "Inserisci come spesa" (entra nelle spese e nel margine)`, reg.length ? euro(regT) : '—'); })()
             + (haDep ? (depChiuso ? r2('Deposito di sicurezza trattenuto', `ricevuto ${dep == null ? '—' : euro(dep)} − restituito ${euro(rest)}`, euro(tratt), tratt < 0 ? 'neg' : '')
                 : r2('Deposito di sicurezza trattenuto', `ricevuto ${dep == null ? '—' : euro(dep)}: si conta dopo la nota "Restituzione deposito"`, '—')) : ''),
               (() => { const ac = sommaAddC(x.spese), n = x.spese.filter(isAddC).length, oltre = dep ? sulDeposito(dep, aggReal).oltre : aggReal;
