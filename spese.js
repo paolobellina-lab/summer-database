@@ -819,6 +819,14 @@
             ${v.vendita == null ? '<p class="note">Prezzo di vendita non inserito nella prenotazione.</p>' : ''}</div>`;
           // 2. affitto al proprietario
           const affN = x.spese.filter(isAff).length;
+          // commissione dell'agenzia: quanto spetta (perc × vendita) e note "Commissione agenzia" registrate
+          const q6 = (() => { const reg = x.spese.filter(z => z.categoria === COMM), regT = reg.reduce((t, z) => t + (Number(z.importo) || 0), 0), c = x.b && x.b.agenziaId && ctx.commAgenzia ? ctx.commAgenzia(x.b) : null;
+            if (!reg.length && !c) return ''; const da = c && c.importo != null ? c.importo : null, resto = da != null ? Math.round((da - regT) * 100) / 100 : null;
+            return `<div class="card pr-q"><h2>Commissione agenzia</h2>${tab(
+                r2('Agenzia', c ? `${esc(String(Math.round(c.perc * 1000) / 10).replace('.', ','))}% della vendita${c.base != null ? ' ' + euro(Math.round(c.base)) : ''}` : 'nessuna agenzia scelta nella prenotazione', c ? esc(c.nome) : '—')
+              + r2('Da riconoscere', '', da != null ? euro(da) : '—')
+              + r2('<b>Riconosciuta</b>', reg.length ? `${reg.length} ${reg.length === 1 ? 'nota' : 'note'} "${COMM}", nelle spese totali` : '', `<b>${reg.length ? euro(regT) : '—'}</b>`, 'tot')
+              + (resto != null && reg.length && Math.abs(resto) >= 1 ? r2('Ancora da riconoscere', '', euro(resto), resto < 0 ? 'neg' : '') : ''))}</div>`; })();
           const q2 = `<div class="card pr-q"><h2>Affitto al proprietario</h2>${tab(
               r2('Pagato al proprietario', qReale != null ? `quota del pagato per tutto il gruppo (${euro(affGrp(V, grpBil))}), ${ripMan(grpBil, 'ripartizioneReale') ? 'ripartito a mano' : 'diviso per notti: bilancialo con il tasto qui sotto'}` : affN ? `${affN} ${affN === 1 ? 'nota spese' : 'note spese'} "Affitto proprietario", anche extra` : 'nessuna nota spese "Affitto proprietario"', euro(affReal) + chip(affPrev, affReal, 'da inserire'), 'tot'))}
             ${qReale != null ? (() => { const nn = grpBil.membri.flatMap(m => { const it = V.l.find(y => y.b && y.b.id === m.id); return it ? it.spese.filter(isAff).map(z => [m, z]) : []; });
@@ -853,7 +861,7 @@
               + (oltreC || nAddC ? r2('Addebitato al cliente', nAddC ? `${nAddC} ${nAddC === 1 ? 'nota' : 'note'} "Addebito cliente" (oltre il deposito)` : 'nessuna nota "Addebito cliente"', euro(addC)) : '')
               + (haDep ? r2('Deposito di sicurezza trattenuto', depChiuso ? `ricevuto ${dep == null ? '—' : euro(dep)} − restituito ${euro(rest)}` : `ricevuto ${dep == null ? '—' : euro(dep)}: si conta dopo la nota "Restituzione deposito"`, depChiuso ? euro(tratt) : '—', depChiuso && tratt < 0 ? 'neg' : '') : '')
               + (oltreC || nAddC ? (oltreC - addC > 0 ? r2('Ancora da addebitare', 'registralo con la nota "Addebito cliente"', euro(oltreC - addC), 'neg') : '') : ''))}</div>`;
-          chkHtml = `<div class="pr-quad">${q1}<div class="pr-col">${q2}${q5}</div>${q3}${q4}</div>`; // riga 1: Riepilogo | Affitto + a carico del proprietario; riga 2: Spese offerte | Spese aggiuntive (stesso lato superiore)
+          chkHtml = `<div class="pr-quad">${q1}<div class="pr-col">${q6}${q2}${q5}</div>${q3}${q4}</div>`; // riga 1: Riepilogo | Affitto + a carico del proprietario; riga 2: Spese offerte | Spese aggiuntive (stesso lato superiore)
         } else {
           chkHtml = `<div class="card pr-chk"><h2>Previsto e reale</h2>
           <p class="note">Previsto = valori della prenotazione (acquisto concordato e servizi). Reale = note spese. In linea entro il 5% (almeno 50 €).</p>
