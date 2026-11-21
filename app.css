@@ -1419,3 +1419,9 @@ dialog.dlg-contr { width: min(980px, calc(100vw - 32px)); }
 .off-pst .st-occupata, .off-riep-p .st-occupata { color: var(--err, #b3261e); }
 .off-riep-p { display: block; font-size: 12px; color: var(--muted); }
 #off-riep tr.off-riep-alt td { border-top: 1px dashed var(--line); }
+/* opzioni in scadenza */
+.opz-sc { font-size: 13px; white-space: nowrap; }
+.opz-scaduta .opz-sc { color: var(--err, #b3261e); font-weight: 600; }
+.opz-vicina .opz-sc { color: #b06d00; font-weight: 600; }
+.opz-act { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.opz-act input[type=date] { width: auto; padding: 4px 6px; }

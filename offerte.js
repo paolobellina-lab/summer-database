@@ -1031,11 +1031,14 @@
     function mostra(l) {
       const C = contatti(l).filter(c => !c.tipo);
       const O = l.filter(aperta).sort((a, b) => String(a.quando).localeCompare(String(b.quando)));
-      if (!C.length && !O.length) { if (forza) toast('Niente da aggiornare: contatti classificati e offerte chiuse'); return; }
+      const OP = ctx.opzioni ? ctx.opzioni() : [], oggi = new Date().toISOString().slice(0, 10), dm = x => x ? x.slice(8, 10) + '/' + x.slice(5, 7) + '/' + x.slice(0, 4) : '';
+      if (!C.length && !O.length && !OP.length) { if (forza) toast('Niente da aggiornare: contatti classificati, offerte chiuse e nessuna opzione in corso'); return; }
       try { localStorage.setItem(chiavePromo(store.user), String(Date.now())); } catch (_) {}
       const MAX = 25;
       let d = document.getElementById('dlg-promo'); if (!d) { d = document.createElement('dialog'); d.id = 'dlg-promo'; d.className = 'dlg-conf dlg-promo'; document.body.appendChild(d); }
       d.innerHTML = `<form class="dlg" method="dialog"><h3>Promemoria della settimana</h3>
+        ${OP.length ? `<h4>Opzioni in corso <span class="note">${OP.length}</span></h4><div class="promo-l">${OP.map(x => { const sc = x.scad, cl = !sc ? '' : sc < oggi ? 'opz-scaduta' : sc <= new Date(Date.now() + 2 * 864e5).toISOString().slice(0, 10) ? 'opz-vicina' : '';
+          return `<div class="promo-r ${cl}"><div><b>${escH(x.villa)}</b><small class="note">${escH([x.cliente, dm(x.from) + ' → ' + dm(x.to), x.stato].filter(Boolean).join(' · '))}</small></div><span class="opz-sc">${sc ? (sc < oggi ? 'scaduta il ' : 'scade il ') + escH(dm(sc)) : 'senza scadenza'}</span>${ctx.openBooking ? `<button type="button" class="btn small" data-oapri="${escH(x.id)}">Apri</button>` : ''}</div>`; }).join('')}</div>` : ''}
         ${C.length ? `<h4>Contatti da classificare <span class="note">${C.length}</span></h4><div class="promo-l">${C.slice(0, MAX).map(c => `<div class="promo-r"><div><b>${escH(c.nome || c.email || c.tel || 'Senza nome')}</b><small class="note">${escH([c.email, c.tel].filter(Boolean).join(' · '))}${c.email || c.tel ? ' · ' : ''}${c.l.length} ${c.l.length === 1 ? 'offerta' : 'offerte'}</small></div>${segTipo(c)}</div>`).join('')}${C.length > MAX ? `<p class="note">… e altri ${C.length - MAX} nella pagina Contatti.</p>` : ''}</div>` : ''}
         ${O.length ? `<h4>Offerte non ancora prese o perse <span class="note">${O.length}</span></h4><div class="promo-l">${O.slice(0, MAX).map(x => `<div class="promo-r"><div><b>${escH(x.cliente || x.email || x.telefono || 'Senza cliente')}</b><small class="note">${escH(dataBreve(x.quando))} · ${escH(x.periodo || x.oggetto || '')}${(x.ville || []).length ? ' · ' + escH(x.ville.map(v => v.name).join(', ')) : ''}</small></div>${selEsito(x)}</div>`).join('')}${O.length > MAX ? `<p class="note">… e altre ${O.length - MAX} nello Storico.</p>` : ''}</div>` : ''}
         <div class="foot"><button type="button" class="btn" data-dopo="1" title="La finestra si chiude e ricompare la prossima volta che apri l'app">Ricordamelo alla prossima apertura</button><button type="button" class="btn" data-vai="contatti">Apri Contatti</button><button type="button" class="btn" data-vai="storico">Apri Storico</button><button type="button" class="btn primary" data-chiudi="1">Fatto</button></div></form>`;
@@ -1044,6 +1047,7 @@
       d.onclick = e => {
         if (e.target === d) { chiudi(); return; }
         if (e.target.closest('[data-chiudi]')) { chiudi(); return; }
+        const ap = e.target.closest('[data-oapri]'); if (ap) { chiudi(); ctx.openBooking({ id: ap.dataset.oapri }); return; }
         // rimanda: tolgo la data dell'ultimo promemoria, così ricompare alla prossima apertura dell'app
         if (e.target.closest('[data-dopo]')) { try { localStorage.removeItem(chiavePromo(store.user)); } catch (_) {} chiudi(); toast('Te lo ricordo alla prossima apertura'); return; }
         const v = e.target.closest('[data-vai]'); if (v) { chiudi(); ui.off = Object.assign(ui.off || {}, { tab: v.dataset.vai }); saveUI();

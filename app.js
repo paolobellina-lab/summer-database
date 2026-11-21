@@ -28,6 +28,12 @@ window.SDBStore.ready.then(function () {
   const statoOf = k => stati().find(s => s.key === k);
   const statoLabel = k => k === '_nd' ? 'Non disponibile' : (statoOf(k) || { label: k }).label;
   const blocks = k => (statoOf(k) || { blocks: true }).blocks;
+  // stati con data di scadenza (spunta "Con scadenza" in Impostazioni; mai impostata = quelli con "opzione" nel nome)
+  const conScadSt = x => x ? (x.scadenza !== undefined ? !!x.scadenza : x.key === 'opzione' || /opzion/i.test(x.label || '')) : false;
+  const conScad = k => conScadSt(statoOf(k));
+  // opzioni in corso con la loro scadenza, dalla più vicina (anche quelle senza data, in fondo)
+  const opzioniLista = () => opzioniInCorso().map(b => ({ id: b.id, villa: (villaById(b.villaId) || { name: b.villaId }).name, cliente: b.cliente || '', from: b.from, to: b.to, stato: statoLabel(b.status), scad: b.scadenzaOpzione || null }));
+  const opzioniInCorso = () => data().bookings.filter(b => conScad(b.status) && b.to >= S.iso(new Date())).sort((a, z) => String(a.scadenzaOpzione || '9999').localeCompare(String(z.scadenzaOpzione || '9999')) || String(a.from).localeCompare(String(z.from)));
   const statoColor = k => (statoOf(k) || statoOf('occupato')).color;
   // colore "di stato": nessun colore salvato, oppure ancora quello originale dello stato → segue il predefinito
   const isDefaultColor = b => !b.color || String(b.color).toLowerCase() === String(S.STATUS_COLOR[b.status] || '').toLowerCase();
@@ -321,7 +327,7 @@ window.SDBStore.ready.then(function () {
     const righe = [
       ['Villa', v.name], ['Località', v.location || ''], ['Cliente', b.cliente || ''],
       ['Check-in', S.dmy(b.from) + (b.earlyIn ? ' · early check-in' : '')], ['Check-out', S.dmy(b.to) + (b.lateOut ? ' · late check-out' : '')],
-      ['Notti', String(notti)], ['Stato', statoLabel(b.status)],
+      ['Notti', String(notti)], ['Stato', statoLabel(b.status) + (conScad(b.status) ? (b.scadenzaOpzione ? ' · scade il ' + S.dmy(b.scadenzaOpzione) : ' · scadenza non indicata') : '')],
       ['Prezzo di vendita concordato', typeof b.prezzoVendita === 'number' ? S.money(b.prezzoVendita) : '—']
     ];
     if (acq) righe.push(['Prezzo di acquisto concordato', typeof b.prezzoAcquisto === 'number' ? S.money(b.prezzoAcquisto) : '—']);
@@ -416,12 +422,44 @@ window.SDBStore.ready.then(function () {
     if (h === 'prenotazioni' && window.SDBSpese) { spesePage = window.SDBSpese.mount(main, ctxPren(), ''); return; }
     if (h === 'appunti') return viewNotes();
     // promemoria settimanale delle offerte (contatti da classificare, offerte non prese né perse): una volta per apertura dell'app
-    if (!promoFatto && canSee('offerte') && window.SDBOfferte && window.SDBOfferte.promemoria) { promoFatto = true; setTimeout(() => window.SDBOfferte.promemoria({ store, toast, ui, saveUI }), 2500); }
-    if (h === 'offerte' && window.SDBOfferte) { return window.SDBOfferte.mount(main, { ui, saveUI, esc, data, store, $, $$, toast, S, settings, blocks, hiddenField, favLists, locations, normLoc, coverOf: id => (thumbs.map[id] || {}).fotoId || null, openBooking, canEdit, stati }); }
+    if (!promoFatto && canSee('offerte') && window.SDBOfferte && window.SDBOfferte.promemoria) { promoFatto = true; setTimeout(() => window.SDBOfferte.promemoria({ store, toast, ui, saveUI, opzioni: canEdit() ? opzioniLista : null, openBooking: canEdit() ? openBooking : null }), 2500); }
+    if (!opzFatto && canEdit()) { opzFatto = true; setTimeout(() => avvisoOpzioni(), 3200); }
+    if (h === 'offerte' && window.SDBOfferte) { return window.SDBOfferte.mount(main, { opzioni: canEdit() ? opzioniLista : null, ui, saveUI, esc, data, store, $, $$, toast, S, settings, blocks, hiddenField, favLists, locations, normLoc, coverOf: id => (thumbs.map[id] || {}).fotoId || null, openBooking, canEdit, stati }); }
     if (h === 'impostazioni') return viewSettings();
     return viewAvail();
   }
   var promoFatto = false;
+  var opzFatto = false;
+  // avviso delle opzioni che scadono entro 2 giorni (o già scadute), all'apertura dell'app: Apri, Proroga, Ricordamelo domani
+  const rinvioKey = () => 'sdb-opz-rinvio:' + String(store.user || '').toLowerCase();
+  const rinvii = () => { try { return JSON.parse(localStorage.getItem(rinvioKey()) || '{}') || {}; } catch (_) { return {}; } };
+  const setRinvii = x => { try { localStorage.setItem(rinvioKey(), JSON.stringify(x)); } catch (_) {} };
+  function avvisoOpzioni(forza) {
+    const oggi = S.iso(new Date()), lim = S.addDays(oggi, 2), rv = rinvii();
+    const l = opzioniInCorso().filter(b => b.scadenzaOpzione && b.scadenzaOpzione <= lim && (forza || !(rv[b.id] && rv[b.id] > oggi)));
+    if (!l.length) { if (forza) toast('Nessuna opzione in scadenza'); return; }
+    let d = document.getElementById('dlg-opz'); if (!d) { d = document.createElement('dialog'); d.id = 'dlg-opz'; d.className = 'dlg-conf dlg-promo dlg-opz'; document.body.appendChild(d); }
+    const quando = sc => sc < oggi ? `scaduta il ${S.dmy(sc)}` : sc === oggi ? 'scade oggi' : sc === S.addDays(oggi, 1) ? 'scade domani' : `scade il ${S.dmy(sc)}`;
+    const draw = () => { const ll = l.filter(b => !b._fatto);
+      if (!ll.length) { try { d.close(); } catch (_) {} return; }
+      d.innerHTML = `<form class="dlg" method="dialog"><h3>Opzioni in scadenza</h3><p class="note">Opzioni scadute o che scadono entro 2 giorni.</p><div class="promo-l">${ll.map(b => `<div class="promo-r opz-r ${b.scadenzaOpzione < oggi ? 'opz-scaduta' : 'opz-vicina'}" data-ob="${esc(b.id)}">
+        <div><b>${esc((villaById(b.villaId) || { name: b.villaId }).name)}</b><small class="note">${esc([b.cliente, S.dm(b.from) + ' → ' + S.dm(b.to), statoLabel(b.status)].filter(Boolean).join(' · '))}</small></div>
+        <span class="opz-sc">${esc(quando(b.scadenzaOpzione))}</span>
+        <span class="opz-act"><button type="button" class="btn small" data-oa>Apri</button><input type="date" data-od value="${esc(S.addDays(oggi, 3))}" aria-label="Nuova scadenza"><button type="button" class="btn small" data-op>Proroga</button><button type="button" class="btn small" data-or>Ricordamelo domani</button></span></div>`).join('')}</div>
+        <div class="foot"><button type="button" class="btn primary" data-oc>Chiudi</button></div></form>`; };
+    draw();
+    d.onclick = e => { const r = e.target.closest('[data-ob]'), b = r && l.find(z => z.id === r.dataset.ob);
+      if (e.target.closest('[data-oc]') || e.target === d) { try { d.close(); } catch (_) {} return; }
+      if (!b) return;
+      if (e.target.closest('[data-oa]')) { try { d.close(); } catch (_) {} openBooking({ id: b.id }); return; }
+      if (e.target.closest('[data-or]')) { const x = rinvii(); x[b.id] = S.addDays(oggi, 1); setRinvii(x); b._fatto = true; draw(); toast('Te lo ricordo domani'); return; }
+      if (e.target.closest('[data-op]')) { const nd = r.querySelector('[data-od]').value; if (!nd) { toast('Scegli la nuova data'); return; }
+        const cur = data().bookings.find(z => z.id === b.id); if (!cur) return;
+        Promise.resolve(store.upsertBooking(Object.assign(JSON.parse(JSON.stringify(cur)), { scadenzaOpzione: nd }))).then(() => { toast('Opzione prorogata al ' + S.dmy(nd)); }, err => toast('Non salvato: ' + (err && err.message || err)));
+        b._fatto = true; draw(); } };
+    d.oncancel = ev => { ev.preventDefault(); try { d.close(); } catch (_) {} };
+    if (!d.open) { if (d.showModal) d.showModal(); else d.setAttribute('open', ''); }
+  }
   window.addEventListener('hashchange', route);
   let listiniOk = false;
   store.subscribe((st, origin) => {
@@ -612,7 +650,7 @@ window.SDBStore.ready.then(function () {
         else if (b.status !== 'owner' && b.status !== 'richiesta' && b.status !== 'vuoto') { const li = listinoApprox(v, b.from, b.to); const val = li && (li.approx ? li.sale : (ui.mode === 'netto' ? li.net : li.sale)); if (typeof val === 'number') tot = '≈ ' + S.money(val); }
         if (tot && w < 74) tot = tot.replace(' €', '').replace(/\.000$/, 'k');
         const extras = srvLabels(b);
-        const tip = [statoLabel(b.status), S.dm(b.from) + ' → ' + S.dm(b.to), b.cliente, typeof b.prezzoVendita === 'number' ? 'Vendita ' + S.money(b.prezzoVendita) : '', typeof b.prezzoAcquisto === 'number' ? 'Acquisto ' + S.money(b.prezzoAcquisto) : '', b.earlyIn ? 'Early check-in' : '', b.lateOut ? 'Late check-out' : ''].concat(extras).filter(Boolean).join(' · ');
+        const tip = [statoLabel(b.status) + (conScad(b.status) && b.scadenzaOpzione ? ' · scade il ' + S.dmy(b.scadenzaOpzione) : ''), S.dm(b.from) + ' → ' + S.dm(b.to), b.cliente, typeof b.prezzoVendita === 'number' ? 'Vendita ' + S.money(b.prezzoVendita) : '', typeof b.prezzoAcquisto === 'number' ? 'Acquisto ' + S.money(b.prezzoAcquisto) : '', b.earlyIn ? 'Early check-in' : '', b.lateOut ? 'Late check-out' : ''].concat(extras).filter(Boolean).join(' · ');
         return `<div class="bar${vuoto ? ' vuotobar' : ''}" data-b="${esc(b.id)}" style="left:${l}px;width:${w}px;background:${esc(col)};color:${S.inkFor(col)}" title="${esc(tip)}"><span class="who">${esc(txt)}</span>${tot ? `<span class="tot">${esc(tot)}</span>` : ''}</div>`;
       }).join('');
       // notti pagate al proprietario ma libere: fascia arancione (un clic sopra apre una prenotazione nuova, come la riga)
@@ -818,6 +856,7 @@ window.SDBStore.ready.then(function () {
       <section class="dsec sec-look"><h4>Stato e colore</h4>
       <div class="row">
         <label class="field"><span>Stato</span><select id="b-status">${stati().map(s => `<option value="${esc(s.key)}" ${s.key === b.status ? 'selected' : ''}>${esc(s.label)}</option>`).join('')}</select></label>
+        <label class="field" id="b-scad-w" ${conScad(b.status) ? '' : 'hidden'}><span>Scadenza opzione</span><input type="date" id="b-scad" value="${esc(b.scadenzaOpzione || '')}"></label>
         <div class="field"><span>Colore</span><div class="swatch-prev" id="b-prev"></div></div>
       </div>
       <div class="swatches" id="b-sw" role="radiogroup" aria-label="Colore dell'affitto">
@@ -843,10 +882,11 @@ window.SDBStore.ready.then(function () {
     };
     $('#b-sw').addEventListener('click', e => { const s = e.target.closest('.sw[data-c]'); if (!s) return; color = s.dataset.c; colorTouched = true; paint(); });
     $('#b-color').addEventListener('input', e => { color = e.target.value; colorTouched = true; paint(); });
-    $('#b-status').addEventListener('change', e => { if (!colorTouched) { color = statoColor(e.target.value); paint(); } });
+    $('#b-status').addEventListener('change', e => { if (!colorTouched) { color = statoColor(e.target.value); paint(); } $('#b-scad-w').hidden = !conScad(e.target.value); });
     let acqDi = b.acquistoDi || null;
     const read = () => ({ villaId: $('#b-villa').value, status: $('#b-status').value, from: $('#b-from').value, to: $('#b-to').value, cliente: $('#b-cliente').value.trim(), note: $('#b-note').value.trim(), color: colorTouched ? color : null, earlyIn: $('#b-early').checked, lateOut: $('#b-late').checked,
       acquistoDi: acqDi,
+      scadenzaOpzione: conScad($('#b-status').value) && $('#b-scad').value ? $('#b-scad').value : null,
       agenziaId: $('#b-ag') ? $('#b-ag').value || null : (b.agenziaId || null),
       agenziaPerc: $('#b-ag') && $('#b-ag').value ? ($('#b-ag').value === b.agenziaId && typeof b.agenziaPerc === 'number' ? b.agenziaPerc : (() => { const a = agenzie().find(x => x.id === $('#b-ag').value); return a ? Number(a.perc) || 0 : null; })()) : null,
       pagatoDal: $('#b-pag').checked && $('#b-status').value !== 'vuoto' && $('#b-pag-from').value ? $('#b-pag-from').value : null, pagatoAl: $('#b-pag').checked && $('#b-status').value !== 'vuoto' && $('#b-pag-to').value ? $('#b-pag-to').value : null, prezzoVendita: money('#b-sale'), ospiti: Number(String($('#b-osp').value).replace(/\D/g, '')) || null, prezzoAcquisto: money('#b-buy'), deposito: money('#b-dep'), pulizia: $('#b-pulizia') ? $('#b-pulizia').checked : !!b.pulizia, cuoco: $('#b-cuoco') ? $('#b-cuoco').checked : !!b.cuoco, transfer: $('#b-transfer') ? $('#b-transfer').checked : !!b.transfer, serviziDett: readSrv(), servizi: $$('#bform [data-srv]').filter(c => c.checked).map(c => c.dataset.srv).concat((b.servizi || []).filter(k => !servizi().some(x => x.key === k))) });
@@ -1901,8 +1941,8 @@ window.SDBStore.ready.then(function () {
     };
     drawProt();
     // ---- stati delle prenotazioni (settings.stati) ----
-    const stSave = list => { st.stati = list.map(x => ({ key: x.key, label: x.label, color: x.color, blocks: !!x.blocks })); save(); };
-    const stDraft = cfg => stati(cfg).map(x => ({ key: x.key, label: x.label, color: x.color, blocks: x.blocks, base: x.base }));
+    const stSave = list => { st.stati = list.map(x => ({ key: x.key, label: x.label, color: x.color, blocks: !!x.blocks, scadenza: !!x.scadenza })); save(); };
+    const stDraft = cfg => stati(cfg).map(x => ({ key: x.key, label: x.label, color: x.color, blocks: x.blocks, scadenza: conScadSt(x), base: x.base }));
     const drawStati = () => {
       const cfgNow = st.stati; const list = stDraft(cfgNow);
       const count = k => data().bookings.filter(b => b.status === k).length;
@@ -1910,6 +1950,7 @@ window.SDBStore.ready.then(function () {
         <input data-sl value="${esc(x.label)}" aria-label="Nome dello stato">
         <input type="color" class="dot" data-sc value="${esc(x.color)}" aria-label="Colore di ${esc(x.label)}">
         <label class="st-blk"><input type="checkbox" data-sb ${x.blocks ? 'checked' : ''}> Blocca</label>
+        <label class="st-blk" title="Nella prenotazione compare la data di scadenza; avviso 2 giorni prima"><input type="checkbox" data-sx ${x.scadenza ? 'checked' : ''}> Con scadenza</label>
         <span class="note">${count(x.key)} ${count(x.key) === 1 ? 'prenotazione' : 'prenotazioni'}</span>
         <span class="chip" style="background:${esc(x.color)};color:${S.inkFor(x.color)}">${esc(x.label)}</span>
         <span class="loc-act">${x.base && String(x.color).toLowerCase() !== S.STATUS_COLOR[x.key] ? `<button type="button" class="btn small" data-sr>Colore originale</button>` : ''}${!x.base && !count(x.key) ? '<button type="button" class="btn small danger" data-sd>Togli</button>' : ''}</span></div>`).join('');
@@ -1922,6 +1963,7 @@ window.SDBStore.ready.then(function () {
       if (e.target.matches('[data-sl]')) { const v = e.target.value.trim(); if (v) stUpd(i, x => { x.label = v; }); } });
     $('#st-list').addEventListener('change', e => { const row = e.target.closest('[data-si]'); if (!row) return; const i = Number(row.dataset.si);
       if (e.target.matches('[data-sb]')) stUpd(i, x => { x.blocks = e.target.checked; }, true);
+      if (e.target.matches('[data-sx]')) stUpd(i, x => { x.scadenza = e.target.checked; }, true);
       if (e.target.matches('[data-sc]')) stList = drawStati();
       if (e.target.matches('[data-sl]') && !e.target.value.trim()) e.target.value = stList[i].label; });
     $('#st-list').addEventListener('click', e => { const row = e.target.closest('[data-si]'); if (!row) return; const i = Number(row.dataset.si);
