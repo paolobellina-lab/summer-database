@@ -77,7 +77,10 @@
      se il campo manca, "Danni villa" conta come aggiuntiva). Le altre sono le spese dei servizi offerti nella prenotazione. */
   const isAgg = s => { if (!s || isRest(s) || isAff(s) || isEntr(s)) return false; const sv = srvDiSpesa(s); if (srvNonOfferto(sv, bkDi(s))) return true; if (!sv && CATS.agg.includes(s.categoria) && voceInOff(s.categoria, bkDi(s))) return false; const a = aggPerCat(s.categoria, sv); return a === null ? s.aggiuntiva === true : a; };
   const sommaAgg = l => l.reduce((t, s) => t + (isAgg(s) ? Number(s.importo) || 0 : 0), 0);
-  const sommaInc = l => somma(l) - sommaAgg(l) - sommaAff(l);
+  // commissione dell'agenzia: nelle spese totali, ma né spesa offerta né aggiuntiva (riquadro a parte)
+  const isComm = s => s && s.categoria === COMM;
+  const sommaComm = l => l.reduce((t, s) => t + (isComm(s) ? Number(s.importo) || 0 : 0), 0);
+  const sommaInc = l => somma(l) - sommaAgg(l) - sommaAff(l) - sommaComm(l);
   // deposito trattenuto: conta solo dopo aver registrato una "Restituzione deposito sicurezza" (anche di 0 €)
   const haRest = l => l.some(isRest);
   // metodo di pagamento della spesa (scontrini.pagamento): contanti, carta di credito, bonifico; null = non indicato
@@ -116,7 +119,7 @@
   // spese a carico del proprietario (categorie con la spunta in Impostazioni): fuori dalle spese offerte, riquadro a parte
   const isPropS = s => !!s && !isRest(s) && !isEntr(s) && !isAff(s) && !isAgg(s) && ((!srvDiSpesa(s) && (CATS.prop || []).includes(s.categoria)) || srvProp(s));
   const sommaPropS = l => l.reduce((t, s) => t + (isPropS(s) ? Number(s.importo) || 0 : 0), 0);
-  const isAltra = s => !isRest(s) && !isEntr(s) && !isAff(s) && !isAgg(s) && !srvDiSpesa(s) && !isPropS(s);
+  const isAltra = s => !isRest(s) && !isEntr(s) && !isAff(s) && !isComm(s) && !isAgg(s) && !srvDiSpesa(s) && !isPropS(s);
   const sommaSrv = l => l.reduce((t, s) => t + (isSrvOff(s) ? Number(s.importo) || 0 : 0), 0);
   const sommaAltre = l => sommaInc(l) - sommaSrv(l) - sommaPropS(l);
   const importoTxt = s => (isRest(s) ? '−' : isEntr(s) ? '+' : '') + euro(s.importo);
@@ -352,7 +355,7 @@
       if (!righe.length) { toast('Niente da esportare'); return; }
       const cella = v => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`;
       const rows = [['Villa', 'Prenotazione', 'Check-in', 'Check-out', 'Data scontrino', 'Categoria', 'Tipo', 'Motivo', 'Pagamento', 'Importo', 'Inserito da', 'Allegati']];
-      righe.forEach(({ s, villa, p }) => rows.push([villa, p ? p.cliente : 'Spese generali', p ? dataIt(p.from) : '', p ? dataIt(p.to) : '', dataIt(s.data), s.categoria || '', isRest(s) ? 'Restituzione deposito' : isAddP(s) ? 'Addebito proprietario (entrata)' : isAddC(s) ? 'Addebito cliente (entrata)' : isAff(s) ? 'Affitto proprietario' : isAgg(s) ? 'Servizio aggiuntivo' : isSrvOff(s) ? 'Servizio offerto' : isPropS(s) ? 'A carico del proprietario' : 'Altra spesa della prenotazione', s.motivo || '', pagLabel(s.pagamento), ((isRest(s) ? -1 : 1) * (Number(s.importo) || 0)).toFixed(2).replace('.', ','), s.creatoDa || '', nAll(s)]));
+      righe.forEach(({ s, villa, p }) => rows.push([villa, p ? p.cliente : 'Spese generali', p ? dataIt(p.from) : '', p ? dataIt(p.to) : '', dataIt(s.data), s.categoria || '', isRest(s) ? 'Restituzione deposito' : isAddP(s) ? 'Addebito proprietario (entrata)' : isAddC(s) ? 'Addebito cliente (entrata)' : isAff(s) ? 'Affitto proprietario' : isComm(s) ? 'Commissione agenzia' : isAgg(s) ? 'Servizio aggiuntivo' : isSrvOff(s) ? 'Servizio offerto' : isPropS(s) ? 'A carico del proprietario' : 'Altra spesa della prenotazione', s.motivo || '', pagLabel(s.pagamento), ((isRest(s) ? -1 : 1) * (Number(s.importo) || 0)).toFixed(2).replace('.', ','), s.creatoDa || '', nAll(s)]));
       const testo = '﻿' + rows.map(r => r.map(cella).join(';')).join('\r\n');
       X.scarica(nomeFile || `spese-ville_${isoLocale(new Date())}.csv`, new Blob([testo], { type: 'text/csv;charset=utf-8' }));
     }
@@ -380,7 +383,7 @@
       if (sc && sc.acq && sc.totAcquisto) tot.push(['Acquisto previsto (affitto + servizi a parte)', ctxMoney(sc.totAcquisto)]);
       if (sommaAff(l)) tot.push(['Affitto proprietario reale', euro(sommaAff(l))]);
       const bW = sc ? (ctx.data().bookings || []).find(b => b.id === pid) : null, utW = utDa(bW), aggW = sommaAgg(l) + utW;
-      tot.push(['Spese reali servizi offerti', euro(sommaSrv(l))], ['Altre spese della prenotazione', euro(sommaAltre(l))], ['Spese a carico del proprietario', euro(sommaPropS(l))], ['Spese reali servizi aggiuntivi' + (utW ? ' (con le utenze)' : ''), euro(aggW)], ['Acquisto reale (totale spese)', euro(somma(l) + utW)]);
+      tot.push(['Spese reali servizi offerti', euro(sommaSrv(l))], ['Altre spese della prenotazione', euro(sommaAltre(l))], ['Commissione agenzia', euro(sommaComm(l))], ['Spese a carico del proprietario', euro(sommaPropS(l))], ['Spese reali servizi aggiuntivi' + (utW ? ' (con le utenze)' : ''), euro(aggW)], ['Acquisto reale (totale spese)', euro(somma(l) + utW)]);
       const depR = sc && typeof sc.deposito === 'number' ? sc.deposito : 0, restW = sommaRest(l);
       const trW = trattDi(depR, l);
       if (depR || restW) tot.push(['Deposito di sicurezza ricevuto', euro(depR)], ['Deposito restituito', haRest(l) ? '−' + euro(restW) : 'non ancora registrato'], ['Deposito trattenuto', haRest(l) ? euro(trW) : '—']);
@@ -747,7 +750,7 @@
         const num0 = n => typeof n === 'number' ? n : null;
         const piuCaro = d => d > 0 ? 'neg' : 'pos', piuAlto = d => d > 0 ? 'pos' : 'neg';
         celle = r4('Vendita', 'affitto + servizi a parte, prezzo al cliente', v.vendita, v.vendita)
-          + r4('Acquisto', on ? `${affR(V, x) ? `affitto ${euro(affR(V, x))} · ` : ''}offerti ${euro(sommaSrv(x.spese))} · altre ${euro(sommaAltre(x.spese))} · aggiuntivi ${euro(aggTot(x))}` : 'affitto + servizi a parte', v.acquisto, on ? sp : null, '', piuCaro)
+          + r4('Acquisto', on ? `${affR(V, x) ? `affitto ${euro(affR(V, x))} · ` : ''}offerti ${euro(sommaSrv(x.spese))} · altre ${euro(sommaAltre(x.spese))}${sommaComm(x.spese) ? ` · agenzia ${euro(sommaComm(x.spese))}` : ''} · aggiuntivi ${euro(aggTot(x))}` : 'affitto + servizi a parte', v.acquisto, on ? sp : null, '', piuCaro)
           + r4('di cui affitto proprietario', v.quota ? 'quota dell\'acquisto unico · note spese "Affitto proprietario"' : 'note spese "Affitto proprietario"', num0(v.affAcq), on ? affR(V, x) : null, 'sub', piuCaro)
           + r4('di cui servizi offerti', 'categorie dei servizi della prenotazione (incluso nel prezzo o a parte)', v.acquisto == null ? null : v.acquisto - (num0(v.affAcq) || 0), on ? sommaSrv(x.spese) : null, 'sub', piuCaro)
           + r4('di cui altre spese della prenotazione', 'categorie non aggiuntive (es. manutenzione)', null, on ? sommaAltre(x.spese) : null, 'sub')
@@ -957,7 +960,7 @@
         else if (grp === 'no') html = l.map(A.rigaSpesa).join('');
         else if (grp === 'cat') { const m = new Map(); l.forEach(z => { const c = z.categoria || 'Altro'; if (!m.has(c)) m.set(c, []); m.get(c).push(z); });
           html = [...m.entries()].sort((a, b) => a[0].localeCompare(b[0], 'it')).map(([c, ll]) => blk(esc(c), ll, ll.some(z => isRest(z) || isEntr(z)) ? null : somma(ll))).join(''); }
-        else html = blk('Affitto proprietario', l.filter(isAff), sommaAff(l)) + blk('Servizi offerti', l.filter(isSrvOff), sommaSrv(l)) + blk('Altre spese della prenotazione', l.filter(isAltra), sommaAltre(l)) + blk('A carico del proprietario', l.filter(isPropS), sommaPropS(l)) + blk('Servizi aggiuntivi', l.filter(isAgg), sommaAgg(l)) + blk('Restituzione deposito', l.filter(isRest), null) + blk('Addebiti al cliente', l.filter(isAddC), null) + blk('Addebiti al proprietario', l.filter(isAddP), null);
+        else html = blk('Affitto proprietario', l.filter(isAff), sommaAff(l)) + blk('Commissione agenzia', l.filter(isComm), sommaComm(l)) + blk('Servizi offerti', l.filter(isSrvOff), sommaSrv(l)) + blk('Altre spese della prenotazione', l.filter(isAltra), sommaAltre(l)) + blk('A carico del proprietario', l.filter(isPropS), sommaPropS(l)) + blk('Servizi aggiuntivi', l.filter(isAgg), sommaAgg(l)) + blk('Restituzione deposito', l.filter(isRest), null) + blk('Addebiti al cliente', l.filter(isAddC), null) + blk('Addebiti al proprietario', l.filter(isAddP), null);
         box.innerHTML = html;
         const filtrato = q || ui.spCat;
         $('#sp-n', root).textContent = filtrato ? `${l.length} di ${x.spese.length}` : x.spese.length;
