@@ -1425,3 +1425,6 @@ dialog.dlg-contr { width: min(980px, calc(100vw - 32px)); }
 .opz-vicina .opz-sc { color: #b06d00; font-weight: 600; }
 .opz-act { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .opz-act input[type=date] { width: auto; padding: 4px 6px; }
+.off-nv { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 0 0 10px; }
+.off-nv > span { font-weight: 600; }
+.off-nv small { flex-basis: 100%; }

@@ -119,6 +119,13 @@
     if (!o.stile || typeof o.stile !== 'object') o.stile = Object.assign({}, stili().find(x => x.id === settings().stileMailDi) || STILI_BASE[0]);
     const salvaStili = l => { const cur = JSON.parse(JSON.stringify(settings())); cur.stiliMail = l; return Promise.resolve(store.setSettings(cur)); };
     // link alle web brochure (normale e/o anonima) sotto il prezzo di ogni villa
+    // nome o codice della villa (offerte alle agenzie senza il nome: niente link al sito, nome tolto dalle descrizioni)
+    const conCod = () => o.nomeV === 'codice';
+    const codOf = v => vis(v, 'codice') ? String(v.codice || '').trim() : '';
+    const nomeOff = v => conCod() && codOf(v) ? codOf(v) : 'Villa ' + String(v.name || '').replace(/^villa\s+/i, '').replace(/\b\w+/g, w => w[0].toUpperCase() + w.slice(1).toLowerCase());
+    const anonTxt = (v, t) => { t = String(t == null ? '' : t); const c = codOf(v); if (!conCod() || !c) return t;
+      const n = String(v.name || '').replace(/^villa\s+/i, '').trim(); if (!n) return t; const rx = n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      return t.replace(new RegExp((n.length < 3 ? '\\bvilla\\s+' : '\\b(villa\\s+)?') + rx + '\\b', 'gi'), c); };
     const linkWb = v => [o.linkWB && vis(v, 'webBrochure') && String(v.webBrochure || '').trim(), o.linkWBA && vis(v, 'webBrochureAnonima') && String(v.webBrochureAnonima || '').trim()].filter(u => u && /^https?:\/\//i.test(u));
     // servizi a ore (es. cuoco): il nome segue le figure presenti per gli ospiti della villa ("Chef and Butler")
     const figOff = (k, v) => S.oreCalc(st, k, 7, { villa: v, ospiti: ospK(k), over: o.srvOre[k] }).righe;
@@ -276,6 +283,7 @@
         <label class="field"><span>Firma</span><textarea id="off-firma" rows="2">${esc(o.firma || '')}</textarea></label>
         </div>
         <div class="off-prev" id="off-anteprima"><p class="note">Scegli almeno una villa per vedere l'anteprima.</p></div>
+        <div class="off-nv"><span>Nelle ville scrivi</span><div class="seg" id="off-nv"><button type="button" data-nv="nome" class="${conCod() ? '' : 'on'}">Nome della villa</button><button type="button" data-nv="codice" class="${conCod() ? 'on' : ''}">Codice</button></div><small class="note" id="off-nv-info"></small></div>
         <div class="off-allega">
         ${store.listBrochure ? `<label class="flag off-bro"><input type="checkbox" id="off-bro" ${o.brochure ? 'checked' : ''}><span><b>Allega brochure</b><small id="off-bro-info">Scarica i PDF delle ville scelte, nella lingua dell'offerta, da trascinare nella mail.</small></span></label>` : ''}
           <label class="flag off-wb"><input type="checkbox" id="off-wb" ${o.linkWB ? 'checked' : ''}><span><b>Link Web Brochure</b><small>Sotto il prezzo di ogni villa che ce l'ha.</small></span></label>
@@ -412,7 +420,11 @@
     const broScelta = l => l.find(b => b.lingua === o.lingua) || l.find(b => !b.lingua) || l[0] || null;
     let broTok = 0;
     function updBro() { setTimeout(() => { drawRiep(); if (document.getElementById('off-srv')) drawSrv(); updBro0(); }, 0); }
-    function updBro0() {
+    function updNv() { const el = document.getElementById('off-nv-info'); if (!el) return;
+      if (!conCod()) { el.textContent = 'Con il codice (es. per le agenzie) il nome non compare: niente link al sito e nome tolto dalle descrizioni.'; return; }
+      const manca = scelte().filter(v => !codOf(v)).map(v => v.name);
+      el.innerHTML = manca.length ? `<b style="color:#b3261e">Senza codice (compare il nome): ${esc(manca.join(', '))}</b>` : 'Niente link al sito, nome tolto dalle descrizioni, brochure scaricate con il nome del codice. Controlla che le brochure e le web brochure scelte siano anonime.'; }
+    function updBro0() { updNv();
       const info = document.getElementById('off-bro-info'); if (!info || !store.listBrochure) return;
       if (!o.brochure) { info.textContent = "Scarica i PDF delle ville scelte, nella lingua dell'offerta, da trascinare nella mail."; return; }
       if (!o.ville.length) { info.textContent = 'Scegli le ville.'; return; }
@@ -429,7 +441,7 @@
       for (const v of vv) {
         const b = broScelta(await broDi(v.id)); if (!b) continue;
         msg(`<p class="note">Scarico la brochure di ${esc(v.name)}…</p>`);
-        try { window.SDBExport.scarica(b.nome, await store.getBrochure(b)); n++; await new Promise(r => setTimeout(r, 600)); } catch (_) {}
+        try { window.SDBExport.scarica(conCod() && codOf(v) ? codOf(v) + '.pdf' : b.nome, await store.getBrochure(b)); n++; await new Promise(r => setTimeout(r, 600)); } catch (_) {}
       }
       return n;
     }
@@ -564,15 +576,15 @@
         for (let i = 0; i < sel.length; i++) {
           const v = sel[i]; msg(`<p class="note">Preparo ${esc(v.name)} (${i + 1} di ${sel.length})…</p>`);
           const fs = await fotoDi(v, 1400, 0.8);
-          B.push({ pageBreak: true }, { h1: v.name });
+          B.push({ pageBreak: true }, { h1: nomeOff(v) }); if (!conCod() && codOf(v)) B.push({ p: codOf(v), small: true });
           const p = perOf(v); if (p && nP() < 2) B.push({ p: rangeTxt(p, o.lingua), small: true });
           // copertina grande, poi le altre foto tre per riga: così ogni villa sta in una pagina
           if (fs[0]) B.push({ img: { bytes: X.dataUrlBytes(fs[0].url).bytes, w: fs[0].w, h: fs[0].h, width: 7800 } });
           const rest = fs.slice(1); for (let k = 0; k < rest.length; k += 3) { const row = rest.slice(k, k + 3).map(f => ({ bytes: X.dataUrlBytes(f.url).bytes, w: f.w, h: f.h })); while (row.length < 3) row.push(null); B.push({ imgs: row }); }
           const info = infoVilla(v); if (info.length) B.push({ kv: info });
-          if (vis(v, 'descrizione')) B.push({ p: String(v.descrizione) });
-          if (vis(v, 'servizi')) B.push({ h2: l.servizi }, { p: String(v.servizi) });
-          if (vis(v, 'linkSito')) B.push({ p: `${l.sito}: ${v.linkSito}`, small: true });
+          if (vis(v, 'descrizione')) B.push({ p: anonTxt(v, v.descrizione) });
+          if (vis(v, 'servizi')) B.push({ h2: l.servizi }, { p: anonTxt(v, v.servizi) });
+          if (!conCod() && vis(v, 'linkSito')) B.push({ p: `${l.sito}: ${v.linkSito}`, small: true });
           if (nP() > 1) { const rv = righeVille().find(z => z.v.id === v.id); rv.per.forEach(q => B.push({ price: [q.lab, q.pr === null ? l.richiesta : euro(q.pr)] })); }
           else { const pr = prezzoTot(v); B.push({ price: [l.prezzo, pr === null ? l.richiesta : euro(pr)] }); }
           linkWb(v).forEach(u => B.push({ p: `${l.webBro}: ${u}`, small: true }));
@@ -606,8 +618,8 @@
         .sort((a, b) => (b.pr === null ? -1 : b.pr) - (a.pr === null ? -1 : a.pr)).map(z => { const v = z.v;
         const iv = inclSoloVilla(v);
         return Object.assign(z, { nota: (o.note[v.id] || '').trim(),
-          titolo: 'Villa ' + v.name.replace(/^villa\s+/i, '').replace(/\b\w+/g, w => w[0].toUpperCase() + w.slice(1).toLowerCase()),
-          codice: vis(v, 'codice') ? String(v.codice).trim() : '', sito: vis(v, 'linkSito') ? String(v.linkSito).trim() : '',
+          titolo: nomeOff(v),
+          codice: conCod() ? '' : codOf(v), sito: !conCod() && vis(v, 'linkSito') ? String(v.linkSito).trim() : '',
           video: vis(v, 'vimeo') ? String(v.vimeo).trim() : vis(v, 'youtube') ? String(v.youtube).trim() : '', psw: vis(v, 'psw') ? String(v.psw).trim() : '',
           wb: linkWb(v), incl: iv.length ? iv.map(x => testiSrv(x.key, v).join(', ')).join('; ') : '' });
       });
@@ -760,7 +772,7 @@
         for (const u of r.wb) await riga(l.webBro, l.qui, u);
         if (r.sito) await riga(l.sitoWeb, l.sito, r.sito);
         y += 8;
-        if (vis(v, 'descrizione')) await testo(String(v.descrizione), { px: 22, lh: 1.5, col: TXT, tronca: true });
+        if (vis(v, 'descrizione')) await testo(anonTxt(v, v.descrizione), { px: 22, lh: 1.5, col: TXT, tronca: true });
       }
 
       // ultima pagina: cosa comprendono le tariffe, testo finale e firma
@@ -962,6 +974,7 @@
       } catch (x) { msg(`<div class="warn err">Non riuscito: ${esc(x.message || x)}</div>`); }
       btn.disabled = false;
     });
+    $('#off-nv').addEventListener('click', e => { const b = e.target.closest('[data-nv]'); if (!b) return; o.nomeV = b.dataset.nv === 'codice' ? 'codice' : 'nome'; $$('#off-nv button').forEach(x => x.classList.toggle('on', x === b)); pdfPronto = null; save(); updBro(); });
     $('#off-wb').addEventListener('change', e => { o.linkWB = e.target.checked; save(); });
     $('#off-wba').addEventListener('change', e => { o.linkWBA = e.target.checked; save(); });
     if ($('#off-bro')) $('#off-bro').addEventListener('change', e => { o.brochure = e.target.checked; save(); updBro(); });
@@ -988,7 +1001,7 @@
         const file = new File([blob], nomeFile() + '.pdf', { type: 'application/pdf' });
         const bro = [];
         if (o.brochure && store.listBrochure) for (const v of scelte()) { const b = broScelta(await broDi(v.id)); if (!b) continue; msg(`<p class="note">Preparo la brochure di ${esc(v.name)}…</p>`);
-          try { const bl = await store.getBrochure(b); bro.push(new File([bl], b.nome || (v.name + '.pdf'), { type: 'application/pdf' })); } catch (_) {} }
+          try { const bl = await store.getBrochure(b); bro.push(new File([bl], conCod() && codOf(v) ? codOf(v) + '.pdf' : (b.nome || (v.name + '.pdf')), { type: 'application/pdf' })); } catch (_) {} }
         pdfPronto = { file, bro }; salvaStorico('pdf'); return pdfPronto;
       } catch (x) { msg(`<div class="warn err">PDF non riuscito: ${esc(x.message || x)}</div>`); return null; }
       finally { btn.disabled = false; }
