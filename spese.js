@@ -807,7 +807,7 @@
             + (() => { const reg = x.spese.filter(z => z.categoria === COMM), regT = reg.reduce((t, z) => t + (Number(z.importo) || 0), 0), c = x.b && x.b.agenziaId && ctx.commAgenzia ? ctx.commAgenzia(x.b) : null;
                 if (!reg.length && !c) return ''; const chi = c ? `${esc(c.nome)} ${String(Math.round(c.perc * 1000) / 10).replace('.', ',')}%` : 'agenzia';
                 const da = c && c.importo != null ? c.importo : null;
-                return r2('Commissione agenzia', reg.length ? `${chi} · ${reg.length} ${reg.length === 1 ? 'nota' : 'note'} "${COMM}", già nelle spese totali${da != null && Math.abs(da - regT) >= 1 ? ` · da riconoscere ${euro(da)}` : ''}` : `${chi} · da riconoscere ${da != null ? euro(da) : '—'}: registrala con "Inserisci come spesa" (entra nelle spese e nel margine)`, reg.length ? euro(regT) : '—'); })()
+                return r2('Commissione agenzia', reg.length ? `${chi} · ${reg.length} ${reg.length === 1 ? 'nota' : 'note'} "${COMM}", già nelle spese totali${da != null && Math.abs(da - regT) >= 1 ? ` · da riconoscere ${euro(da)}` : ''}` : `${chi} · da riconoscere ${da != null ? euro(da) : '—'}: registrala con una nuova spesa "${COMM}" (entra nelle spese e nel margine)`, reg.length ? euro(regT) : '—'); })()
             + (haDep ? (depChiuso ? r2('Deposito di sicurezza trattenuto', `ricevuto ${dep == null ? '—' : euro(dep)} − restituito ${euro(rest)}`, euro(tratt), tratt < 0 ? 'neg' : '')
                 : r2('Deposito di sicurezza trattenuto', `ricevuto ${dep == null ? '—' : euro(dep)}: si conta dopo la nota "Restituzione deposito"`, '—')) : ''),
               (() => { const ac = sommaAddC(x.spese), n = x.spese.filter(isAddC).length, oltre = dep ? sulDeposito(dep, aggReal).oltre : aggReal;
@@ -898,9 +898,9 @@
           <div class="card pr-info"><h2>${x.gen ? 'Villa' : 'Prenotazione'}</h2><dl class="pr-kv">${info.map(([l, val0]) => `<dt>${esc(l)}</dt><dd>${esc(val0)}</dd>`).join('')}</dl>
             ${x.b && ctx.commAgenzia && x.b.agenziaId ? (() => { const c = ctx.commAgenzia(x.b), reg = x.spese.filter(s => s.categoria === COMM), regT = reg.reduce((t, s) => t + (Number(s.importo) || 0), 0);
               return `<div class="pr-ag"><h3>Agenzia</h3><dl class="pr-kv"><dt>Agenzia</dt><dd>${esc(c.nome)} · ${esc(String(Math.round(c.perc * 1000) / 10).replace('.', ','))}%</dd>
-                <dt>Da riconoscere</dt><dd><b>${c.importo === null ? '—' : esc(euro(c.importo))}</b> <small class="note">${c.base === null ? 'manca la vendita' : `su ${esc(euro(Math.round(c.base)))} (vendita senza il ${Math.round(c.agL * 100)}% del listino)`}</small></dd>
+                <dt>Da riconoscere</dt><dd><b>${c.importo === null ? '—' : esc(euro(c.importo))}</b> <small class="note">${c.base === null ? 'manca la vendita' : `sulla vendita ${esc(euro(Math.round(c.base)))}`}</small></dd>
                 <dt>Registrata</dt><dd>${reg.length ? esc(euro(regT)) + ` <small class="note">${reg.length} ${reg.length === 1 ? 'nota' : 'note'} "${COMM}"</small>` : '<span class="note">non ancora</span>'}</dd></dl>
-                ${ctx.canEdit() && ctx.online && c.importo !== null && !reg.length ? `<p class="no-print" style="margin:6px 0 0"><button type="button" class="btn" id="ag-spesa">Inserisci come spesa (${esc(euro(c.importo))})</button></p>` : ''}</div>`; })() : ''}
+                ${!reg.length ? `<p class="note no-print" style="margin:6px 0 0">Si registra con <b>+ Nuova spesa</b>, categoria "${COMM}", come l'affitto del proprietario.</p>` : ''}</div>`; })() : ''}
             ${x.b ? (() => { const uc = utCalc(x.b, ctx.data().settings), ed = ctx.canEdit();
               const cel = (k, f, v0, ph) => ed ? `<input class="ut-in" data-ut="${k}|${f}" inputmode="decimal" value="${esc(fmtU(v0))}"${ph ? ` placeholder="${esc(ph)}"` : ''}>` : esc(fmtU(v0) || '—');
               return `<div class="pr-ut"><h3>Utenze</h3><p class="note">Letture dei contatori all'arrivo e all'uscita: il consumo × la tariffa dà quanto far pagare al cliente.</p>
@@ -977,11 +977,6 @@
         box.addEventListener('focusout', e => { if (!box.contains(e.relatedTarget)) salva(); });
         utIns.forEach(i => i.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); salva(); } }));
         window.addEventListener('hashchange', salva, { once: true }); }
-      const agb = $('#ag-spesa', root); if (agb && x.b) agb.onclick = async () => { const c = ctx.commAgenzia(x.b); if (!c || c.importo === null) return; agb.disabled = true;
-        const oggi = new Date(), d0 = `${oggi.getFullYear()}-${String(oggi.getMonth() + 1).padStart(2, '0')}-${String(oggi.getDate()).padStart(2, '0')}`;
-        const dati = { villaId: x.b.villaId, prenotazioneId: x.b.id, prenotazione: { cliente: (x.b.cliente || '').trim() || 'Prenotazione senza nome', from: x.b.from, to: x.b.to }, data: d0, importo: c.importo,
-          motivo: `${c.nome} · ${String(Math.round(c.perc * 1000) / 10).replace('.', ',')}% di ${euro(Math.round(c.base))}`, pagamento: null, categoria: COMM, servizio: null, aggiuntiva: false };
-        try { await ctx.store.addScontrino(dati, null); ctx.toast('Commissione registrata come spesa'); } catch (e) { agb.disabled = false; ctx.toast('Non salvata: ' + (e && e.message || e)); } };
       const cc = $('#pd-concl', root); if (cc && x.b) cc.onchange = () => { const b0 = ctx.data().bookings.find(b => b.id === x.b.id); if (!b0) return;
         ctx.store.upsertBooking(Object.assign(JSON.parse(JSON.stringify(b0)), { conteggiConclusi: cc.checked })); ctx.toast(cc.checked ? 'Conteggi conclusi' : 'Conteggi riaperti'); };
       if (grpBil || grp) { const g = grpBil || grp, tot0 = typeof g.root.prezzoAcquisto === 'number' ? g.root.prezzoAcquisto : null, ins = $$('.bil-in', root), inR = $$('.bil-re', root), totR0 = affGrp(V, g);
