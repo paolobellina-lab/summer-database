@@ -355,12 +355,12 @@ window.SDBStore.ready.then(function () {
     const tot = typeof g.root.prezzoAcquisto === 'number' ? g.root.prezzoAcquisto : 0;
     return ripDi(g, g.root.ripartizione, tot).q[b.id]; };
   // agenzie (Impostazioni): meta/settings.agenzie = [{ id, nome, perc }] (perc 0,08 = 8%); nella prenotazione agenziaId + agenziaPerc (copiata alla scelta)
-  // commissione = perc × (affitto + servizi a parte) senza la percentuale agenzia già compresa nel listino della villa
+  // commissione = perc × vendita (affitto + servizi a parte), sul prezzo finale
   const agenzie = () => (settings().agenzie || []).filter(a => a && a.id);
   const commAgenzia = b => { if (!b || !b.agenziaId) return null; const a = agenzie().find(x => x.id === b.agenziaId);
     const perc = typeof b.agenziaPerc === 'number' ? b.agenziaPerc : a ? Number(a.perc) || 0 : 0; const v = valoriPren(b, true).vendita;
     const vl = data().villas.find(x => x.id === b.villaId), pl = vl && vl.pricing && vl.pricing.settimanale, agL = pl && typeof pl.agenzia === 'number' ? pl.agenzia : S.AGENZIA_DEF;
-    const base = typeof v === 'number' ? v / (1 + agL) : null;
+    const base = typeof v === 'number' ? v : null;
     return { nome: a ? a.nome : 'agenzia non più in elenco', perc, agL, vendita: v, base, importo: base === null ? null : Math.round(base * perc * 100) / 100 }; };
   const valoriPren = (b, intero) => { const sv = srvTot(b); const hv = typeof b.prezzoVendita === 'number', ha = typeof b.prezzoAcquisto === 'number';
     const q = intero || !canAcq() ? null : quotaAcq(b), affA = q != null ? q : ha ? b.prezzoAcquisto : null;
@@ -938,7 +938,7 @@ window.SDBStore.ready.then(function () {
       const totV = typeof x.prezzoVendita === 'number' ? x.prezzoVendita + sv.vendita : null;
       if ($('#b-ag-n')) { const x0 = read(); const c = commAgenzia(Object.assign({}, b, x0, { serviziDett: x0.serviziDett || b.serviziDett }));
         $('#b-ag-n').innerHTML = !c ? 'Scegli l\'agenzia che ha portato il cliente: si calcola quanto le spetta.' : c.importo === null ? 'Inserisci la vendita concordata per calcolare la commissione.'
-          : `Da riconoscere all'agenzia: <b>${S.money(c.importo)}</b> = ${String(Math.round(c.perc * 1000) / 10).replace('.', ',')}% di ${S.money(Math.round(c.base))} (vendita ${S.money(c.vendita)} senza il ${Math.round(c.agL * 100)}% agenzia del listino). Si registra come spesa dal riepilogo della prenotazione.`; }
+          : `Da riconoscere all'agenzia: <b>${S.money(c.importo)}</b> = ${String(Math.round(c.perc * 1000) / 10).replace('.', ',')}% di ${S.money(Math.round(c.base))}. Si registra come spesa dal riepilogo della prenotazione.`; }
       $('#b-hint').innerHTML = [
         li ? `Listino: <b>${S.money(li.sale)}</b>${li.net ? ` · netto ${S.money(li.net)}` : ''} <span class="muted">(${esc(li.label)})</span>${ro ? '' : ' <button type="button" class="btn small" id="b-uselist">Usa listino</button>'}` : '<span class="muted">Nessun prezzo di listino per queste date esatte.</span>',
         hasSv ? `Servizi a parte: vendita <b>${S.money(sv.vendita)}</b>${canAcq() ? ` · acquisto ${S.money(sv.acquisto)}` : ''}${totV !== null ? ` · <b>Totale cliente ${S.money(totV)}</b>` : ''}` : '',
@@ -1399,8 +1399,8 @@ window.SDBStore.ready.then(function () {
           <label class="field"><span>Arrotonda a €</span><input data-p="arrotonda" inputmode="numeric" value="${esc(p.arrotonda)}"></label>
           <label class="field"><span>Margine %</span><input data-p="margine" inputmode="decimal" value="${esc(Math.round((Number(p.margine) || 0) * 1000) / 10)}"></label>
           <label class="field"><span>Margine minimo €</span><input data-p="minimo" inputmode="numeric" value="${esc(p.minimo === undefined || p.minimo === null ? S.MARGINE_MIN : p.minimo)}"><small class="lbl-sub">per prenotazione</small></label>
-          <label class="field"><span>Agenzia %</span><input data-p="agenzia" inputmode="decimal" value="${esc(Math.round((p.agenzia === undefined || p.agenzia === null ? S.AGENZIA_DEF : Number(p.agenzia) || 0) * 1000) / 10)}"><small class="lbl-sub">su affitto + spese</small></label>
-          <div class="formula">Vendita = (acquisto ÷ (1 − margine), con un margine di almeno il minimo, + spese) + la percentuale dell'agenzia, arrotondato per eccesso, + rettifica. Il listino comprende la commissione massima dell'agenzia. Scrivi ND se non disponibile.</div>
+          <label class="field"><span>Agenzia %</span><input data-p="agenzia" inputmode="decimal" value="${esc(Math.round((p.agenzia === undefined || p.agenzia === null ? S.AGENZIA_DEF : Number(p.agenzia) || 0) * 1000) / 10)}"><small class="lbl-sub">sopra il minimo; nel margine è già compresa</small></label>
+          <div class="formula">Vendita = il più alto tra acquisto ÷ (1 − margine) + spese (il margine comprende già l'agenzia) e (acquisto + margine minimo + spese) + la percentuale dell'agenzia, arrotondato per eccesso, + rettifica. Scrivi ND se non disponibile.</div>
         </div>
         <div class="tbl-wrap"><table class="prices"><thead><tr><th>Periodo</th><th>Acquisto (netto)</th><th>Rettifica</th><th style="text-align:right">Vendita (listino)</th><th style="text-align:right">Guadagno<small class="lbl-sub">dopo l'agenzia</small></th></tr></thead><tbody>
           ${per.map((pp, i) => `<tr data-i="${i}"><td class="per">${t !== 'settimanale' && v.periodi && v.periodi[t] ? `${esc(pp.label)}<span class="per-edit"><input type="date" data-vp="${i}" data-vk="from" value="${esc(pp.from)}"><input type="date" data-vp="${i}" data-vk="to" value="${esc(pp.to)}"></span>` : `${esc(pp.label)}${pp.label.includes(S.dm(pp.from)) ? '' : `<small>${S.dm(pp.from)} → ${S.dm(pp.to)}</small>`}`}</td>
@@ -1446,9 +1446,9 @@ window.SDBStore.ready.then(function () {
         const sale = S.salePrice(p.acquisto[i], p, p.rettifica[i], p.fisso[i]);
         const c = $(`[data-sale="${i}"]`, box); c.textContent = sale === null ? '—' : S.money(sale); c.classList.toggle('nd', sale === 'ND' || sale === null);
         const acq = p.acquisto[i];
-        // guadagno dopo la commissione massima dell'agenzia (compresa nel listino): vendita − acquisto − agenzia
+        // guadagno dopo la commissione massima dell'agenzia: vendita − acquisto − agenzia × vendita
         const ag = p.agenzia === undefined || p.agenzia === null || p.agenzia === '' ? S.AGENZIA_DEF : (Number(p.agenzia) || 0);
-        $(`[data-mg="${i}"]`, box).textContent = typeof sale === 'number' && typeof acq === 'number' ? S.money(Math.round(sale - acq - sale * ag / (1 + ag))) : '';
+        $(`[data-mg="${i}"]`, box).textContent = typeof sale === 'number' && typeof acq === 'number' ? S.money(Math.round(sale - acq - sale * ag)) : '';
       }
     }
     function drawPricesRO() {

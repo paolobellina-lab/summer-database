@@ -117,9 +117,9 @@
   }
 
   /* Stessa formula dell'Excel, con un margine minimo in euro e la commissione dell'agenzia:
-     ARROTONDA.ECCESSO( (MAX(acquisto / (1 - margine) ; acquisto + minimo) + spese) × (1 + agenzia) ; arrotonda ) + rettifica
+     ARROTONDA.ECCESSO( MAX( acquisto / (1 - margine) + spese ; (acquisto + minimo + spese) × (1 + agenzia) ) ; arrotonda ) + rettifica
      minimo: params.minimo (euro), se manca MARGINE_MIN (7.000 €); agenzia: params.agenzia (0,10 = 10%), se manca AGENZIA_DEF.
-     Il listino comprende la commissione massima; se a un'agenzia si dà meno, aumenta il nostro margine. */
+     Il margine % comprende già l'agenzia; il minimo € no (l'agenzia si aggiunge sopra). Commissione = agenzia × prezzo finale. */
   const MARGINE_MIN = 7000, AGENZIA_DEF = 0.1;
   function salePrice(acq, params, rett, fisso) {
     if (fisso !== null && fisso !== undefined && fisso !== '') return Number(fisso);
@@ -129,9 +129,11 @@
     const m = Number(params.margine) || 0;
     const mn = params.minimo === undefined || params.minimo === null || params.minimo === '' ? MARGINE_MIN : (Number(params.minimo) || 0);
     const ag = params.agenzia === undefined || params.agenzia === null || params.agenzia === '' ? AGENZIA_DEF : (Number(params.agenzia) || 0);
-    const x = (Math.max(a / (1 - m), a + mn) + (Number(params.spese) || 0)) * (1 + ag);
+    const sp = Number(params.spese) || 0;
+    // il margine % comprende già l'agenzia; il minimo € è netto, quindi l'agenzia si aggiunge sopra
+    const x = Math.max(a / (1 - m) + sp, (a + mn + sp) * (1 + ag));
     const r = Number(params.arrotonda) || 0;
-    const base = r > 0 ? Math.ceil(Math.round((x / r) * 1e6) / 1e6) * r : x;
+    const base = r > 0 ? Math.ceil(Math.round((x / r) * 1e6) / 1e6) * r : Math.round(x * 100) / 100;
     return base + (Number(rett) || 0);
   }
 
