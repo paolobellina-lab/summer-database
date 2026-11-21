@@ -23,9 +23,10 @@
     if (Array.isArray(s.includedServices) && s.includedServices.length) c.servizi = s.includedServices.join('\n');
     set('descrizione', s.description);
     set('linkSito', s.url);
+    set('codice', s.codice);
     return c;
   }
-  const ETICHETTE = { seafront: 'Seafront – Seaview', guests: 'N° ospiti', totalBedrooms: 'Camere totali', guestBedrooms: 'Camere ospiti', bathrooms: 'Bagni', indoorSqm: 'Indoor mq', outdoorSqm: 'Outdoor mq', pool: 'Piscina', spa: 'Spa', gym: 'Palestra', servizi: 'Servizi inclusi', descrizione: 'Descrizione', linkSito: 'Link sito' };
+  const ETICHETTE = { codice: 'Codice', seafront: 'Seafront – Seaview', guests: 'N° ospiti', totalBedrooms: 'Camere totali', guestBedrooms: 'Camere ospiti', bathrooms: 'Bagni', indoorSqm: 'Indoor mq', outdoorSqm: 'Outdoor mq', pool: 'Piscina', spa: 'Spa', gym: 'Palestra', servizi: 'Servizi inclusi', descrizione: 'Descrizione', linkSito: 'Link sito' };
 
   // stato che sopravvive al ridisegno della pagina (le schede salvate fanno aggiornare le Impostazioni)
   const S0 = { file: null, msg: '', lavoro: false, sovrascrivi: false, conFoto: true, nFoto: 10, scelte: null };
