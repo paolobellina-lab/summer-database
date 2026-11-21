@@ -162,6 +162,17 @@
     const rangeTxt = (p, lang) => lang === 'en' ? `${fmtD(p.from, lang)} – ${fmtD(p.to, lang)}` : `dal ${fmtD(p.from, lang)} al ${fmtD(p.to, lang)}`;
     const ville = () => data().villas.slice().sort((a, b) => String(a.name).localeCompare(String(b.name), 'it', { numeric: true }));
     const perOf = v => S.periodsFor(st, v, o.tariff)[o.idx] || null;
+    /* più periodi alternativi nella stessa offerta: o.periodi = [{ tariff, idx, prezzi, srvVilla }] (tutti, con quello attivo o.pAtt);
+       il periodo attivo sta anche in o.tariff / o.idx / o.prezzi / o.srvVilla; conP(i, fn) esegue fn con il periodo i al posto di quello attivo */
+    const nP = () => Array.isArray(o.periodi) && o.periodi.length > 1 ? o.periodi.length : 1;
+    const caricaP = q => { o.tariff = q.tariff; o.idx = q.idx; o.prezzi = q.prezzi || {}; o.srvVilla = q.srvVilla || {}; };
+    const syncP = () => { if (nP() > 1) o.periodi[o.pAtt] = { tariff: o.tariff, idx: o.idx, prezzi: o.prezzi, srvVilla: o.srvVilla }; };
+    if (Array.isArray(o.periodi) && o.periodi.length < 2) delete o.periodi;
+    if (!(o.pAtt >= 0 && o.pAtt < nP())) o.pAtt = 0;
+    if (nP() > 1) caricaP(o.periodi[o.pAtt]);
+    const conP = (i, fn) => { if (nP() < 2 || i === o.pAtt) return fn(); syncP(); const cur = o.pAtt; caricaP(o.periodi[i]); o.pAtt = i;
+      try { return fn(); } finally { syncP(); caricaP(o.periodi[cur]); o.pAtt = cur; } };
+    const ogniP = fn => Array.from({ length: nP() }, (_, i) => conP(i, () => fn(i)));
     // listino della villa; se un servizio Predefinito a carico del cliente (già nelle spese servizi del listino) è tolto dall'offerta
     // o messo "a parte", il listino si rifà con la stessa formula (agenzia e arrotondamento) senza quel servizio
     const inListinoOff = (v, k) => S.predefSet(st, k) && S.caricoDef(st, v, k) === 'parte';
@@ -182,7 +193,8 @@
     const prezzoDi = v => { const k = o.prezzi[v.id]; if (k !== undefined && k !== '') { const n = S.parseMoney(k); return typeof n === 'number' ? n : null; } const x = listinoOf(v); return typeof x === 'number' ? x : null; };
     const euro = n => new Intl.NumberFormat(o.lingua === 'en' ? 'en-GB' : 'it-IT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0, useGrouping: 'always' }).format(n);
     const baseP = () => S.periodsFor(st, null, o.tariff);
-    const periodoTxt = () => {
+    const periodoTxt = () => nP() > 1 ? ogniP(() => periodoTxt1()).filter(Boolean).join(o.lingua === 'en' ? ' or ' : ' oppure ') : periodoTxt1();
+    const periodoTxt1 = () => {
       const sel = ville().filter(v => o.ville.includes(v.id)); const ps = sel.map(perOf).filter(Boolean);
       const same = ps.length && ps.every(p => p.from === ps[0].from && p.to === ps[0].to);
       const p = same ? ps[0] : baseP()[o.idx]; if (!p) return '';
@@ -195,7 +207,7 @@
       if (!o.ville.length) { el.innerHTML = '<p class="note">Scegli almeno una villa per vedere l\'anteprima.</p>'; return; }
       try { el.innerHTML = await htmlMail(); } catch (err) { console.warn('anteprima', err); } }, 150); };
     const oggettoMail = () => (o.oggettoMod && String(o.oggetto || '').trim()) ? o.oggetto.trim() : L().oggetto(periodoTxt());
-    const save = () => { saveUI(); schedPrev(); };
+    const save = () => { syncP(); saveUI(); schedPrev(); };
 
     main.innerHTML = `<div class="page"><div class="wrap off-page">
       <div class="head"><div><h1>Offerte</h1><div class="sub">Scegli il periodo e le ville: prepari un documento Word o una mail per il cliente, con foto, informazioni e prezzo</div></div>
@@ -205,6 +217,7 @@
       <div id="off-contatti" ${o.tab === 'contatti' ? '' : 'hidden'}></div>
       <div id="off-editor" ${['storico', 'contatti'].includes(o.tab) ? 'hidden' : ''}>
       <section class="card"><h2>1 · Periodo</h2>
+        <div class="off-ptabs" id="off-ptabs"></div>
         <div class="seg off-tar" id="off-tar">${S.TARIFFE.map(t => `<button type="button" data-t="${t.key}" class="${o.tariff === t.key ? 'on' : ''}">${t.label}</button>`).join('')}</div>
         <div class="off-pernav"><button type="button" class="btn" id="off-prev" aria-label="Periodo precedente">‹</button><div class="off-persel" id="off-persel"></div><button type="button" class="btn" id="off-next" aria-label="Periodo successivo">›</button></div>
         <div class="off-cal" id="off-cal"></div>
@@ -282,7 +295,13 @@
     // periodi della tariffa (date del giorno di cambio predefinito)
     const iso = t => new Date(t).toISOString().slice(0, 10);
     const MESI = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'];
+    const pLab = q => { const p = S.periodsFor(st, null, q.tariff)[q.idx], t = (S.TARIFFE.find(x => x.key === q.tariff) || {}).label || ''; return p ? `${t} · ${S.dm(p.from)} → ${S.dm(p.to)}` : t; };
+    const drawTabs = () => { const el = $('#off-ptabs'); if (!el) return; syncP();
+      el.innerHTML = nP() < 2 ? `<button type="button" class="btn small" data-padd title="Proponi la stessa offerta anche per un altro periodo: il cliente ne sceglie uno">+ Aggiungi un periodo alternativo</button>`
+        : `<div class="seg off-pseg">${o.periodi.map((q, i) => `<button type="button" data-psel="${i}" class="${i === o.pAtt ? 'on' : ''}"><b>Periodo ${i + 1}</b><small>${esc(pLab(q))}</small><span class="off-pdel" data-pdel="${i}" title="Togli questo periodo" role="button" aria-label="Togli il periodo ${i + 1}">✕</span></button>`).join('')}</div><button type="button" class="btn small" data-padd>+ Periodo</button><small class="note">Periodi alternativi: il cliente ne sceglie uno. Si modifica quello evidenziato.</small>`; };
+    const ridisegnaTutto = () => { $$('#off-tar button').forEach(x => x.classList.toggle('on', x.dataset.t === o.tariff)); drawPer(); drawList(); drawSrv(); drawRiep(); drawTexts(); save(); };
     const drawPer = () => {
+      drawTabs();
       const ps = baseP(); if (o.idx >= ps.length) o.idx = 0;
       const p = ps[o.idx];
       $('#off-persel').innerHTML = p ? `<b>${esc(o.tariff === 'settimanale' ? 'Settimana ' + (o.idx + 1) : p.label)}</b><span>${esc(S.dm(p.from) + ' → ' + S.dm(p.to))}</span>` : '<span class="note">Nessun periodo</span>';
@@ -322,8 +341,8 @@
       $('#off-list').innerHTML = list.length ? list.map(({ v, s, p, pr }) => {
         const on = o.ville.includes(v.id);
         return `<div class="off-item${on ? ' on' : ''}${s !== 'libera' ? ' busy' : ''}" data-v="${esc(v.id)}">
-          <label class="off-pick"><input type="checkbox" data-pick="${esc(v.id)}" ${on ? 'checked' : ''} ${s === 'nd' ? 'disabled' : ''}>
-            <span><b>${esc(v.name)}</b><small>${esc(v.location || '')}${p ? ' · ' + S.dm(p.from) + ' → ' + S.dm(p.to) : ''}</small></span></label>
+          <label class="off-pick"><input type="checkbox" data-pick="${esc(v.id)}" ${on ? 'checked' : ''} ${s === 'nd' && (nP() < 2 || ogniP(() => stato(v)).every(z => z === 'nd')) ? 'disabled' : ''}>
+            <span><b>${esc(v.name)}</b><small>${esc(v.location || '')}${p ? ' · ' + S.dm(p.from) + ' → ' + S.dm(p.to) : ''}</small>${nP() > 1 ? `<small class="off-pst">${ogniP(i => { const s2 = stato(v); return `<em class="st-${s2}">P${i + 1} ${s2 === 'libera' ? 'libera' : s2 === 'occupata' ? 'occupata' : 'ND'}</em>`; }).join(' ')}</small>` : ''}</span></label>
           <span class="off-st st-${s}">${s === 'libera' ? 'Libera' : s === 'occupata' ? 'Occupata' : 'ND'}</span>
           <span class="off-list-pr">${typeof pr === 'number' ? S.money(pr) : pr === 'ND' ? 'ND' : 'Senza listino'}</span>
           ${on ? `<label class="off-price"><span>Prezzo in offerta €</span><input data-price="${esc(v.id)}" inputmode="numeric" value="${esc(o.prezzi[v.id] !== undefined ? o.prezzi[v.id] : typeof pr === 'number' ? String(pr) : '')}" placeholder="su richiesta"></label>
@@ -365,14 +384,15 @@
         return `<div class="off-ore-f"><b>${esc(f.it)}</b><small class="note">${f.da > 1 ? 'da ' + f.da + ' ' + cosa : 'sempre'}</small><span><input data-ofv="${esc(k)}|${esc(f.id)}" inputmode="decimal" value="${esc(z.vendita != null ? String(z.vendita) : '')}" placeholder="${esc(f2(f.vendita))}"> €/h</span><span><input data-ofo="${esc(k)}|${esc(f.id)}" inputmode="decimal" value="${esc(z.ore != null ? String(z.ore) : '')}" placeholder="${esc(f2(f.ore))}"> ${hl}</span></div>`; }).join('') : ''}</div></td></tr>`; };
     const drawRiep = () => {
       const vv = scelte();
-      $('#off-riep').innerHTML = vv.length ? vv.map(v => { const pr = prezzoDi(v), et = extraTot(v), inc = srvInclVilla(v), ag = srvAparte(v), li = listinoOf(v);
+      $('#off-riep').innerHTML = vv.length ? vv.map(v => ogniP(pi => { const pr = prezzoDi(v), et = extraTot(v), inc = srvInclVilla(v), ag = srvAparte(v), li = listinoOf(v);
         const affIn = `<input class="off-rp" data-rp="${esc(v.id)}" inputmode="numeric" value="${esc(o.prezzi[v.id] !== undefined ? o.prezzi[v.id] : typeof li === 'number' ? String(li) : '')}" placeholder="su richiesta">${typeof li === 'number' && pr !== null && pr !== li ? `<small class="note off-mod">listino ${esc(S.money(li))}</small>` : ''}`;
         const srvIn = ag.length ? ag.map(x => { const b0 = prezzoSrvBase(v, x.key), cur = (o.srvVilla[v.id] || {})[x.key]; const val0 = cur !== undefined ? cur : typeof x.eur === 'number' ? String(x.eur) : '';
           return `<label class="off-rs-l"><span>${esc(x.label)}</span><input class="off-rs" data-rs="${esc(v.id)}|${esc(x.key)}" inputmode="numeric" value="${esc(val0)}" placeholder="—">${typeof b0 === 'number' && typeof x.eur === 'number' && x.eur !== b0 ? `<small class="note off-mod">scheda ${esc(S.money(b0))}</small>` : ''}</label>`; }).join('') : '<span class="note">—</span>';
         // valore di vendita dei servizi inclusi (scheda villa o Impostazioni, o il prezzo scritto nell'offerta): solo da vedere, non entra nel totale
         const incV = inc.map(x => ({ x, eur: prezzoSrv(v, x.key), prop: S.caricoDef(st, v, x.key) === 'proprietario', om: S.caricoDef(st, v, x.key) === 'esmeralda' })), incT = incV.reduce((t, y) => t + (typeof y.eur === 'number' ? y.eur : 0), 0);
         const incIn = incV.length ? incV.map(y => `<div class="off-ri-l"><span>${esc(y.x.label)}${y.prop ? ' <small class="note">· proprietario</small>' : y.om ? ' <small class="note">· omaggio</small>' : ''}</span><b>${typeof y.eur === 'number' ? esc(S.money(y.eur)) : '—'}</b></div>`).join('') + (incT ? `<small class="note">valore ${esc(S.money(incT))} · non sommato</small>` : '') : '<span class="note">—</span>';
-        return `<tr data-rv="${esc(v.id)}"><td><b>${esc(v.name)}</b>${incRighe(v, inc)}</td><td>${affIn}</td><td class="off-ri-c">${incIn}</td><td class="off-rs-c">${srvIn}<small class="note" data-rt>${et ? 'totale servizi ' + esc(S.money(et)) : ''}</small></td><td><b data-rtot>${pr === null ? '—' : S.money(pr + et)}</b></td></tr>`; }).join('')
+        const pp = perOf(v), s2 = stato(v), pTag = nP() > 1 ? `<small class="off-riep-p">Periodo ${pi + 1}${pp ? ' · ' + esc(S.dm(pp.from) + ' → ' + S.dm(pp.to)) : ''}${s2 !== 'libera' ? ` · <b class="st-${s2}">${s2 === 'occupata' ? 'occupata, non va nella mail' : 'ND'}</b>` : ''}</small>` : '';
+        return `<tr data-rv="${esc(v.id)}" data-rpi="${pi}"${nP() > 1 && pi ? ' class="off-riep-alt"' : ''}><td>${nP() > 1 && pi ? '' : `<b>${esc(v.name)}</b>`}${pTag}${nP() > 1 && pi ? '' : incRighe(v, inc)}</td><td>${affIn}</td><td class="off-ri-c">${incIn}</td><td class="off-rs-c">${srvIn}<small class="note" data-rt>${et ? 'totale servizi ' + esc(S.money(et)) : ''}</small></td><td><b data-rtot>${pr === null ? '—' : S.money(pr + et)}</b></td></tr>`; }).join('')).join('')
         : '<tr><td colspan="5" class="note">Scegli le ville al punto 2.</td></tr>';
     };
     const drawTexts = () => {
@@ -415,6 +435,14 @@
     }
     drawPer(); drawList(); drawTexts();
 
+    $('#off-ptabs').addEventListener('click', e => {
+      const del = e.target.closest('[data-pdel]'), sel = e.target.closest('[data-psel]'), add = e.target.closest('[data-padd]');
+      if (del) { e.stopPropagation(); syncP(); const i = Number(del.dataset.pdel); o.periodi.splice(i, 1); if (o.pAtt >= o.periodi.length || o.pAtt > i) o.pAtt = Math.max(0, o.pAtt - (o.pAtt >= i ? 1 : 0));
+        if (o.pAtt >= o.periodi.length) o.pAtt = o.periodi.length - 1; caricaP(o.periodi[o.pAtt]); if (o.periodi.length < 2) { delete o.periodi; o.pAtt = 0; } ridisegnaTutto(); return; }
+      if (sel) { const i = Number(sel.dataset.psel); if (i === o.pAtt) return; syncP(); o.pAtt = i; caricaP(o.periodi[i]); ridisegnaTutto(); return; }
+      if (add) { if (nP() < 2) { o.periodi = [{ tariff: o.tariff, idx: o.idx, prezzi: o.prezzi, srvVilla: o.srvVilla }]; o.pAtt = 0; } syncP();
+        const ps = baseP(); o.periodi.push({ tariff: o.tariff, idx: Math.min(o.idx + 1, Math.max(0, ps.length - 1)), prezzi: {}, srvVilla: {} }); o.pAtt = o.periodi.length - 1; caricaP(o.periodi[o.pAtt]); ridisegnaTutto(); }
+    });
     $('#off-tar').addEventListener('click', e => { const b = e.target.closest('[data-t]'); if (!b) return; o.tariff = b.dataset.t; o.idx = 0; o.prezzi = {}; o.srvVilla = {}; $$('#off-tar button').forEach(x => x.classList.toggle('on', x === b)); drawPer(); drawList(); drawTexts(); save(); });
     $('#off-cal').addEventListener('click', e => { const b = e.target.closest('[data-i]'); if (b) setIdx(Number(b.dataset.i)); });
     $('#off-prev').addEventListener('click', () => setIdx(o.idx - 1));
@@ -475,12 +503,14 @@
       if (c.checked) { const sel = incSel().slice(); S.inclusioniDi(st).filter(i => i.servizio === k).forEach(i => { if (!sel.includes(i.id)) sel.push(i.id); }); o.incSel = sel; } drawSrv(); drawTexts(); save(); });
     $('#off-srv').addEventListener('click', e => { const bt = e.target.closest('[data-smode] button'); if (!bt || bt.disabled) return; const k = bt.closest('[data-ok]').dataset.ok; const cur = Object.assign({}, o.srv[k]); delete cur.incluso; o.srv[k] = Object.assign(cur, { modo: bt.dataset.m }); drawSrv(); drawTexts(); save(); });
     // riepilogo prezzi per villa: affitto e servizi modificabili qui (l'affitto è lo stesso campo del punto 2)
-    const totRiga = vid => { const v = scelte().find(z => z.id === vid), tr = $(`#off-riep tr[data-rv="${CSS.escape(vid)}"]`); if (!v || !tr) return;
+    const totRiga = vid => { const v = scelte().find(z => z.id === vid), tr = $(`#off-riep tr[data-rv="${CSS.escape(vid)}"][data-rpi="${o.pAtt}"]`); if (!v || !tr) return;
       const pr = prezzoDi(v), et = extraTot(v); tr.querySelector('[data-rtot]').textContent = pr === null ? '—' : S.money(pr + et); tr.querySelector('[data-rt]').textContent = et ? 'totale servizi ' + S.money(et) : ''; };
     $('#off-riep').addEventListener('input', e => { const a = e.target.closest('[data-rp]'), r = e.target.closest('[data-rs]'); if (!a && !r) return;
-      if (a) { o.prezzi[a.dataset.rp] = a.value; const li = $(`#off-list [data-price="${CSS.escape(a.dataset.rp)}"]`); if (li) li.value = a.value; totRiga(a.dataset.rp); }
+      const pi = Number((e.target.closest('[data-rpi]') || {}).dataset ? e.target.closest('[data-rpi]').dataset.rpi : o.pAtt) || 0; const attivo = pi === o.pAtt;
+      conP(pi, () => {
+      if (a) { o.prezzi[a.dataset.rp] = a.value; const li = attivo && $(`#off-list [data-price="${CSS.escape(a.dataset.rp)}"]`); if (li) li.value = a.value; totRiga(a.dataset.rp); }
       else { const [vid, k] = r.dataset.rs.split('|'); o.srvVilla[vid] = Object.assign({}, o.srvVilla[vid]); if (r.value.trim() === '') delete o.srvVilla[vid][k]; else o.srvVilla[vid][k] = r.value; totRiga(vid); }
-      save(); });
+      }); save(); });
     $('#off-srv').addEventListener('input', e => { if (!e.target.matches('[data-sprz]')) return; const k = e.target.closest('[data-ok]').dataset.ok; o.srv[k] = Object.assign({}, o.srv[k], { prezzo: e.target.value }); drawRiep(); save(); });
     $('#off-incl').addEventListener('change', e => { const c = e.target.closest('[data-inc]'); if (!c) return; const sel = incSel().filter(x => x !== c.dataset.inc); if (c.checked) sel.push(c.dataset.inc); o.incSel = sel; save(); });
     $('#off-incx').addEventListener('input', e => { o.incExtra = e.target.value; save(); });
@@ -535,7 +565,7 @@
           const v = sel[i]; msg(`<p class="note">Preparo ${esc(v.name)} (${i + 1} di ${sel.length})…</p>`);
           const fs = await fotoDi(v, 1400, 0.8);
           B.push({ pageBreak: true }, { h1: v.name });
-          const p = perOf(v); if (p) B.push({ p: rangeTxt(p, o.lingua), small: true });
+          const p = perOf(v); if (p && nP() < 2) B.push({ p: rangeTxt(p, o.lingua), small: true });
           // copertina grande, poi le altre foto tre per riga: così ogni villa sta in una pagina
           if (fs[0]) B.push({ img: { bytes: X.dataUrlBytes(fs[0].url).bytes, w: fs[0].w, h: fs[0].h, width: 7800 } });
           const rest = fs.slice(1); for (let k = 0; k < rest.length; k += 3) { const row = rest.slice(k, k + 3).map(f => ({ bytes: X.dataUrlBytes(f.url).bytes, w: f.w, h: f.h })); while (row.length < 3) row.push(null); B.push({ imgs: row }); }
@@ -543,7 +573,8 @@
           if (vis(v, 'descrizione')) B.push({ p: String(v.descrizione) });
           if (vis(v, 'servizi')) B.push({ h2: l.servizi }, { p: String(v.servizi) });
           if (vis(v, 'linkSito')) B.push({ p: `${l.sito}: ${v.linkSito}`, small: true });
-          const pr = prezzoTot(v); B.push({ price: [l.prezzo, pr === null ? l.richiesta : euro(pr)] });
+          if (nP() > 1) { const rv = righeVille().find(z => z.v.id === v.id); rv.per.forEach(q => B.push({ price: [q.lab, q.pr === null ? l.richiesta : euro(q.pr)] })); }
+          else { const pr = prezzoTot(v); B.push({ price: [l.prezzo, pr === null ? l.richiesta : euro(pr)] }); }
           linkWb(v).forEach(u => B.push({ p: `${l.webBro}: ${u}`, small: true }));
           const iv = inclSoloVilla(v); if (iv.length) B.push({ p: `${l.inclVilla}: ${iv.map(x => testiSrv(x.key, v).join(', ')).join('; ')}`, small: true });
           if ((o.note[v.id] || '').trim()) B.push({ p: o.note[v.id].trim(), small: true });
@@ -561,19 +592,24 @@
     const eurT = n => new Intl.NumberFormat('it-IT', { maximumFractionDigits: 0, useGrouping: 'always' }).format(n) + ' €';
     function righeVille() {
       const l = L();
-      const tar = (S.TARIFFE.find(t => t.key === o.tariff) || {}).label || '';
-      const tarEn = { settimanale: 'Weekly', bisettimanale: 'BiWeekly', mensile: 'Monthly', bimensile: 'Two-month' }[o.tariff] || tar;
-      const base = baseP()[o.idx];
-      const mese = base ? new Date(S.parse(base.from)).toLocaleDateString(o.lingua === 'en' ? 'en-GB' : 'it-IT', { month: 'long', timeZone: 'UTC' }) : '';
-      return scelte().map(v => ({ v, pr: prezzoTot(v) })).sort((a, b) => (b.pr === null ? -1 : b.pr) - (a.pr === null ? -1 : a.pr)).map(({ v, pr }) => {
-        const p = perOf(v); const diverso = p && base && (p.from !== base.from || p.to !== base.to);
-        const lab = (o.lingua === 'en' ? `${mese ? mese[0].toUpperCase() + mese.slice(1) + ' ' : ''}${tarEn} ${l.tariffa}` : `${l.tariffa} ${tar.toLowerCase()}${mese ? ' ' + mese : ''}`) + (diverso ? ' ' + rangeTxt(p, o.lingua) : '');
+      // etichetta del prezzo per il periodo attivo (con più periodi sempre con le date)
+      const labDi = v => { const tar = (S.TARIFFE.find(t => t.key === o.tariff) || {}).label || '';
+        const tarEn = { settimanale: 'Weekly', bisettimanale: 'BiWeekly', mensile: 'Monthly', bimensile: 'Two-month' }[o.tariff] || tar;
+        const base = baseP()[o.idx], mese = base ? new Date(S.parse(base.from)).toLocaleDateString(o.lingua === 'en' ? 'en-GB' : 'it-IT', { month: 'long', timeZone: 'UTC' }) : '';
+        const p = perOf(v), diverso = p && (nP() > 1 || (base && (p.from !== base.from || p.to !== base.to)));
+        return (o.lingua === 'en' ? `${mese ? mese[0].toUpperCase() + mese.slice(1) + ' ' : ''}${tarEn} ${l.tariffa}` : `${l.tariffa} ${tar.toLowerCase()}${mese ? ' ' + mese : ''}`) + (diverso ? ' ' + rangeTxt(p, o.lingua) : ''); };
+      return scelte().map(v => {
+        // un prezzo per ogni periodo; con più periodi solo quelli in cui la villa è libera
+        const tutti = ogniP(i => { const pr = prezzoTot(v); return { i, disp: stato(v) === 'libera', p: perOf(v), pr, lab: labDi(v), prTxt: pr === null ? l.richiesta : eurT(pr) }; });
+        const per = nP() > 1 ? tutti.filter(q => q.disp) : tutti, f = per[0] || tutti[0];
+        return { v, per: per.length ? per : [f], p: f.p, pr: f.pr, lab: f.lab, prTxt: f.prTxt }; })
+        .sort((a, b) => (b.pr === null ? -1 : b.pr) - (a.pr === null ? -1 : a.pr)).map(z => { const v = z.v;
         const iv = inclSoloVilla(v);
-        return { v, p, pr, lab, prTxt: pr === null ? l.richiesta : eurT(pr), nota: (o.note[v.id] || '').trim(),
+        return Object.assign(z, { nota: (o.note[v.id] || '').trim(),
           titolo: 'Villa ' + v.name.replace(/^villa\s+/i, '').replace(/\b\w+/g, w => w[0].toUpperCase() + w.slice(1).toLowerCase()),
           codice: vis(v, 'codice') ? String(v.codice).trim() : '', sito: vis(v, 'linkSito') ? String(v.linkSito).trim() : '',
           video: vis(v, 'vimeo') ? String(v.vimeo).trim() : vis(v, 'youtube') ? String(v.youtube).trim() : '', psw: vis(v, 'psw') ? String(v.psw).trim() : '',
-          wb: linkWb(v), incl: iv.length ? iv.map(x => testiSrv(x.key, v).join(', ')).join('; ') : '' };
+          wb: linkWb(v), incl: iv.length ? iv.map(x => testiSrv(x.key, v).join(', ')).join('; ') : '' });
       });
     }
     // mail: HTML con stili in linea e foto incorporate, copiato negli appunti per incollarlo in Gmail
@@ -591,7 +627,7 @@
         const titolo = esc(r.titolo);
         h += P(`<b${acc !== '#000000' ? ` style="color:${acc};font-size:${z.size + 2}px"` : ''}>${r.sito ? link(r.sito, titolo) : titolo}</b>${r.codice ? ` <b style="${acc !== '#000000' ? 'font-weight:normal;font-size:' + (z.size - 2) + 'px;letter-spacing:1px;color:' + z.testo : ''}">${esc(r.codice)}</b>` : ''}`);
         if (r.video) h += P(`${esc(l.video)} ${link(r.video, esc(l.qui))}${r.psw ? ' (psw: ' + esc(r.psw) + ')' : ''}`);
-        h += P(`<b>${esc(r.lab)}:</b> ${r.pr === null ? esc(l.richiesta) : eurT(r.pr)}${r.nota ? ' - ' + esc(r.nota) + ' -' : ''}`);
+        r.per.forEach((q, j) => { h += P(`<b>${esc(q.lab)}:</b> ${q.pr === null ? esc(l.richiesta) : eurT(q.pr)}${!j && r.nota ? ' - ' + esc(r.nota) + ' -' : ''}`); });
         r.wb.forEach(u => { h += P(`${esc(l.webBro)}: ${link(u, esc(l.qui))}`); });
         if (r.incl) h += P(`${esc(l.inclVilla)}: ${esc(r.incl)}`);
         h += sep ? HR : BR;
@@ -615,7 +651,7 @@
         r0.push(B(r.titolo) + (r.codice ? ' (' + r.codice + ')' : ''));
         if (r.sito) r0.push(r.sito);
         if (r.video) r0.push(`${l.video}: ${r.video}${r.psw ? ' (psw: ' + r.psw + ')' : ''}`);
-        r0.push(`${r.lab}: ${B(r.prTxt)}${r.nota ? ' – ' + r.nota : ''}`);
+        r.per.forEach((q, j) => r0.push(`${q.lab}: ${B(q.prTxt)}${!j && r.nota ? ' – ' + r.nota : ''}`));
         r.wb.forEach(u => r0.push(`${l.webBro}: ${u}`));
         if (r.incl) r0.push(`${l.inclVilla}: ${r.incl}`);
         r0.push('');
@@ -690,7 +726,7 @@
       for (const r of R) {
         if (y + 56 > FONDO) await nuova();
         g.font = font(27, true); g.fillStyle = NAVY; g.fillText(r.titolo, M, y + 34);
-        g.font = font(27, true); g.textAlign = 'right'; g.fillText(r.prTxt, W - M, y + 34); g.textAlign = 'left';
+        g.font = font(27, true); g.textAlign = 'right'; g.fillText(r.per.map(q => q.prTxt).join(' / '), W - M, y + 34); g.textAlign = 'left';
         g.strokeStyle = '#e4dccd'; g.lineWidth = 1; g.beginPath(); g.moveTo(M, y + 52); g.lineTo(W - M, y + 52); g.stroke(); y += 60;
       }
 
@@ -699,7 +735,7 @@
         const r = R[i], v = r.v; passo && passo(`Preparo ${v.name} (${i + 1} di ${R.length})…`);
         await nuova();
         await testo(r.titolo, { px: 46, b: true, col: NAVY, link: r.sito || null, dopo: 0 });
-        const sub = [r.codice, r.p ? rangeTxt(r.p, o.lingua) : ''].filter(Boolean).join('  ·  ');
+        const sub = [r.codice, r.p && nP() < 2 ? rangeTxt(r.p, o.lingua) : ''].filter(Boolean).join('  ·  ');
         if (sub) await testo(sub, { px: 22, col: GREY, dopo: 16 }); else y += 16;
         const fs = await fotoDi(v, 1400, 0.82); const ims = (await Promise.all(fs.slice(0, 4).map(f => caricaImg(f.url)))).filter(Boolean);
         if (ims[0]) { const h0 = ims.length > 1 ? 560 : 700; copri(ims[0], M, y, CW, h0); y += h0 + 12; }
@@ -713,10 +749,10 @@
             g.strokeStyle = '#eee6d8'; g.lineWidth = 1; g.beginPath(); g.moveTo(M, y + rh - 2); g.lineTo(W - M, y + rh - 2); g.stroke(); y += rh; }
           y += 20; }
         // riquadro del prezzo
-        if (y + 110 > FONDO) await nuova();
-        linea(y); g.font = font(23, true); g.fillStyle = GOLD; g.fillText(r.lab.toUpperCase().slice(0, 60), M, y + 62);
-        g.font = font(40, true); g.fillStyle = NAVY; g.textAlign = 'right'; g.fillText(r.prTxt, W - M, y + 66); g.textAlign = 'left';
-        linea(y + 96); y += 116;
+        for (const q of r.per) { if (y + 110 > FONDO) await nuova();
+          linea(y); g.font = font(nP() > 1 ? 19 : 23, true); g.fillStyle = GOLD; g.fillText(q.lab.toUpperCase().slice(0, 70), M, y + 62);
+          g.font = font(40, true); g.fillStyle = NAVY; g.textAlign = 'right'; g.fillText(q.prTxt, W - M, y + 66); g.textAlign = 'left';
+          linea(y + 96); y += 116; }
         if (r.nota) await testo(r.nota, { px: 23, it: true, dopo: 8 });
         if (r.incl) await riga(l.inclVilla, r.incl);
         if (r.video) await riga(l.video, l.qui, r.video);
@@ -742,19 +778,21 @@
     }
     // ---- storico delle offerte ----
     let storico = [], aperte = {}, cercaSt = '', cercaCt = '', fEsito = '', fTipo = '';
-    async function salvaStorico(tipo, html) {
-      if (!store.saveOfferta) return;
-      try {
-        html = html || await htmlMail();
-        const stato = JSON.parse(JSON.stringify(o)); ['tab', 'q', 'f', 'fOpen', 'persOpen', 'ultima'].forEach(k => delete stato[k]);
-        const rec = { cliente: o.cliente.trim(), email: String(o.email || '').trim().toLowerCase(), telefono: String(o.tel || '').trim(), agenziaId: o.agenziaId || null, agenzia: (() => { const a = (st.agenzie || []).find(x => x && x.id === o.agenziaId); return a ? a.nome : null; })(), lingua: o.lingua, oggetto: oggettoMail(), periodo: periodoTxt(), tariffa: o.tariff,
-          ville: scelte().map(v => { const li = listinoOf(v);
-            return { id: v.id, name: v.name, prezzo: prezzoTot(v), affitto: prezzoDi(v), listino: typeof li === 'number' ? li : null,
+    // ville per lo storico (periodo attivo): prezzo, affitto, listino, voci e servizi per Prenota
+    const villeRec = () => scelte().map(v => { const disp = stato(v) === 'libera'; const li = listinoOf(v);
+            return { id: v.id, name: v.name, disp, prezzo: prezzoTot(v), affitto: prezzoDi(v), listino: typeof li === 'number' ? li : null,
               voci: srvList().filter(x => x.voce && haServ(v, x.key)).map(x => x.label),
               // servizi dell'offerta per la prenotazione (Prenota): carico e prezzo di vendita (solo a carico del cliente)
               srvPren: srvList().filter(x => !x.voce && haServ(v, x.key)).map(x => { const c = S.caricoDef(st, v, x.key), pr = prezzoSrv(v, x.key);
                 return { k: x.key, carico: c, vendita: c === 'parte' && typeof pr === 'number' ? pr : null, incluso: inclusoPer(v, x.key) }; }),
-              servizi: srvAparte(v).map(x => { const b0 = prezzoSrvBase(v, x.key); return { k: x.key, label: x.label, prezzo: typeof x.eur === 'number' ? x.eur : null, base: typeof b0 === 'number' ? b0 : null }; }) }; }), html, stato, creatoDa: String(store.user || '').toLowerCase(), quando: new Date().toISOString() };
+              servizi: srvAparte(v).map(x => { const b0 = prezzoSrvBase(v, x.key); return { k: x.key, label: x.label, prezzo: typeof x.eur === 'number' ? x.eur : null, base: typeof b0 === 'number' ? b0 : null }; }) }; });
+    async function salvaStorico(tipo, html) {
+      if (!store.saveOfferta) return;
+      try {
+        html = html || await htmlMail();
+        syncP(); const stato = JSON.parse(JSON.stringify(o)); ['tab', 'q', 'f', 'fOpen', 'persOpen', 'ultima'].forEach(k => delete stato[k]);
+        const rec = { cliente: o.cliente.trim(), email: String(o.email || '').trim().toLowerCase(), telefono: String(o.tel || '').trim(), agenziaId: o.agenziaId || null, agenzia: (() => { const a = (st.agenzie || []).find(x => x && x.id === o.agenziaId); return a ? a.nome : null; })(), lingua: o.lingua, oggetto: oggettoMail(), periodo: periodoTxt(), tariffa: o.tariff,
+          ville: conP(0, villeRec), ...(nP() > 1 ? { periodi: ogniP(() => ({ tariffa: o.tariff, idx: o.idx, periodo: periodoTxt1(), ville: villeRec() })) } : {}), html, stato, creatoDa: String(store.user || '').toLowerCase(), quando: new Date().toISOString() };
         // stessa offerta salvata poco fa (stesso testo): aggiorno quella invece di crearne un'altra
         const u = o.ultima; const firma = rec.html.length + '|' + rec.cliente + '|' + rec.email + '|' + rec.telefono + '|' + rec.oggetto + '|' + rec.ville.map(v => v.id + v.prezzo).join(',');
         if (u && u.firma === firma && storico.some(x => x.id === u.id)) { const x = storico.find(y => y.id === u.id); rec.id = u.id; rec.tipi = Array.from(new Set((x.tipi || []).concat(tipo))); rec.quando = x.quando; ['esito', 'esitoIl', 'tipoContatto'].forEach(k => { if (x[k] !== undefined) rec[k] = x[k]; }); }
@@ -851,7 +889,9 @@
        Salvata, l'offerta ricorda la prenotazione (prenotazioni: [id]) e, se lo stato è confermato, diventa "Presa". */
     function daOffertaAPrenotazione(x) {
       const tar = (x.stato && x.stato.tariff) || x.tariffa || o.tariff, idx = x.stato && typeof x.stato.idx === 'number' ? x.stato.idx : null;
-      const vl = (x.ville || []).map(r => { const v = data().villas.find(z => z.id === r.id); const p = v && idx != null ? S.periodsFor(st, v, tar)[idx] : null; return { r, v, p }; }).filter(z => z.v);
+      const multi = Array.isArray(x.periodi) && x.periodi.length > 1;
+      const vl = multi ? x.periodi.flatMap((q, pi) => (q.ville || []).map(r => { const v = data().villas.find(z => z.id === r.id); const p = v && typeof q.idx === 'number' ? S.periodsFor(st, v, q.tariffa)[q.idx] : null; return { r, v, p, pi, key: pi + '|' + r.id, occ: r.disp === false }; })).filter(z => z.v)
+        : (x.ville || []).map(r => { const v = data().villas.find(z => z.id === r.id); const p = v && idx != null ? S.periodsFor(st, v, tar)[idx] : null; return { r, v, p, pi: 0, key: '0|' + r.id }; }).filter(z => z.v);
       if (!vl.length) { toast('Le ville di questa offerta non ci sono più'); return; }
       const fatte = (x.prenotazioni || []).map(id => data().bookings.find(bk => bk.id === id)).filter(Boolean);
       const stList = (ctx.stati ? ctx.stati() : []).filter(z => z.key !== 'owner');
@@ -860,7 +900,7 @@
         <p class="note">${esc(x.cliente || x.email || x.telefono || 'Cliente')} · ${esc(x.periodo || '')}</p>
         ${fatte.length ? `<div class="warn">Da questa offerta c'è già ${fatte.length === 1 ? 'una prenotazione' : fatte.length + ' prenotazioni'}: ${fatte.map(bk => esc((data().villas.find(v => v.id === bk.villaId) || {}).name || '') + ' · ' + esc(S.dm(bk.from)) + ' → ' + esc(S.dm(bk.to))).join(', ')}.</div>` : ''}
         <section class="dsec sec-date"><h4>Villa</h4><div class="op-ville">
-          ${vl.map((z, i) => `<label class="flag"><input type="radio" name="op-v" value="${esc(z.v.id)}" ${i === 0 ? 'checked' : ''}><span><b>${esc(z.v.name)}</b><small>${z.p ? esc(S.dm(z.p.from)) + ' → ' + esc(S.dm(z.p.to)) : 'date da scegliere'} · ${typeof z.r.prezzo === 'number' ? esc(S.money(z.r.prezzo)) : 'prezzo su richiesta'}</small></span></label>`).join('')}</div></section>
+          ${vl.map((z, i) => `<label class="flag"><input type="radio" name="op-v" value="${esc(z.key)}" ${i === 0 ? 'checked' : ''}><span><b>${esc(z.v.name)}</b><small>${multi ? 'Periodo ' + (z.pi + 1) + ' · ' : ''}${z.p ? esc(S.dm(z.p.from)) + ' → ' + esc(S.dm(z.p.to)) : 'date da scegliere'} · ${typeof z.r.prezzo === 'number' ? esc(S.money(z.r.prezzo)) : 'prezzo su richiesta'}${z.occ ? ' · era occupata' : ''}</small></span></label>`).join('')}</div></section>
         <section class="dsec sec-st"><h4>Stato</h4><div class="seg" id="op-st">${stList.map(z => `<button type="button" data-st="${esc(z.key)}" class="${z.key === 'opzione' ? 'on' : ''}">${esc(z.label)}</button>`).join('')}</div>
           <p class="note">Nella finestra che si apre controlli date, prezzo e servizi prima di salvare. L'affitto è quello dell'offerta senza i servizi; i servizi dell'offerta si spuntano da soli, ognuno con il suo prezzo di vendita (a carico del cliente) o la scritta a carico di Esmeralda / del proprietario.</p></section>
         <div class="foot"><button type="button" class="btn" id="op-no">Annulla</button><button type="submit" class="btn primary">Continua</button></div></form>`;
@@ -868,7 +908,7 @@
       $$('#op-st button', d).forEach(bt => bt.onclick = () => { stato = bt.dataset.st; $$('#op-st button', d).forEach(z => z.classList.toggle('on', z === bt)); });
       $('#op-no').onclick = () => d.close();
       $('#op-form').onsubmit = ev => { ev.preventDefault();
-        const z = vl.find(y => y.v.id === (d.querySelector('[name="op-v"]:checked') || {}).value) || vl[0]; d.close();
+        const z = vl.find(y => y.key === (d.querySelector('[name="op-v"]:checked') || {}).value) || vl[0]; d.close();
         const from = z.p ? z.p.from : S.iso(new Date()), to = z.p ? z.p.to : S.iso(new Date(Date.now() + 7 * 864e5));
         // affitto senza i servizi: totale dell'offerta − prezzi di vendita dei servizi a carico del cliente (a parte o compresi nel listino)
         const sp = Array.isArray(z.r.srvPren) ? z.r.srvPren : null, base = ['pulizia', 'cuoco', 'transfer'];

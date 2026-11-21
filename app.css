@@ -1407,3 +1407,15 @@ dialog.dlg-contr { width: min(980px, calc(100vw - 32px)); }
 #ct-card .card + .card { margin-top: 14px; }
 .off-ospk { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
 .off-ospk input { width: 120px; text-transform: none; letter-spacing: 0; }
+/* offerte: periodi alternativi */
+.off-ptabs { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 12px; }
+.off-pseg button { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 2px; position: relative; padding-right: 28px; text-align: left; }
+.off-pseg button small { font-size: 11px; opacity: .8; letter-spacing: 0; text-transform: none; }
+.off-pdel { position: absolute; top: 4px; right: 6px; font-size: 12px; opacity: .6; cursor: pointer; }
+.off-pdel:hover { opacity: 1; }
+.off-pst { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+.off-pst em { font-style: normal; font-size: 11px; }
+.off-pst .st-libera, .off-riep-p .st-libera { color: var(--ok, #2e7d4f); }
+.off-pst .st-occupata, .off-riep-p .st-occupata { color: var(--err, #b3261e); }
+.off-riep-p { display: block; font-size: 12px; color: var(--muted); }
+#off-riep tr.off-riep-alt td { border-top: 1px dashed var(--line); }
