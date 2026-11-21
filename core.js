@@ -209,11 +209,18 @@
   // prezzo di un servizio: a soggiorno (fisso, fattore 1) o settimanale: la prima settimana a prezzo pieno,
   // ogni settimana successiva × coeff (1 = stesso prezzo, 0,8 = ridotta del 20%); settimane = notti / 7, almeno 1
   // settings.prezziServizi[k] = { incluso, vendita, unita: 'soggiorno'|'settimana', coeff }
-  const srvUnita = (st, k) => { const d = ((st && st.prezziServizi) || {})[k] || {}; const c = Number(d.coeff);
-    return { settimanale: d.unita === 'settimana', coeff: c >= 0 && d.coeff !== null && d.coeff !== undefined && d.coeff !== '' ? c : 1 }; };
+  // unità: 'soggiorno' (una volta), 'settimana' (× settimane, coeff dalla 2ª), 'giorno' (× giorni = notti + 1); il vecchio 'ore' vale come 'giorno' + personale secondo gli ospiti
+  const unitaDi = (st, k) => { const u = (((st && st.prezziServizi) || {})[k] || {}).unita; return u === 'ore' || u === 'giorno' ? 'giorno' : u === 'settimana' ? 'settimana' : 'soggiorno'; };
+  const srvUnita = (st, k) => { const d = ((st && st.prezziServizi) || {})[k] || {}; const c = Number(d.coeff), un = unitaDi(st, k);
+    return { unita: un, settimanale: un === 'settimana', giornaliero: un === 'giorno', coeff: c >= 0 && d.coeff !== null && d.coeff !== undefined && d.coeff !== '' ? c : 1 }; };
   const srvSettimane = notti => Math.max(1, (Number(notti) || 0) / 7);
-  const srvFattore = (st, k, notti) => { const u = srvUnita(st, k); if (!u.settimanale) return 1; return 1 + (srvSettimane(notti) - 1) * u.coeff; };
-  const srvPrezzo = (st, k, base, notti) => typeof base === 'number' ? Math.round(base * srvFattore(st, k, notti)) : null;
+  const srvGiorni = notti => (Number(notti) || 0) + 1;
+  // opz.giorni / opz.settimane: valori scritti nella singola offerta (es. solo weekend, 1 settimana su 2)
+  const srvFattore = (st, k, notti, opz) => { const u = srvUnita(st, k), o = opz || {};
+    if (u.giornaliero) return o.giorni != null && o.giorni !== '' ? Math.max(0, Number(o.giorni) || 0) : srvGiorni(notti);
+    if (u.settimanale) { const sw = o.settimane != null && o.settimane !== '' ? Math.max(0, Number(o.settimane) || 0) : srvSettimane(notti); return sw <= 0 ? 0 : 1 + (sw - 1) * u.coeff; }
+    return 1; };
+  const srvPrezzo = (st, k, base, notti, opz) => typeof base === 'number' ? Math.round(base * srvFattore(st, k, notti, opz)) : null;
   /* Prezzo che cambia secondo la villa (fasce: { da, a, vendita }, acquisto '<k>@f:<da>') (Impostazioni → "Prezzi variabili" del servizio o della voce), prima del fattore settimanale:
      prezziServizi[k].loc = { LOCALITÀ: { vendita } } (es. transfer) → sostituisce il prezzo normale nella località della villa;
      prezziServizi[k].regola = { tipo: 'gruppiOspiti'|'gruppiCamere'|'fasceOspiti'|'fasceCamere', n, fasce: [{ fino, vendita }] }:
@@ -221,11 +228,13 @@
      Ospiti = quelli dell'offerta / prenotazione, se no la capienza della villa (guests); camere = camere della villa (totalBedrooms).
      Acquisto: stessi criteri, importi in meta/servizi_acquisto con chiavi '<k>@loc:<LOCALITÀ>' e '<k>@f:<fino>' (opz.acq = quella mappa). */
   const numCampo = x => { const m = String(x == null ? '' : x).match(/\d+/g); return m ? m.map(Number).reduce((a, b) => a + b, 0) : 0; };
-  const REGOLE = [['', 'Prezzo fisso'], ['gruppiOspiti', 'A gruppi di ospiti'], ['gruppiCamere', 'A gruppi di camere'], ['fasceOspiti', 'A fasce di ospiti'], ['fasceCamere', 'A fasce di camere']];
+  const REGOLE = [['', 'Prezzo fisso'], ['gruppiOspiti', 'A gruppi di ospiti'], ['gruppiCamere', 'A gruppi di camere'], ['fasceOspiti', 'A fasce di ospiti'], ['fasceCamere', 'A fasce di camere'], ['personaleOspiti', 'Personale a ore secondo gli ospiti'], ['personaleCamere', 'Personale a ore secondo le camere']];
+  const REG_PERS = ['personaleOspiti', 'personaleCamere'];
+  const regolaDi = (st, k) => { const d = ((st && st.prezziServizi) || {})[k] || {}; if (d.regola && REG_PERS.includes(d.regola.tipo)) return d.regola; if (d.unita === 'ore') return { tipo: 'personaleOspiti' }; return d.regola && d.regola.tipo ? d.regola : null; };
   const srvAdatta = (st, k, base, opz) => { opz = opz || {}; const d = ((st && st.prezziServizi) || {})[k] || {}, v = opz.villa || null; let p = base;
     const loc = v && v.location ? String(v.location).trim().toUpperCase() : '';
     if (loc) { const lv = opz.acq ? opz.acq[k + '@loc:' + loc] : ((d.loc || {})[loc] || {}).vendita; if (typeof lv === 'number') p = lv; }
-    const r = d.regola; if (!r || !r.tipo) return p;
+    const r = d.regola; if (!r || !r.tipo || REG_PERS.includes(r.tipo)) return p;
     const q = /Ospiti$/.test(r.tipo) ? (Number(opz.ospiti) > 0 ? Number(opz.ospiti) : numCampo(v && v.guests)) : numCampo(v && v.totalBedrooms);
     if (!q) return p;
     if (r.tipo.indexOf('gruppi') === 0) { const n = Number(r.n) || 0; return n > 0 && typeof p === 'number' ? p * Math.ceil(q / n) : p; }
@@ -238,21 +247,24 @@
      una figura entra quando gli ospiti sono almeno "da" (cuoco 1, butler 7, extra waiter e kitchen aid 13). Acquisto €/h di ogni figura nella parte
      protetta: chiave '<k>@h:<id>'. Totale = Σ figure attive (€/h × ore × giorni), giorni = notti del soggiorno. opz.over = { id: { vendita, ore } }
      = valori cambiati nella singola offerta; opz.giorni = giorni effettivi se il servizio non è tutti i giorni (es. solo weekend). */
-  const isOre = (st, k) => ((((st && st.prezziServizi) || {})[k]) || {}).unita === 'ore';
+  const isOre = (st, k) => { const r = regolaDi(st, k); return !!(r && REG_PERS.includes(r.tipo)); };
+  const perCamere = (st, k) => { const r = regolaDi(st, k); return !!(r && r.tipo === 'personaleCamere'); };
   const FIG_DEF = [{ id: 'f1', it: 'Cuoco', en: 'Chef', da: 1, vendita: null, ore: 6 }];
   const figureDi = (st, k) => { const f = ((((st && st.prezziServizi) || {})[k]) || {}).figure; return Array.isArray(f) && f.length ? f : FIG_DEF; };
   const nOr = (x, y) => { const z = typeof x === 'string' ? Number(x.replace(/\./g, '').replace(',', '.')) : x; return typeof z === 'number' && isFinite(z) && String(x).trim() !== '' ? z : y; };
   const oreCalc = (st, k, notti, opz) => { opz = opz || {}; const v = opz.villa || null, over = opz.over || {};
-    const osp = (Number(opz.ospiti) > 0 ? Number(opz.ospiti) : numCampo(v && v.guests)) || 1, g = Math.max(0, opz.giorni != null ? Number(opz.giorni) || 0 : Number(notti) || 0);
-    const righe = figureDi(st, k).filter(f => osp >= (Number(f.da) || 1)).map(f => { const o2 = over[f.id] || {};
+    const osp = (Number(opz.ospiti) > 0 ? Number(opz.ospiti) : numCampo(v && v.guests)) || 1, cam = numCampo(v && v.totalBedrooms) || 1, cc = perCamere(st, k), q = cc ? cam : osp;
+    // le figure danno il prezzo di base (€/h × ore); l'unità moltiplica: al giorno × giorni, a settimana × settimane (coeff), a soggiorno una volta
+    const g = srvFattore(st, k, notti, { giorni: opz.giorni, settimane: opz.settimane }), u = srvUnita(st, k);
+    const righe = figureDi(st, k).filter(f => q >= (Number(f.da) || 1)).map(f => { const o2 = over[f.id] || {};
       const ore = nOr(o2.ore, typeof f.ore === 'number' ? f.ore : null), vh = nOr(o2.vendita, typeof f.vendita === 'number' ? f.vendita : null), ah = opz.acq ? nOr(o2.acquisto, opz.acq[k + '@h:' + f.id]) : null;
       return { id: f.id, it: f.it, en: f.en, ore, giorni: g, vh, ah, v: vh != null && ore != null ? Math.round(vh * ore * g) : null, a: ah != null && ore != null ? Math.round(ah * ore * g) : null }; });
     const tot = c => righe.some(r => typeof r[c] === 'number') ? righe.reduce((t, r) => t + (r[c] || 0), 0) : null;
-    return { righe, ospiti: osp, giorni: g, vendita: tot('v'), acquisto: tot('a') }; };
+    return { righe, ospiti: osp, camere: cam, perCamere: cc, unita: u.unita, giorni: g, vendita: tot('v'), acquisto: tot('a') }; };
   // nomi delle figure attive per la mail: "Chef", "Chef and Butler", "Chef, Butler, extra Waiter and Kitchen Aid"
   const nomeFigure = (righe, lingua) => { const n = righe.map(r => (lingua === 'en' ? r.en : r.it) || r.it || r.en).filter(Boolean); const e = lingua === 'en' ? ' and ' : ' e ';
     return n.length < 2 ? (n[0] || '') : n.slice(0, -1).join(', ') + e + n[n.length - 1]; };
-  const srvPrezzoV = (st, k, base, notti, opz) => { if (isOre(st, k)) { const r = oreCalc(st, k, notti, opz); return opz && opz.acq ? r.acquisto : r.vendita; } return srvPrezzo(st, k, srvAdatta(st, k, base, opz), notti); };
+  const srvPrezzoV = (st, k, base, notti, opz) => { if (isOre(st, k)) { const r = oreCalc(st, k, notti, opz); return opz && opz.acq ? r.acquisto : r.vendita; } return srvPrezzo(st, k, srvAdatta(st, k, base, opz), notti, opz); };
   // a carico di chi è un servizio: 'esmeralda' (incluso, lo paghiamo noi: spese servizi del listino), 'parte' (si somma al prezzo),
   // 'proprietario' (incluso, lo fornisce il proprietario). Di norma da Impostazioni (prezziServizi[k].carico, vecchio "incluso"),
   // per la villa "Servizi compresi nel prezzo" (villas.serviziInclusi) = a carico del proprietario. Mai impostato = a parte.
@@ -281,5 +293,5 @@
   // dettaglio di una prenotazione: carico salvato, altrimenti il vecchio "incluso" (incluso = a carico di Esmeralda)
   const caricoDi = d => d && CARICHI.includes(d.carico) ? d.carico : d && d.incluso === false ? 'parte' : 'esmeralda';
   const TAR_SETT = { settimanale: 1, bisettimanale: 2, mensile: 4, bimensile: 8 };
-  window.SDB = { isOre, figureDi, oreCalc, nomeFigure, fasceDi, srvAdatta, srvPrezzoV, REGOLE, numCampo, predefSet, migraCarichi, voceKey, isVoceKey, voceNome, CARICHI, CARICO_LABEL, CARICO_BREVE, caricoSet, caricoDef, caricoDi, TAR_SETT, MARGINE_MIN, AGENZIA_DEF, srvUnita, srvSettimane, srvFattore, srvPrezzo, MARE, mareLivello, mareLabel, INCLUSIONI, inclusioniDi, CAMPI_SCHEDA, CAMPI_NASCOSTI_DEFAULT, nascostiDi, periodsFor, autoPeriods, autoPeriodsFor, cambioDi, STATUS_COLOR, PALETTE, inkFor, DAY, MESI, MESI_L, GG, parse, iso, addDays, diffDays, dm, dmy, TARIFFE, STATI, defaultSettings, defaultPeriods, salePrice, priceAt, emptyPricing, money, short, parseMoney, uid };
+  window.SDB = { isOre, perCamere, regolaDi, unitaDi, srvGiorni, REG_PERS, figureDi, oreCalc, nomeFigure, fasceDi, srvAdatta, srvPrezzoV, REGOLE, numCampo, predefSet, migraCarichi, voceKey, isVoceKey, voceNome, CARICHI, CARICO_LABEL, CARICO_BREVE, caricoSet, caricoDef, caricoDi, TAR_SETT, MARGINE_MIN, AGENZIA_DEF, srvUnita, srvSettimane, srvFattore, srvPrezzo, MARE, mareLivello, mareLabel, INCLUSIONI, inclusioniDi, CAMPI_SCHEDA, CAMPI_NASCOSTI_DEFAULT, nascostiDi, periodsFor, autoPeriods, autoPeriodsFor, cambioDi, STATUS_COLOR, PALETTE, inkFor, DAY, MESI, MESI_L, GG, parse, iso, addDays, diffDays, dm, dmy, TARIFFE, STATI, defaultSettings, defaultPeriods, salePrice, priceAt, emptyPricing, money, short, parseMoney, uid };
 })();

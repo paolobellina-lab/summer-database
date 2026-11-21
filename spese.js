@@ -653,7 +653,7 @@
       const pctS = (r0, p0) => p0 ? ((r0 - p0) / p0 * 100) : null;
       const pctTxt = v => v == null ? '—' : (v > 0 ? '+' : '') + v.toFixed(1).replace('.', ',') + '%';
       const esito = v => v == null ? '' : Math.abs(v) <= 5 ? 'ok' : v > 0 ? 'oltre' : 'sotto';
-      const unita = k => { if (S.isOre(st, k)) return 'a ore (personale)'; const u = S.srvUnita(st, k); return u.settimanale ? `a settimana${u.coeff !== 1 ? ' (dalla 2ª × ' + String(u.coeff).replace('.', ',') + ')' : ''}` : 'a soggiorno'; };
+      const unita = k => { const u = S.srvUnita(st, k); const b = u.giornaliero ? 'al giorno' : u.settimanale ? `a settimana${u.coeff !== 1 ? ' (dalla 2ª × ' + String(u.coeff).replace('.', ',') + ')' : ''}` : 'a soggiorno'; return S.isOre(st, k) ? b + ' · personale' : b; };
       const T = righe.reduce((t, r) => ({ reale: t.reale + r.reale, prev: t.prev + r.prev, realeP: t.realeP + r.realeP, gen: t.gen + r.gen }), { reale: 0, prev: 0, realeP: 0, gen: 0 });
       const ville = [...new Set(V.l.concat(V.generali).map(x => x.villaId))].map(villaDi).sort((p, q) => String(p.name).localeCompare(String(q.name), 'it', { numeric: true }));
       root.innerHTML = `<div class="wrap">
