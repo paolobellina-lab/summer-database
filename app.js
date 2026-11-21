@@ -788,12 +788,15 @@ window.SDBStore.ready.then(function () {
         <label class="field"><span>Deposito di sicurezza €</span><input id="b-dep" inputmode="numeric" value="${typeof b.deposito === 'number' ? esc(fmtNum(b.deposito)) : ''}" placeholder="ricevuto dal cliente"></label>
         <div class="field b-dep-note"><span>&nbsp;</span><small class="note">La restituzione si registra come nota spesa "Restituzione deposito sicurezza".</small></div>
       </div>
-      ${agenzie().length || b.agenziaId ? `<div class="row">
-        <label class="field"><span>Agenzia</span><select id="b-ag"><option value="">Nessuna (vendita diretta)</option>${agenzie().map(a => `<option value="${esc(a.id)}" ${b.agenziaId === a.id ? 'selected' : ''}>${esc(a.nome)} · ${esc(String(Math.round((Number(a.perc) || 0) * 1000) / 10).replace('.', ','))}%</option>`).join('')}${b.agenziaId && !agenzie().some(a => a.id === b.agenziaId) ? `<option value="${esc(b.agenziaId)}" selected>agenzia non più in elenco</option>` : ''}</select></label>
-        <div class="field"><span>&nbsp;</span><small class="note" id="b-ag-n"></small></div>
-      </div>` : ''}
       <div class="pricehint" id="b-hint"></div>
       <div id="b-spese"></div>
+      </section>
+      <section class="dsec sec-ag"><h4>Agenzia</h4>
+<div class="row">
+        <label class="field"><span>Agenzia</span><select id="b-ag"><option value="">Nessuna (vendita diretta)</option>${agenzie().map(a => `<option value="${esc(a.id)}" ${b.agenziaId === a.id ? 'selected' : ''}>${esc(a.nome)} · ${esc(String(Math.round((Number(a.perc) || 0) * 1000) / 10).replace('.', ','))}%</option>`).join('')}${b.agenziaId && !agenzie().some(a => a.id === b.agenziaId) ? `<option value="${esc(b.agenziaId)}" selected>agenzia non più in elenco</option>` : ''}</select></label>
+        <div class="field"><span>&nbsp;</span><small class="note" id="b-ag-n"></small></div>
+      </div>
+      ${agenzie().length ? '' : '<small class="note">Nessuna agenzia in elenco: si aggiungono in Impostazioni → Servizi e inclusioni → Agenzie.</small>'}
       </section>
       </div><div class="bcol"><section class="dsec sec-srv"><h4>Servizi</h4>
       <div class="srv-list">

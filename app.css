@@ -27,6 +27,7 @@
   --sec-date: #e9edf3; --sec-date-ink: #142861;
   --sec-cli: #f4eee2; --sec-cli-ink: #7d6237;
   --sec-srv: #e9eee6; --sec-srv-ink: #48613f;
+  --sec-ag: #efe9f2; --sec-ag-ink: #5e3f73;
   --sec-look: #f0e9ea; --sec-look-ink: #6b4a55;
   --font-ui: "Jost", "Futura", "Century Gothic", "Helvetica Neue", Arial, sans-serif;
   --font-grid: "Jost", "Futura", "Helvetica Neue", Arial, sans-serif;
@@ -46,6 +47,8 @@
     --sec-date: #14223a; --sec-date-ink: #a9bdf0;
     --sec-cli: #2a2416; --sec-cli-ink: #e2c38c;
     --sec-srv: #1a2a1d; --sec-srv-ink: #a8c79c;
+  --sec-ag: #261c2c; --sec-ag-ink: #cdb2e0;
+    --sec-ag: #261c2c; --sec-ag-ink: #cdb2e0;
     --sec-look: #2a1f25; --sec-look-ink: #d9b3c1;
     color-scheme: dark;
   }
@@ -341,6 +344,7 @@ dialog::backdrop { background: rgba(8, 20, 18, .45); }
 .dsec h4 { margin: 0; font: 700 11px/1 var(--font-ui); letter-spacing: .14em; text-transform: uppercase; color: var(--sec-ink); }
 .dsec .field > span { color: var(--sec-ink); }
 .sec-date { --sec-bg: var(--sec-date); --sec-ink: var(--sec-date-ink); }
+.sec-ag { --sec-bg: var(--sec-ag); --sec-ink: var(--sec-ag-ink); }
 .sec-cli { --sec-bg: var(--sec-cli); --sec-ink: var(--sec-cli-ink); }
 .sec-srv { --sec-bg: var(--sec-srv); --sec-ink: var(--sec-srv-ink); }
 .sec-look { --sec-bg: var(--sec-look); --sec-ink: var(--sec-look-ink); }
