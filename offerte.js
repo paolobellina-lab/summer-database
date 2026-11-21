@@ -126,7 +126,7 @@
     const anonTxt = (v, t) => { t = String(t == null ? '' : t); const c = codOf(v); if (!conCod() || !c) return t;
       const n = String(v.name || '').replace(/^villa\s+/i, '').trim(); if (!n) return t; const rx = n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       return t.replace(new RegExp((n.length < 3 ? '\\bvilla\\s+' : '\\b(villa\\s+)?') + rx + '\\b', 'gi'), c); };
-    const linkWb = v => [o.linkWB && vis(v, 'webBrochure') && String(v.webBrochure || '').trim(), o.linkWBA && vis(v, 'webBrochureAnonima') && String(v.webBrochureAnonima || '').trim()].filter(u => u && /^https?:\/\//i.test(u));
+    const linkWb = v => [!conCod() && o.linkWB && vis(v, 'webBrochure') && String(v.webBrochure || '').trim(), conCod() && o.linkWBA && vis(v, 'webBrochureAnonima') && String(v.webBrochureAnonima || '').trim()].filter(u => u && /^https?:\/\//i.test(u));
     // servizi a ore (es. cuoco): il nome segue le figure presenti per gli ospiti della villa ("Chef and Butler")
     const figOff = (k, v) => S.oreCalc(st, k, 7, { villa: v, ospiti: ospK(k), over: o.srvOre[k] }).righe;
     const srvNome = (x, v) => { if (x && S.isOre(st, x.key)) { const n = S.nomeFigure(figOff(x.key, v), o.lingua); if (n) return n; } return o.lingua === 'en' ? (SRV_EN[x.key] || x.label) : x.label; };
@@ -286,8 +286,8 @@
         <div class="off-nv"><span>Nelle ville scrivi</span><div class="seg" id="off-nv"><button type="button" data-nv="nome" class="${conCod() ? '' : 'on'}">Nome della villa</button><button type="button" data-nv="codice" class="${conCod() ? 'on' : ''}">Codice</button></div><small class="note" id="off-nv-info"></small></div>
         <div class="off-allega">
         ${store.listBrochure ? `<label class="flag off-bro"><input type="checkbox" id="off-bro" ${o.brochure ? 'checked' : ''}><span><b>Allega brochure</b><small id="off-bro-info">Scarica i PDF delle ville scelte, nella lingua dell'offerta, da trascinare nella mail.</small></span></label>` : ''}
-          <label class="flag off-wb"><input type="checkbox" id="off-wb" ${o.linkWB ? 'checked' : ''}><span><b>Link Web Brochure</b><small>Sotto il prezzo di ogni villa che ce l'ha.</small></span></label>
-          <label class="flag off-wb"><input type="checkbox" id="off-wba" ${o.linkWBA ? 'checked' : ''}><span><b>Link Web Brochure anonima</b><small>La versione senza logo, sotto il prezzo di ogni villa che ce l'ha.</small></span></label>
+          <label class="flag off-wb${conCod() ? ' off-dis' : ''}"><input type="checkbox" id="off-wb" ${o.linkWB && !conCod() ? 'checked' : ''} ${conCod() ? 'disabled' : ''}><span><b>Link Web Brochure</b><small>Sotto il prezzo di ogni villa che ce l'ha.</small></span></label>
+          <label class="flag off-wb${conCod() ? '' : ' off-dis'}"><input type="checkbox" id="off-wba" ${o.linkWBA && conCod() ? 'checked' : ''} ${conCod() ? '' : 'disabled'}><span><b>Link Web Brochure anonima</b><small>La versione senza logo, sotto il prezzo di ogni villa che ce l'ha.</small></span></label>
         </div>
         <div class="off-actions off-act-gr">
           <div class="off-act"><span>Email</span><div><button type="button" class="btn primary" id="off-copy">Copia per email</button><button type="button" class="btn" id="off-gmail">Apri Gmail</button></div></div>
@@ -417,13 +417,16 @@
     // brochure PDF delle ville scelte: quella nella lingua dell'offerta, altrimenti un'altra
     const broCache = {};
     const broDi = id => (broCache[id] = broCache[id] || store.listBrochure(id).catch(() => []));
-    const broScelta = l => l.find(b => b.lingua === o.lingua) || l.find(b => !b.lingua) || l[0] || null;
+    // brochure anonima = nel nome del file il codice della villa (es. MRN-PRT_brochure.pdf) o "anonim"; le altre sono con il nome (Villa-<Nome>_Esmeralda.pdf)
+    const norm = t => String(t || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const broAnon = (b, v) => { const n = norm(b.nome), c = norm(codOf(v)); return n.includes('anonim') || (!!c && n.includes(c)); };
+    const broScelta = (l0, v) => { const l = (l0 || []).filter(b => broAnon(b, v) === conCod()); return l.find(b => b.lingua === o.lingua) || l.find(b => !b.lingua) || l[0] || null; };
     let broTok = 0;
     function updBro() { setTimeout(() => { drawRiep(); if (document.getElementById('off-srv')) drawSrv(); updBro0(); }, 0); }
     function updNv() { const el = document.getElementById('off-nv-info'); if (!el) return;
       if (!conCod()) { el.textContent = 'Con il codice (es. per le agenzie) il nome non compare: niente link al sito e nome tolto dalle descrizioni.'; return; }
       const manca = scelte().filter(v => !codOf(v)).map(v => v.name);
-      el.innerHTML = manca.length ? `<b style="color:#b3261e">Senza codice (compare il nome): ${esc(manca.join(', '))}</b>` : 'Niente link al sito, nome tolto dalle descrizioni, brochure scaricate con il nome del codice. Controlla che le brochure e le web brochure scelte siano anonime.'; }
+      el.innerHTML = manca.length ? `<b style="color:#b3261e">Senza codice (compare il nome): ${esc(manca.join(', '))}</b>` : 'Niente link al sito, nome tolto dalle descrizioni, solo brochure e web brochure anonime.'; }
     function updBro0() { updNv();
       const info = document.getElementById('off-bro-info'); if (!info || !store.listBrochure) return;
       if (!o.brochure) { info.textContent = "Scarica i PDF delle ville scelte, nella lingua dell'offerta, da trascinare nella mail."; return; }
@@ -431,15 +434,15 @@
       const tok = ++broTok; const vv = scelte();
       Promise.all(vv.map(v => broDi(v.id))).then(ls => {
         if (tok !== broTok) return;
-        const manca = vv.filter((v, i) => !broScelta(ls[i])).map(v => v.name);
-        const altra = vv.filter((v, i) => { const b = broScelta(ls[i]); return b && b.lingua && b.lingua !== o.lingua; }).map(v => v.name);
-        info.innerHTML = `Brochure trovate: <strong>${vv.length - manca.length} di ${vv.length}</strong>${manca.length ? ` · mancano: ${esc(manca.join(', '))}` : ''}${altra.length ? ` · in un'altra lingua: ${esc(altra.join(', '))}` : ''}`;
+        const manca = vv.filter((v, i) => !broScelta(ls[i], v)).map(v => v.name);
+        const altra = vv.filter((v, i) => { const b = broScelta(ls[i], v); return b && b.lingua && b.lingua !== o.lingua; }).map(v => v.name);
+        info.innerHTML = `Brochure ${conCod() ? 'anonime (con il codice)' : 'con il nome'} trovate: <strong>${vv.length - manca.length} di ${vv.length}</strong>${manca.length ? ` · mancano: ${esc(manca.join(', '))}` : ''}${altra.length ? ` · in un'altra lingua: ${esc(altra.join(', '))}` : ''}`;
       });
     }
     async function scaricaBro() {
       const vv = scelte(); let n = 0;
       for (const v of vv) {
-        const b = broScelta(await broDi(v.id)); if (!b) continue;
+        const b = broScelta(await broDi(v.id), v); if (!b) continue;
         msg(`<p class="note">Scarico la brochure di ${esc(v.name)}…</p>`);
         try { window.SDBExport.scarica(conCod() && codOf(v) ? codOf(v) + '.pdf' : b.nome, await store.getBrochure(b)); n++; await new Promise(r => setTimeout(r, 600)); } catch (_) {}
       }
@@ -974,7 +977,7 @@
       } catch (x) { msg(`<div class="warn err">Non riuscito: ${esc(x.message || x)}</div>`); }
       btn.disabled = false;
     });
-    $('#off-nv').addEventListener('click', e => { const b = e.target.closest('[data-nv]'); if (!b) return; o.nomeV = b.dataset.nv === 'codice' ? 'codice' : 'nome'; $$('#off-nv button').forEach(x => x.classList.toggle('on', x === b)); pdfPronto = null; save(); updBro(); });
+    $('#off-nv').addEventListener('click', e => { const b = e.target.closest('[data-nv]'); if (!b) return; o.nomeV = b.dataset.nv === 'codice' ? 'codice' : 'nome'; $$('#off-nv button').forEach(x => x.classList.toggle('on', x === b)); const wb = $('#off-wb'), wba = $('#off-wba'); wb.disabled = conCod(); wba.disabled = !conCod(); wb.checked = !!o.linkWB && !conCod(); wba.checked = !!o.linkWBA && conCod(); wb.closest('label').classList.toggle('off-dis', conCod()); wba.closest('label').classList.toggle('off-dis', !conCod()); pdfPronto = null; save(); updBro(); });
     $('#off-wb').addEventListener('change', e => { o.linkWB = e.target.checked; save(); });
     $('#off-wba').addEventListener('change', e => { o.linkWBA = e.target.checked; save(); });
     if ($('#off-bro')) $('#off-bro').addEventListener('change', e => { o.brochure = e.target.checked; save(); updBro(); });
@@ -1000,7 +1003,7 @@
         const blob = await pdfOfferta(t => msg(`<p class="note">${esc(t)}</p>`));
         const file = new File([blob], nomeFile() + '.pdf', { type: 'application/pdf' });
         const bro = [];
-        if (o.brochure && store.listBrochure) for (const v of scelte()) { const b = broScelta(await broDi(v.id)); if (!b) continue; msg(`<p class="note">Preparo la brochure di ${esc(v.name)}…</p>`);
+        if (o.brochure && store.listBrochure) for (const v of scelte()) { const b = broScelta(await broDi(v.id), v); if (!b) continue; msg(`<p class="note">Preparo la brochure di ${esc(v.name)}…</p>`);
           try { const bl = await store.getBrochure(b); bro.push(new File([bl], conCod() && codOf(v) ? codOf(v) + '.pdf' : (b.nome || (v.name + '.pdf')), { type: 'application/pdf' })); } catch (_) {} }
         pdfPronto = { file, bro }; salvaStorico('pdf'); return pdfPronto;
       } catch (x) { msg(`<div class="warn err">PDF non riuscito: ${esc(x.message || x)}</div>`); return null; }
