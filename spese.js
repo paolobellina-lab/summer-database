@@ -821,12 +821,11 @@
           const affN = x.spese.filter(isAff).length;
           // commissione dell'agenzia: quanto spetta (perc × vendita) e note "Commissione agenzia" registrate
           const q6 = (() => { const reg = x.spese.filter(z => z.categoria === COMM), regT = reg.reduce((t, z) => t + (Number(z.importo) || 0), 0), c = x.b && x.b.agenziaId && ctx.commAgenzia ? ctx.commAgenzia(x.b) : null;
-            if (!reg.length && !c) return ''; const da = c && c.importo != null ? c.importo : null, resto = da != null ? Math.round((da - regT) * 100) / 100 : null;
+            if (!reg.length && !c) return ''; const da = c && c.importo != null ? c.importo : null;
+            const chi = c ? `${esc(c.nome)} · ${esc(String(Math.round(c.perc * 1000) / 10).replace('.', ','))}%` : 'agenzia';
             return `<div class="card pr-q"><h2>Commissione agenzia</h2>${tab(
-                r2('Agenzia', c ? `${esc(String(Math.round(c.perc * 1000) / 10).replace('.', ','))}% della vendita${c.base != null ? ' ' + euro(Math.round(c.base)) : ''}` : 'nessuna agenzia scelta nella prenotazione', c ? esc(c.nome) : '—')
-              + r2('Da riconoscere', '', da != null ? euro(da) : '—')
-              + r2('<b>Riconosciuta</b>', reg.length ? `${reg.length} ${reg.length === 1 ? 'nota' : 'note'} "${COMM}", nelle spese totali` : '', `<b>${reg.length ? euro(regT) : '—'}</b>`, 'tot')
-              + (resto != null && reg.length && Math.abs(resto) >= 1 ? r2('Ancora da riconoscere', '', euro(resto), resto < 0 ? 'neg' : '') : ''))}</div>`; })();
+                r2('Pagato all\'agenzia', `${chi}${reg.length ? ` · ${reg.length} ${reg.length === 1 ? 'nota spese' : 'note spese'} "${COMM}"` : ''}`, (reg.length ? euro(regT) : '—') + chip(da, regT, 'da inserire'), 'tot'))}
+            ${da != null ? prev(riga('Commissione agenzia', c && c.base != null ? `${esc(String(Math.round(c.perc * 1000) / 10).replace('.', ','))}% della vendita ${euro(Math.round(c.base))}` : 'percentuale dell\'agenzia × vendita', da, regT, 'da inserire tra le spese')) : ''}</div>`; })();
           const q2 = `<div class="card pr-q"><h2>Affitto al proprietario</h2>${tab(
               r2('Pagato al proprietario', qReale != null ? `quota del pagato per tutto il gruppo (${euro(affGrp(V, grpBil))}), ${ripMan(grpBil, 'ripartizioneReale') ? 'ripartito a mano' : 'diviso per notti: bilancialo con il tasto qui sotto'}` : affN ? `${affN} ${affN === 1 ? 'nota spese' : 'note spese'} "Affitto proprietario", anche extra` : 'nessuna nota spese "Affitto proprietario"', euro(affReal) + chip(affPrev, affReal, 'da inserire'), 'tot'))}
             ${qReale != null ? (() => { const nn = grpBil.membri.flatMap(m => { const it = V.l.find(y => y.b && y.b.id === m.id); return it ? it.spese.filter(isAff).map(z => [m, z]) : []; });
