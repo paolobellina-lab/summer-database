@@ -1428,3 +1428,6 @@ dialog.dlg-contr { width: min(980px, calc(100vw - 32px)); }
 .off-nv { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 0 0 10px; }
 .off-nv > span { font-weight: 600; }
 .off-nv small { flex-basis: 100%; }
+.srv-ptar { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; color: var(--muted); font-size: 12.5px; }
+.srv-ptar .ptar { border: 1px solid var(--line); background: var(--surface); color: var(--muted); border-radius: 999px; padding: 2px 9px; font-size: 12px; cursor: pointer; }
+.srv-ptar .ptar.on { background: var(--navy, #142861); border-color: var(--navy, #142861); color: #fff; }

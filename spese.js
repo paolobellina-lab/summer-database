@@ -55,7 +55,7 @@
   // voce a carico del cliente che c'era nell'offerta (inclusa o a parte): non è aggiuntiva. bookings.vociOfferta = voci dell'offerta
   // (prenotazione fatta da un'offerta); senza, valgono le voci Predefinite di Impostazioni. Senza prenotazione (spese generali): aggiuntiva.
   const voceInOff = (cat, bk) => { if (!bk) return false; if (Array.isArray(bk.vociOfferta)) return bk.vociOfferta.includes(cat);
-    const st = CTX && CTX.data && CTX.data().settings; return !!(st && window.SDB && window.SDB.predefSet(st, window.SDB.voceKey(cat))); };
+    const st = CTX && CTX.data && CTX.data().settings; const S0 = window.SDB; return !!(st && S0 && S0.predefSet(st, S0.voceKey(cat), S0.tarDaNotti(S0.diffDays(bk.from, bk.to)))); };
   const aggPerCat = (cat, srv) => cat === 'Danni villa' ? true : cat === AFF || cat === COMM || cat === REST_DEP || cat === ADD_PROP || cat === ADD_CLI || srv ? false : CATS.agg.includes(cat) ? true : CATS.libere.includes(cat) ? false : null;
   const tipoCat = (cat, srv) => cat === ADD_CLI ? 'Addebitato al cliente oltre il deposito: è un\'entrata come una vendita, si somma al margine' : cat === ADD_PROP ? 'Addebitato al proprietario: è un\'entrata come una vendita, si somma al margine' : srv ? 'Servizio offerto: si confronta con l\'acquisto previsto del servizio' : cat === AFF ? 'Pagato al proprietario: si confronta con l\'acquisto concordato' : cat === REST_DEP ? 'Restituito al cliente: riduce il deposito, non è una spesa' : aggPerCat(cat) ? 'Servizio aggiuntivo: da addebitare al cliente o trattenere dal deposito' : 'Altra spesa della prenotazione: non addebitata al cliente (es. manutenzione)';
   // menu Categoria: <optgroup> servizi (value "srv:chiave") · altre · fisse; cur = scontrino in modifica

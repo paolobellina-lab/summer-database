@@ -81,7 +81,7 @@
       // voci delle note spese con un prezzo di vendita in Impostazioni: si possono proporre (prezzo e carico), ma senza testi nella mail
       .concat(Object.keys(st.prezziServizi || {}).filter(k => S.isVoceKey(k) && typeof st.prezziServizi[k].vendita === 'number' && (!Array.isArray(st.categorieSpese) || st.categorieSpese.includes(S.voceNome(k)))).map(k => ({ key: k, label: S.voceNome(k), voce: true })));
     // spuntati di norma: i Predefiniti di Impostazioni e quelli compresi nella scheda di una villa scelta (a carico del proprietario)
-    const srvDefOn = k => S.predefSet(st, k) || (o.ville || []).some(id => { const v = (data().villas || []).find(z => z.id === id); return v && (v.serviziInclusi || []).includes(k); });
+    const srvDefOn = k => (nP() > 1 ? ogniP(() => S.predefSet(st, k, o.tariff)).some(Boolean) : S.predefSet(st, k, o.tariff)) || (o.ville || []).some(id => { const v = (data().villas || []).find(z => z.id === id); return v && (v.serviziInclusi || []).includes(k); });
     const srvDi = k => { const d = (st.prezziServizi || {})[k] || {}; const x = o.srv[k] || {};
       const modo = ['pred', 'inc', 'parte'].includes(x.modo) ? x.modo : x.incluso === true ? 'inc' : x.incluso === false ? 'parte' : 'pred';
       // non ancora toccato nell'offerta: spuntato di norma se compreso nel prezzo (a carico di Esmeralda o del proprietario, in Impostazioni
@@ -133,7 +133,7 @@
     // un servizio è incluso per una villa se "Includi tutti", oppure con "Predefinito" se la scheda villa lo ha tra i servizi compresi nel prezzo
     // compreso nel prezzo della villa: a carico di Esmeralda (già nelle spese servizi del listino) o del proprietario (scheda villa)
     // compreso nel prezzo per questa villa: omaggio di Esmeralda, a carico del proprietario, o del cliente ma Predefinito (già nel listino)
-    const inclVilla = (v, k) => { const c = S.caricoDef(settings(), v, k); return c !== 'parte' || S.predefSet(settings(), k); };
+    const inclVilla = (v, k) => { const c = S.caricoDef(settings(), v, k); return c !== 'parte' || S.predefSet(settings(), k, o.tariff); };
     const inclusoPer = (v, k) => { const d = srvDi(k); return d.modo === 'inc' || (d.modo === 'pred' && inclVilla(v, k)); };
     const srvAttivi = () => srvList().map(x => Object.assign({}, x, srvDi(x.key))).filter(x => x.on).map(x => Object.assign(x, { eur: S.parseMoney(x.prezzo) }));
     const srvAparte = v => srvAttivi().filter(x => !inclusoPer(v, x.key)).map(x => Object.assign({}, x, { eur: prezzoSrv(v, x.key) }));
@@ -182,7 +182,7 @@
     const ogniP = fn => Array.from({ length: nP() }, (_, i) => conP(i, () => fn(i)));
     // listino della villa; se un servizio Predefinito a carico del cliente (già nelle spese servizi del listino) è tolto dall'offerta
     // o messo "a parte", il listino si rifà con la stessa formula (agenzia e arrotondamento) senza quel servizio
-    const inListinoOff = (v, k) => S.predefSet(st, k) && S.caricoDef(st, v, k) === 'parte';
+    const inListinoOff = (v, k) => S.predefSet(st, k, o.tariff) && S.caricoDef(st, v, k) === 'parte';
     const prezzoListinoSrv = (v, k) => { const n = (S.TAR_SETT[o.tariff] || 1) * 7, pv = (v.prezziServizi || {})[k], d = (st.prezziServizi || {})[k] || {};
       const z = typeof pv === 'number' ? S.srvPrezzo(st, k, pv, n) : S.srvPrezzoV(st, k, typeof d.vendita === 'number' ? d.vendita : null, n, { villa: v }); return typeof z === 'number' ? z : 0; };
     const srvToltiListino = v => srvList().filter(x => inListinoOff(v, x.key) && (!srvDi(x.key).on || !inclusoPer(v, x.key)));

@@ -129,10 +129,10 @@ window.SDBStore.ready.then(function () {
   // voci delle note spese con un prezzo di vendita in Impostazioni (chiave 'voce:<nome>'): come i servizi, ma non nella prenotazione né nei testi dell'offerta
   const vociPrezzo = st => catLibere(st).map(c => ({ key: S.voceKey(c), label: c, voce: true })).filter(x => typeof (((st || {}).prezziServizi || {})[x.key] || {}).vendita === 'number');
   // spese servizi del listino = servizi e voci Predefiniti a carico del cliente (il prezzo entra nel listino); Esmeralda = omaggio, non entra
-  const inListino = (st, v, k) => S.predefSet(st, k) && S.caricoDef(st, v, k) === 'parte';
+  const inListino = (st, v, k, t) => S.predefSet(st, k, t) && S.caricoDef(st, v, k) === 'parte';
   const speseAutoOn = () => { const st = settings(); return servizi(st.servizi).concat(vociPrezzo(st)).some(x => inListino(st, null, x.key)); };
   const speseAuto = (v, t) => { const st = settings(), n = (S.TAR_SETT[t] || 1) * 7, det = []; let tot = 0;
-    servizi(st.servizi).concat(vociPrezzo(st)).forEach(x => { if (!inListino(st, v, x.key)) return; const pv = (v.prezziServizi || {})[x.key], d = (st.prezziServizi || {})[x.key] || {};
+    servizi(st.servizi).concat(vociPrezzo(st)).forEach(x => { if (!inListino(st, v, x.key, t)) return; const pv = (v.prezziServizi || {})[x.key], d = (st.prezziServizi || {})[x.key] || {};
       // prezzo della scheda villa così com'è; altrimenti quello di Impostazioni adattato alla villa (località, gruppi o fasce su capienza e camere)
       const pz = typeof pv === 'number' ? S.srvPrezzo(st, x.key, pv, n) : S.srvPrezzoV(st, x.key, typeof d.vendita === 'number' ? d.vendita : null, n, { villa: v }); if (typeof pz !== 'number') { det.push([x.label, null]); return; } tot += pz; det.push([x.label, pz]); });
     return { tot, det }; };
@@ -1994,7 +1994,7 @@ window.SDBStore.ready.then(function () {
       const un = S.isOre(st, k) ? `${ul} · personale a ore secondo ${cosaF === 'camere' ? 'le camere' : 'gli ospiti'}: ${S.figureDi(st, k).map(f => f.it + (f.da > 1 ? ` (da ${f.da} ${cosaF})` : '')).join(', ')}` : ul;
       const eur = x => typeof x === 'number' ? fmtNum(x) + ' €' : '—';
       return `<td class="c-var"><button type="button" class="btn small" data-pvar title="Acquisto e vendita, a soggiorno o a settimana, località, gruppi o fasce di ospiti / camere">Modifica prezzi</button></td><td class="srv-pdf"><input type="checkbox" data-pdf ${S.predefSet(st, k) ? 'checked' : ''} aria-label="Predefinito"></td>
-        <td class="srv-sum"><span>${esc(un)}</span>${provaHtml(k)}${vt ? `<span class="note">${esc(vt)}</span>` : ''}</td>`; };
+        <td class="srv-sum"><span>${esc(un)}</span>${S.predefSet(st, k) ? `<span class="srv-ptar" title="Tariffe in cui è predefinito: nelle altre non entra nel listino e nell'offerta è un extra">Predefinito in ${S.TARIFFE.map(t => { const a = S.predefTarDi(st, k), on = !a || a.includes(t.key); return `<button type="button" class="ptar${on ? ' on' : ''}" data-ptar="${t.key}">${S.TAR_BREVE[t.key]}</button>`; }).join('')}</span>` : ''}${provaHtml(k)}${vt ? `<span class="note">${esc(vt)}</span>` : ''}</td>`; };
     // riquadro Prova (accanto al testo): le stesse condizioni per tutte le voci, risultato nel riepilogo di ogni riga
     const prova = { villa: '', loc: '', cam: '', osp: '', n: '' };
     const provaHtml = k => { const vill = { location: prova.loc, totalBedrooms: Number(prova.cam) || 0, guests: Number(prova.osp) || 0 }, notti = Number(prova.n) || 7, opz = { villa: vill, ospiti: vill.guests };
@@ -2092,6 +2092,10 @@ window.SDBStore.ready.then(function () {
         if (acq) { Object.keys(acqSrv).forEach(z => { if (z === k || z.indexOf(k + '@') === 0) delete acqSrv[z]; }); Object.assign(acqSrv, acqK); }
         prezziSrv()[k] = o0; save(); if (acq) salvaAcq(); d.close(); if (S.isVoceKey(k)) drawCat(); else drawSrv(); toast('Prezzi salvati'); };
       draw(); drawG(); if (d.showModal) d.showModal(); else d.setAttribute('open', ''); };
+    $('.srv-tbl').addEventListener('click', e => { const b = e.target.closest('[data-ptar]'); if (!b) return; const k = b.closest('[data-pk]').dataset.pk;
+      const tutte = S.TARIFFE.map(t => t.key), a = (S.predefTarDi(st, k) || tutte).slice(), i = a.indexOf(b.dataset.ptar); if (i >= 0) a.splice(i, 1); else a.push(b.dataset.ptar);
+      if (!a.length) { toast('Almeno una tariffa: per non averlo mai predefinito togli la spunta Predefinito'); return; }
+      const o0 = Object.assign({}, prezziSrv()[k]); if (a.length === tutte.length) delete o0.predefTar; else o0.predefTar = tutte.filter(t => a.includes(t)); prezziSrv()[k] = o0; save(); if (S.isVoceKey(k)) drawCat(); else drawSrv(); });
     $('.srv-tbl').addEventListener('change', e => { if (!e.target.matches('[data-pdf]')) return; const k = e.target.closest('[data-pk]').dataset.pk;
       prezziSrv()[k] = Object.assign({}, prezziSrv()[k], { predef: e.target.checked }); save(); if (S.isVoceKey(k)) drawCat(); else drawSrv(); });
     $('.srv-tbl').addEventListener('change', e => { if (!e.target.matches('[data-pu]')) return; const row = e.target.closest('[data-pk]'), k = row.dataset.pk, sett = e.target.value === 'settimana';
