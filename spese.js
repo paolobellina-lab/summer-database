@@ -104,8 +104,16 @@
   const utDa = b => { if (!b || !CTX) return 0; const t = utCalc(b, CTX.data().settings).tot; return t && !utIncluse(b) ? t : 0; };
   const PAGAMENTI = [['contanti', 'Contanti'], ['carta', 'Carta di credito'], ['bonifico', 'Bonifico']];
   const pagLabel = k => (PAGAMENTI.find(x => x[0] === k) || [])[1] || '';
-  const pagSec = (pre, cur) => `<section class="dsec sec-pag"><h4>Metodo di pagamento <span class="req" title="Obbligatorio">*</span></h4><div class="pag-opts">${PAGAMENTI.map(([k, l]) => `<label class="pag-opt"><input type="radio" name="${pre}-pag" value="${k}" ${cur === k ? 'checked' : ''}><span>${l}</span></label>`).join('')}</div></section>`;
+  // "Contanti di": borsellino da cui escono (o in cui entrano) i contanti della nota (scontrini.contantiDi; mancante = chi l'ha inserita)
+  const persBors = () => (CTX && CTX.borsPersone ? CTX.borsPersone() : []);
+  const escH = t => String(t == null ? '' : t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const pagSec = (pre, cur, chi) => { const io = String((CTX && CTX.store && CTX.store.user) || '').toLowerCase(); chi = String(chi || io).toLowerCase();
+    const pp = persBors().slice(); if (io && !pp.some(x => x.email === io)) pp.unshift({ email: io, nome: 'I miei contanti (' + io + ')' }); if (chi && !pp.some(x => x.email === chi)) pp.push({ email: chi, nome: chi });
+    return `<section class="dsec sec-pag"><h4>Metodo di pagamento <span class="req" title="Obbligatorio">*</span></h4><div class="pag-opts">${PAGAMENTI.map(([k, l]) => `<label class="pag-opt"><input type="radio" name="${pre}-pag" value="${k}" ${cur === k ? 'checked' : ''}><span>${l}</span></label>`).join('')}</div>
+      <label class="field pag-chi" ${cur === 'contanti' ? '' : 'hidden'}><span>Contanti di (borsellino)</span><select id="${pre}-chi">${pp.map(x => `<option value="${escH(x.email)}" ${x.email === chi ? 'selected' : ''}>${escH(x.nome || x.email)}</option>`).join('')}</select></label></section>`; };
   const pagLetto = pre => { const r = document.querySelector(`input[name="${pre}-pag"]:checked`); return r ? r.value : null; };
+  const chiLetto = pre => { if (pagLetto(pre) !== 'contanti') return null; const el = document.getElementById(pre + '-chi'); return el && el.value ? el.value : null; };
+  document.addEventListener('change', e => { const t = e.target; if (!t || !/-pag$/.test(t.name || '')) return; const sec = t.closest('.sec-pag'); const w = sec && sec.querySelector('.pag-chi'); if (w) w.hidden = t.value !== 'contanti'; });
   const trattDi = (dep, l) => haRest(l) ? (Number(dep) || 0) - sommaRest(l) : 0;
   // aggiuntive: quanto trattenere sul deposito, quanto restituire, quanto addebitare oltre il deposito
   const sulDeposito = (dep, agg) => { const d = Number(dep) || 0; const tr = Math.min(agg, d); return { tr, resta: d - tr, oltre: Math.max(0, agg - d) }; };
@@ -203,7 +211,7 @@
           <label class="field"><span>Categoria</span><select id="ed-cat">${catOpts(esc, s, cur && !cur.nonInCalendario ? bookings.find(b => b.id === cur.id) : null)}</select><small class="note cat-tipo" id="ed-tipo"></small></label>
           <label class="field"><span>Motivo</span><input id="ed-mot" value="${esc(s.motivo || '')}"></label>
 </section>
-        ${pagSec('ed', s.pagamento || null)}
+        ${pagSec('ed', s.pagamento || null, s.contantiDi || s.creatoDa)}
         <section class="dsec sec-date"><h4>Villa e prenotazione</h4>
           <label class="field"><span>Villa</span><select id="ed-villa">${ville().map(v => `<option value="${esc(v.id)}" ${v.id === s.villaId ? 'selected' : ''}>${esc(v.name)}</option>`).join('')}</select></label>
           <label class="field"><span>Prenotazione</span><select id="ed-pren">${prenOpts(s.villaId)}</select></label></section>
@@ -229,8 +237,8 @@
         if (pv === '__keep') { prenotazioneId = s.prenotazioneId || null; prenotazione = s.prenotazione || null; }
         else if (pv) { const bk = bookings.find(x => x.id === pv); prenotazioneId = pv; prenotazione = { cliente: (bk.cliente || '').trim() || 'Prenotazione senza nome', from: bk.from, to: bk.to }; }
         else { prenotazioneId = null; prenotazione = null; }
-        const changes = Object.assign({ importo, data: $('#ed-data').value }, catSalva($('#ed-cat').value, prenotazioneId ? bookings.find(x => x.id === prenotazioneId) : null), { motivo: $('#ed-mot').value.trim(), villaId, prenotazioneId, prenotazione, pagamento: pagLetto('ed') });
-        const prevFields = { importo: s.importo, data: s.data, categoria: s.categoria || '', motivo: s.motivo || '', villaId: s.villaId, prenotazioneId: s.prenotazioneId || null, prenotazione: s.prenotazione || null , aggiuntiva: isAgg(s), servizio: s.servizio || null, pagamento: s.pagamento || null };
+        const changes = Object.assign({ importo, data: $('#ed-data').value }, catSalva($('#ed-cat').value, prenotazioneId ? bookings.find(x => x.id === prenotazioneId) : null), { motivo: $('#ed-mot').value.trim(), villaId, prenotazioneId, prenotazione, pagamento: pagLetto('ed'), contantiDi: chiLetto('ed') === String(s.creatoDa || '').toLowerCase() && !s.contantiDi ? null : chiLetto('ed') });
+        const prevFields = { importo: s.importo, data: s.data, categoria: s.categoria || '', motivo: s.motivo || '', villaId: s.villaId, prenotazioneId: s.prenotazioneId || null, prenotazione: s.prenotazione || null , aggiuntiva: isAgg(s), servizio: s.servizio || null, pagamento: s.pagamento || null, contantiDi: s.contantiDi || null };
         const same = Object.keys(changes).every(k => JSON.stringify(changes[k] ?? null) === JSON.stringify(prevFields[k] ?? null));
         if (same) { dlg.close(); return; }
         const previous = Object.assign({}, prevFields, { autore: s.modificatoDa || s.creatoDa || '', sostituitoDa: store.user || '', sostituitoIl: new Date().toISOString() });
@@ -321,7 +329,7 @@
         <section class="dsec sec-srv"><h4>Descrizione</h4>
           <label class="field"><span>Categoria</span><select id="nw-cat">${catOpts(esc, null)}</select><small class="note cat-tipo" id="nw-tipo"></small></label>
           <label class="field"><span>Motivo</span><input id="nw-mot" placeholder="es. pulizia finale, lampadina…"></label></section>
-        ${pagSec('nw', null)}
+        ${pagSec('nw', null, null)}
         <section class="dsec sec-st"><h4>Foto dello scontrino</h4>
           <div class="nw-photo"><img id="nw-prev" alt="" hidden><span class="note" id="nw-none">Nessuna foto</span>
             <label class="btn small" for="nw-cam">Scatta foto</label><input type="file" id="nw-cam" accept="image/*" capture="environment" hidden>
@@ -343,7 +351,7 @@
         if (!(importo > 0)) { $('#nw-msg').innerHTML = '<div class="warn err">Importo non valido.</div>'; return; }
         if (!pagLetto('nw')) { $('#nw-msg').innerHTML = '<div class="warn err">Scegli il metodo di pagamento: contanti, carta o bonifico.</div>'; return; }
         const pv = $('#nw-pren').value; const bk = pv ? bookings.find(x => x.id === pv) : null;
-        const dati = { villaId: $('#nw-villa').value, prenotazioneId: bk ? bk.id : null, prenotazione: bk ? { cliente: (bk.cliente || '').trim() || 'Prenotazione senza nome', from: bk.from, to: bk.to } : null, data: $('#nw-data').value, importo, motivo: $('#nw-mot').value.trim(), pagamento: pagLetto('nw') }; Object.assign(dati, catSalva($('#nw-cat').value, bk));
+        const dati = { villaId: $('#nw-villa').value, prenotazioneId: bk ? bk.id : null, prenotazione: bk ? { cliente: (bk.cliente || '').trim() || 'Prenotazione senza nome', from: bk.from, to: bk.to } : null, data: $('#nw-data').value, importo, motivo: $('#nw-mot').value.trim(), pagamento: pagLetto('nw'), contantiDi: chiLetto('nw') && chiLetto('nw') !== String(store.user || '').toLowerCase() ? chiLetto('nw') : null }; Object.assign(dati, catSalva($('#nw-cat').value, bk));
         $('#nw-save').disabled = true;
         try { await store.addScontrino(dati, foto); dlg.close(); toast('Spesa salvata: la vede anche l\'app Scontrini'); }
         catch (x) { $('#nw-save').disabled = false; $('#nw-msg').innerHTML = `<div class="warn err">Salvataggio non riuscito: ${esc(x.message || x)}</div>`; }

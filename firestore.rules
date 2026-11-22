@@ -112,6 +112,19 @@ service cloud.firestore {
     match /contratti/{id}         { allow read, write: if amministratore(); }
     match /contratti_modelli/{id} { allow read, write: if amministratore(); }
 
+    // borsellini dei contanti dei concierge (prelievi, spese personali, riconsegne): l'amministratore legge e modifica tutto;
+    // il concierge legge e inserisce solo i suoi movimenti (email == la sua), non li modifica né li cancella
+    match /borsellino/{id} {
+      allow read: if amministratore() || (autorizzato() && resource.data.email == emailUtente());
+      allow create: if amministratore() || (autorizzato() && request.resource.data.email == emailUtente() && request.resource.data.creatoDa.lower() == emailUtente());
+      allow update, delete: if amministratore();
+    }
+    match /borsellino_foto/{id} {
+      allow read: if amministratore() || (autorizzato() && resource.data.email == emailUtente());
+      allow create: if amministratore() || (autorizzato() && request.resource.data.email == emailUtente());
+      allow update, delete: if amministratore();
+    }
+
     match /meta/accessi   { allow read: if autorizzato(); allow write: if amministratore(); }
     match /meta/profili   { allow read: if autorizzato(); allow write: if amministratore(); }
     match /meta/settings  { allow read: if autorizzato(); allow write: if completo(); }

@@ -1433,3 +1433,18 @@ dialog.dlg-contr { width: min(980px, calc(100vw - 32px)); }
 .srv-ptar .ptar.on { background: var(--navy, #142861); border-color: var(--navy, #142861); color: #fff; }
 .flag.off-wb.off-dis { opacity: .5; cursor: not-allowed; }
 .sec-pag .req { color: #b3261e; }
+/* Borsellini */
+.bs-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+.bs-card { text-align: left; cursor: pointer; display: flex; flex-direction: column; gap: 2px; font: inherit; color: inherit; border: 1px solid var(--line); }
+.bs-card.on { outline: 2px solid var(--accent, #142861); }
+.bs-nome { font-weight: 600; }
+.bs-saldo { font-size: 26px; line-height: 1.1; }
+.bs-saldo.neg, .bs-det .neg, .bs-t .neg { color: #b3261e; }
+.bs-t .pos { color: #1b7a3a; }
+.bs-kv { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; margin: 8px 0 0; font-size: 13px; }
+.bs-kv dt { color: var(--muted); } .bs-kv dd { margin: 0; text-align: right; }
+.bs-det-h { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-bottom: 10px; }
+.bs-det-h h2 { margin: 0; } .bs-det-h .actions { margin-left: auto; display: flex; flex-wrap: wrap; gap: 8px; }
+.bs-pv { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 0 0 10px; font-size: 13px; }
+.bs-voci { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; }
+.bs-voci .row input, .dlg > .row input { flex: 1; }

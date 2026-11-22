@@ -25,7 +25,7 @@
 
   /* ------------------------------------------------------------------ LOCALE */
   function LocalStore() {
-    let state = null, canPersist = true; const memBro = [], offSubs = [], memContr = { cfg: null, mod: {}, c: {} };
+    let state = null, canPersist = true; const memBro = [], offSubs = [], memContr = { cfg: null, mod: {}, c: {} }, memBors = [], borsSubs = [], memBorsFoto = {};
     const subs = new Set();
     const read = () => { try { const raw = localStorage.getItem(KEY); if (raw) return JSON.parse(raw); } catch (e) { canPersist = false; } return null; };
     const persist = () => {
@@ -64,6 +64,12 @@
       async addBrochure(villaId, file, lingua) { const id = 'b' + Date.now(); memBro.push({ id, villaId, nome: file.name, lingua: lingua || '', size: file.size, parti: 1, _blob: new Blob([await file.arrayBuffer()], { type: 'application/pdf' }) }); return id; },
       getBrochure(b) { return Promise.resolve(b._blob); },
       deleteBrochure(b) { const i = memBro.findIndex(x => x.id === b.id); if (i >= 0) memBro.splice(i, 1); return Promise.resolve(); },
+      // borsellini (solo in memoria in locale): prelievi, spese personali e riconsegne di contanti
+      listenBorsellino(cb) { borsSubs.push(cb); cb(memBors.slice()); return () => { const i = borsSubs.indexOf(cb); if (i >= 0) borsSubs.splice(i, 1); }; },
+      addMovBors(x, foto) { const id = 'm' + Date.now() + Math.random().toString(36).slice(2, 6); memBors.push(Object.assign({ id, hasFoto: !!foto, creatoDa: 'locale', creatoIl: new Date().toISOString() }, x)); if (foto) memBorsFoto[id] = foto; borsSubs.forEach(f => f(memBors.slice())); return Promise.resolve(id); },
+      updMovBors(id, patch) { const x = memBors.find(y => y.id === id); if (x) Object.assign(x, patch, { modificatoDa: 'locale', modificatoIl: new Date().toISOString() }); borsSubs.forEach(f => f(memBors.slice())); return Promise.resolve(); },
+      delMovBors(id) { const i = memBors.findIndex(y => y.id === id); if (i >= 0) memBors.splice(i, 1); delete memBorsFoto[id]; borsSubs.forEach(f => f(memBors.slice())); return Promise.resolve(); },
+      getFotoBors(id) { return Promise.resolve(memBorsFoto[id] || null); },
       // contratti (solo in memoria in locale): modelli Word, predefiniti e dati del cliente per prenotazione
       getContrCfg() { return Promise.resolve(memContr.cfg ? JSON.parse(JSON.stringify(memContr.cfg)) : null); },
       setContrCfg(x) { memContr.cfg = JSON.parse(JSON.stringify(x)); return Promise.resolve(); },
@@ -519,6 +525,22 @@
       },
       delModello(l) { return db.collection('contratti_modelli').doc(l).delete(); },
       getContratto(id) { return db.collection('contratti').doc(id).get().then(d => d.exists ? d.data() : null); },
+      /* ---- borsellini dei contanti: borsellino/{id} = { email (di chi è il borsellino), tipo: 'prelievo'|'spesa'|'riconsegna', voce, pagamento,
+         importo, data, nota, hasFoto, creatoDa, creatoIl, modificatoDa, modificatoIl }; foto in borsellino_foto/{id} = { email, img }.
+         Regole: l'amministratore legge e modifica tutto; il concierge legge e inserisce solo i suoi (email == la sua), non modifica. ---- */
+      listenBorsellino(cb, onErr, email) {
+        let q = db.collection('borsellino'); if (email) q = q.where('email', '==', String(email).toLowerCase());
+        return q.onSnapshot(sn => cb(sn.docs.map(d => { const x = d.data(); return Object.assign({ id: d.id }, x, { creatoIl: x.creatoIl && x.creatoIl.toDate ? x.creatoIl.toDate().toISOString() : x.creatoIl || '' }); })), e => onErr && onErr(e));
+      },
+      async addMovBors(x, foto) {
+        const ref = db.collection('borsellino').doc(); const b = db.batch();
+        b.set(ref, Object.assign({}, x, { email: String(x.email || '').toLowerCase(), hasFoto: !!foto, creatoDa: api.user || '', creatoIl: firebase.firestore.FieldValue.serverTimestamp() }));
+        if (foto) b.set(db.collection('borsellino_foto').doc(ref.id), { email: String(x.email || '').toLowerCase(), img: foto });
+        await b.commit(); return ref.id;
+      },
+      updMovBors(id, patch) { return db.collection('borsellino').doc(id).update(Object.assign({}, patch, { modificatoDa: api.user || '', modificatoIl: firebase.firestore.FieldValue.serverTimestamp() })); },
+      async delMovBors(id, hasFoto) { const b = db.batch(); b.delete(db.collection('borsellino').doc(id)); if (hasFoto) b.delete(db.collection('borsellino_foto').doc(id)); await b.commit(); },
+      getFotoBors(id) { return db.collection('borsellino_foto').doc(id).get().then(d => d.exists ? d.data().img : null); },
       setContratto(id, x) { return db.collection('contratti').doc(id).set(x); },
       listContratti() { return db.collection('contratti').get().then(q => q.docs.map(d => Object.assign({ id: d.id }, d.data()))); },
       setCover(villaId, fotoId, thumb) { return db.collection('villas_thumb').doc(villaId).set({ thumb, fotoId }); },

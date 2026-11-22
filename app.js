@@ -185,6 +185,7 @@ window.SDBStore.ready.then(function () {
         <a href="#vendita" data-r="vendita">Vendita</a>
         <a href="#offerte" data-r="offerte">Offerte</a>
         <a href="#prenotazioni" data-r="prenotazioni"><span class="l-full">Prenotazioni</span><span class="l-short">Prenot.</span></a>
+        <a href="#borsellini" data-r="borsellini"><span class="l-full">Borsellini</span><span class="l-short">Borsell.</span></a>
         <a href="#appunti" data-r="appunti">Appunti</a>
         <a href="#impostazioni" data-r="impostazioni"><span class="l-full">Impostazioni</span><span class="l-short">Impost.</span></a>
       </nav>
@@ -198,15 +199,15 @@ window.SDBStore.ready.then(function () {
   /* Profilo dell'account collegato (store.profile, deciso all'accesso):
      full = vede e modifica tutto; altrimenti acquisto (prezzi di acquisto), modifica (prenotazioni),
      dettaglio (false = prenotazioni solo come ND), pagine visibili, ville condivise. */
-  const PAGES = [['disponibilita', 'Disponibilità'], ['ville', 'Ville'], ['vendita', 'Vendita'], ['offerte', 'Offerte'], ['prenotazioni', 'Prenotazioni'], ['appunti', 'Appunti'], ['impostazioni', 'Impostazioni']];
+  const PAGES = [['disponibilita', 'Disponibilità'], ['ville', 'Ville'], ['vendita', 'Vendita'], ['offerte', 'Offerte'], ['prenotazioni', 'Prenotazioni'], ['borsellini', 'Borsellini'], ['appunti', 'Appunti'], ['impostazioni', 'Impostazioni']];
   const ME = () => store.profile || { full: true, acquisto: true, modifica: true, dettaglio: true, pagine: null, ville: [] };
   const isFull = () => !!ME().full;
   const canAcq = () => isFull() || !!ME().acquisto;
   const canEdit = () => isFull() || (!!ME().modifica && !!ME().dettaglio);
   const canDetail = () => isFull() || !!ME().dettaglio;
   const isAdmin = () => store.mode !== 'online' || !!ME().admin;
-  const allowedPages = () => isFull() ? PAGES.map(p => p[0]) : PAGES.map(p => p[0]).filter(k => (ME().pagine || []).map(x => x === 'spese' ? 'prenotazioni' : x).includes(k));
-  const canSee = p => store.mode !== 'online' || allowedPages().includes(p);
+  const allowedPages = () => (isFull() ? PAGES.map(p => p[0]) : PAGES.map(p => p[0]).filter(k => (ME().pagine || []).map(x => x === 'spese' ? 'prenotazioni' : x).includes(k))).filter(k => k !== 'borsellini' || isAdmin());
+  const canSee = p => p === 'borsellini' ? !!window.SDBBorsellini && isAdmin() && (store.mode !== 'online' || allowedPages().includes('prenotazioni')) : (store.mode !== 'online' || allowedPages().includes(p));
 
   /* ---------- Backup ----------
      File JSON con ville (listini completi), prenotazioni, impostazioni, appunti, profili e account.
@@ -390,7 +391,7 @@ window.SDBStore.ready.then(function () {
   }
 
   // contesto della pagina Prenotazioni (spese.js)
-  const ctxPren = () => ({ ui, saveUI, esc, data, spese, store, $, $$, toast, schedaPren, compressImage, canAcq, canEdit, isFull, S, catSpese, hasSrv: (b, k) => hasSrv(b, servizi(null, null, true).find(x => x.key === k) || { key: k }), srvDet,
+  const ctxPren = () => ({ borsPersone: () => accScontrini().map(a => ({ email: a.email, nome: a.nome || a.email })), ui, saveUI, esc, data, spese, store, $, $$, toast, schedaPren, compressImage, canAcq, canEdit, isFull, S, catSpese, hasSrv: (b, k) => hasSrv(b, servizi(null, null, true).find(x => x.key === k) || { key: k }), srvDet,
     stati, statoLabel, bookingColor, valori: valoriPren, openBooking, gruppoAcq, ripDi, commAgenzia, agenzie, ridisegna: () => route(), pagatiLiberi: b => nottiDi(pagatiLiberi(b)),
     nuovaPren: villaId => { const v = villaById(villaId) || sortedVillas()[0]; if (!v) { toast('Prima inserisci una villa'); return; } openBooking(Object.assign({ villaId: v.id }, julyWeek(v))); }, cover: id => (thumbs.map[id] || {}).thumb || '', onThumbs: f => { villasRedraw = f; },
     contratto: window.SDBContratto && isAdmin() ? (b, onSaved) => window.SDBContratto.apri(b, ctxContr(onSaved)).catch(err => toast(err && err.code === 'permission-denied' ? 'Contratto: pubblica le regole nuove (contratti) nella console Firebase' : 'Contratto: ' + (err.message || err))) : null,
@@ -420,6 +421,7 @@ window.SDBStore.ready.then(function () {
     if (h === 'ville') return viewVillas();
     if (h === 'vendita') return viewVendita();
     if (h === 'prenotazioni' && window.SDBSpese) { spesePage = window.SDBSpese.mount(main, ctxPren(), ''); return; }
+    if (h === 'borsellini' && window.SDBBorsellini) { spesePage = window.SDBBorsellini.mount(main, { ui, saveUI, esc, store, toast, data, spese, accScontrini, compressImage }); return; }
     if (h === 'appunti') return viewNotes();
     // promemoria settimanale delle offerte (contatti da classificare, offerte non prese né perse): una volta per apertura dell'app
     if (!promoFatto && canSee('offerte') && window.SDBOfferte && window.SDBOfferte.promemoria) { promoFatto = true; setTimeout(() => window.SDBOfferte.promemoria({ store, toast, ui, saveUI, opzioni: canEdit() ? opzioniLista : null, openBooking: canEdit() ? openBooking : null }), 2500); }
@@ -1877,7 +1879,7 @@ window.SDBStore.ready.then(function () {
           <div class="prof-top"><input data-pn value="${esc(p.nome || '')}" aria-label="Nome del profilo" ${adm ? '' : 'disabled'}>
             ${adm && !nAcc ? '<button type="button" class="btn small danger" data-pdel>Elimina</button>' : ''}</div>
           <div class="prof-opt"><span class="lbl">Accesso</span><div class="seg small" data-pk="completo">${[[false, 'Limitato'], [true, 'Completo: vede e modifica tutto']].map(([v, l]) => `<button type="button" data-v="${v}" class="${!!p.completo === v ? 'on' : ''}" ${adm ? '' : 'disabled'}>${l}</button>`).join('')}</div></div>
-          ${p.completo ? '' : `<div class="prof-opt"><span class="lbl">Pagine</span><div class="pg-chips">${PAGES.map(([pk, l]) => `<label class="pg-chip"><input type="checkbox" data-ppg="${pk}" ${(p.pagine || []).includes(pk) ? 'checked' : ''} ${adm ? '' : 'disabled'}><span>${l}</span></label>`).join('')}</div></div>`}
+          ${p.completo ? '' : `<div class="prof-opt"><span class="lbl">Pagine</span><div class="pg-chips">${PAGES.filter(([pk]) => pk !== 'borsellini').map(([pk, l]) => `<label class="pg-chip"><input type="checkbox" data-ppg="${pk}" ${(p.pagine || []).includes(pk) ? 'checked' : ''} ${adm ? '' : 'disabled'}><span>${l}</span></label>`).join('')}</div></div>`}
           ${p.completo ? '' : PROF_OPTS.filter(([pk]) => pk === 'acquisto' ? (p.pagine || []).includes('disponibilita') || (p.pagine || []).includes('ville') : (p.pagine || []).includes('disponibilita')).map(([pk, lbl, opts]) => { const off = pk === 'modifica' && !p.dettaglio; return `<div class="prof-opt"><span class="lbl">${lbl}</span><div class="seg small" data-pk="${pk}">${opts.map(([v, l]) => `<button type="button" data-v="${v}" class="${(off ? false : !!p[pk]) === v ? 'on' : ''}" ${adm && !off ? '' : 'disabled'}>${l}</button>`).join('')}</div>${off ? '<span class="note">Con "Solo ND" le prenotazioni si possono solo vedere.</span>' : ''}</div>`; }).join('')}
           ${p.completo || !(p.pagine || []).includes('ville') ? '' : `<div class="prof-opt"><span class="lbl">Dati della scheda villa nascosti</span><div class="pg-chips ris-chips">${RIS_FIELDS.map(([fk, l]) => `<label class="pg-chip"><input type="checkbox" data-pris="${fk}" ${S.nascostiDi(p).includes(fk) ? 'checked' : ''} ${adm ? '' : 'disabled'}><span>${l}</span></label>`).join('')}</div></div>`}
         </div></details>`; }).join('') : '<p class="note">Nessun profilo. Creane uno, poi assegnalo agli account qui sopra.</p>';
