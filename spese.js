@@ -104,7 +104,7 @@
   const utDa = b => { if (!b || !CTX) return 0; const t = utCalc(b, CTX.data().settings).tot; return t && !utIncluse(b) ? t : 0; };
   const PAGAMENTI = [['contanti', 'Contanti'], ['carta', 'Carta di credito'], ['bonifico', 'Bonifico']];
   const pagLabel = k => (PAGAMENTI.find(x => x[0] === k) || [])[1] || '';
-  const pagSec = (pre, cur) => `<section class="dsec sec-pag"><h4>Metodo di pagamento</h4><div class="pag-opts">${PAGAMENTI.map(([k, l]) => `<label class="pag-opt"><input type="radio" name="${pre}-pag" value="${k}" ${cur === k ? 'checked' : ''}><span>${l}</span></label>`).join('')}</div></section>`;
+  const pagSec = (pre, cur) => `<section class="dsec sec-pag"><h4>Metodo di pagamento <span class="req" title="Obbligatorio">*</span></h4><div class="pag-opts">${PAGAMENTI.map(([k, l]) => `<label class="pag-opt"><input type="radio" name="${pre}-pag" value="${k}" ${cur === k ? 'checked' : ''}><span>${l}</span></label>`).join('')}</div></section>`;
   const pagLetto = pre => { const r = document.querySelector(`input[name="${pre}-pag"]:checked`); return r ? r.value : null; };
   const trattDi = (dep, l) => haRest(l) ? (Number(dep) || 0) - sommaRest(l) : 0;
   // aggiuntive: quanto trattenere sul deposito, quanto restituire, quanto addebitare oltre il deposito
@@ -223,6 +223,7 @@
         e.preventDefault();
         const importo = parseImporto($('#ed-imp').value);
         if (!(importo > 0)) { $('#ed-msg').innerHTML = '<div class="warn err">Importo non valido.</div>'; return; }
+        if (!pagLetto('ed')) { $('#ed-msg').innerHTML = '<div class="warn err">Scegli il metodo di pagamento: contanti, carta o bonifico.</div>'; return; }
         const villaId = $('#ed-villa').value, pv = $('#ed-pren').value;
         let prenotazioneId, prenotazione;
         if (pv === '__keep') { prenotazioneId = s.prenotazioneId || null; prenotazione = s.prenotazione || null; }
@@ -340,6 +341,7 @@
         e.preventDefault();
         const importo = parseImporto($('#nw-imp').value);
         if (!(importo > 0)) { $('#nw-msg').innerHTML = '<div class="warn err">Importo non valido.</div>'; return; }
+        if (!pagLetto('nw')) { $('#nw-msg').innerHTML = '<div class="warn err">Scegli il metodo di pagamento: contanti, carta o bonifico.</div>'; return; }
         const pv = $('#nw-pren').value; const bk = pv ? bookings.find(x => x.id === pv) : null;
         const dati = { villaId: $('#nw-villa').value, prenotazioneId: bk ? bk.id : null, prenotazione: bk ? { cliente: (bk.cliente || '').trim() || 'Prenotazione senza nome', from: bk.from, to: bk.to } : null, data: $('#nw-data').value, importo, motivo: $('#nw-mot').value.trim(), pagamento: pagLetto('nw') }; Object.assign(dati, catSalva($('#nw-cat').value, bk));
         $('#nw-save').disabled = true;

@@ -1432,3 +1432,4 @@ dialog.dlg-contr { width: min(980px, calc(100vw - 32px)); }
 .srv-ptar .ptar { border: 1px solid var(--line); background: var(--surface); color: var(--muted); border-radius: 999px; padding: 2px 9px; font-size: 12px; cursor: pointer; }
 .srv-ptar .ptar.on { background: var(--navy, #142861); border-color: var(--navy, #142861); color: #fff; }
 .flag.off-wb.off-dis { opacity: .5; cursor: not-allowed; }
+.sec-pag .req { color: #b3261e; }
