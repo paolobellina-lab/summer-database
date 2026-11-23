@@ -1458,3 +1458,4 @@ dialog.dlg-contr { width: min(980px, calc(100vw - 32px)); }
 /* numero di prenotazioni sotto "Predefinito in", a destra (senza "Riordina e togli" la colonna delle azioni non c'è) */
 .srv-tbl .c-uso { justify-self: end; text-align: right; }
 @media (min-width: 721px) { .srv-tbl.srv-noedit tr.srv-tr, .srv-tbl.srv-noedit tr.catv-row { grid-template-areas: "nome off car pdf var var" "sum sum ptar ptar ptar ptar" "sum sum uso uso uso uso"; } }
+.srv-tbl .srv-sum .srv-pr { flex-basis: 100%; }
