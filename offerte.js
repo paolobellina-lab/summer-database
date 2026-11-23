@@ -930,7 +930,7 @@
         const srvPre = {}; let venSrv = 0;
         if (sp) { srvPre.serviziDett = {}; srvPre.servizi = [];
           sp.forEach(q => { if (base.includes(q.k)) srvPre[q.k] = true; else srvPre.servizi.push(q.k);
-            srvPre.serviziDett[q.k] = { carico: q.carico, incluso: q.carico !== 'parte', acquisto: null, vendita: q.vendita, note: '' }; if (typeof q.vendita === 'number') venSrv += q.vendita; }); }
+            srvPre.serviziDett[q.k] = { carico: q.carico, incluso: q.carico !== 'parte', acquisto: null, vendita: q.vendita, quota: q.carico === 'parte' ? 'totale' : null, note: '' }; if (typeof q.vendita === 'number') venSrv += q.vendita; }); }
         const tot = typeof z.r.prezzo === 'number' ? z.r.prezzo : null, aff = tot == null ? undefined : sp ? Math.max(0, tot - venSrv) : tot;
         ctx.openBooking({ villaId: z.v.id, from, to,
           pre: Object.assign({ cliente: x.cliente || '', telefono: x.telefono || null, email: x.email || null, leader: x.cliente || x.telefono ? { nome: x.cliente || '', tel: x.telefono || '' } : null, ospiti: (() => { const a = x.stato ? Object.values(x.stato.srvOsp || {}).map(Number).filter(n => n > 0) : []; return a.length ? Math.max(...a) : x.stato && Number(x.stato.ospiti) > 0 ? Number(x.stato.ospiti) : null; })(), status: stato, prezzoVendita: aff, ...((() => { const id = x.agenziaId || (x.stato && x.stato.agenziaId); const a = id && (st.agenzie || []).find(y => y && y.id === id); return a ? { agenziaId: a.id, agenziaPerc: Number(a.perc) || 0 } : {}; })()), vociOfferta: Array.isArray(z.r.voci) ? z.r.voci : undefined, note: `Da offerta del ${dataBreve(x.quando)}${x.email ? ' · ' + x.email : ''}${x.telefono ? ' · ' + x.telefono : ''}` }, srvPre),

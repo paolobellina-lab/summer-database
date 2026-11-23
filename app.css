@@ -1474,3 +1474,13 @@ dialog.dlg-contr { width: min(980px, calc(100vw - 32px)); }
 .pr-kv dd { white-space: pre-line; }
 .dlg .b-occ-r { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 36px; gap: 10px; align-items: end; }
 .dlg .b-occ-r .b-occ-x { width: 36px; min-width: 0; padding: 6px 0; margin: 0 0 2px; }
+/* prezzo al cliente: riepilogo e finestra prenotazione */
+.pr-pcli { width: 100%; border-collapse: collapse; margin: 6px 0 10px; font-size: 14px; }
+.pr-pcli td { padding: 3px 0; border: 0; }
+.pr-pcli td.r { text-align: right; white-space: nowrap; }
+.pr-pcli .pc-t td { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 6px 0; }
+.pr-pcli .pc-g td { padding-top: 8px; font-weight: 600; color: var(--navy, #142861); }
+.pr-pcli .pc-s td:first-child { padding-left: 16px; color: var(--muted); }
+.b-pcli { margin-top: 8px; padding: 8px 10px; border: 1px dashed var(--line); border-radius: 8px; display: grid; gap: 2px; font-size: 13.5px; }
+.b-pcli:empty { display: none; }
+.srv-quota { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 4px 0; }

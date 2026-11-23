@@ -107,6 +107,15 @@
   // "Contanti di": borsellino da cui escono (o in cui entrano) i contanti della nota (scontrini.contantiDi; mancante = chi l'ha inserita)
   const persBors = () => (CTX && CTX.borsPersone ? CTX.borsPersone() : []);
   const escH = t => String(t == null ? '' : t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  // Riepilogo: prezzo al cliente diviso fra unico totale (affitto + servizi "nel totale") e servizi quotati a parte; poi gli inclusi senza costo
+  const pcliHtml = sc => { const L = sc.srvInfo || [], E = t => escH(t), M = n => euro(n || 0);
+    const tot = L.filter(z => z.carico === 'parte' && z.quota === 'totale'), sep = L.filter(z => z.carico === 'parte' && z.quota !== 'totale'), inc = L.filter(z => z.carico !== 'parte');
+    const sm = l => l.reduce((t, z) => t + (z.vendita || 0), 0), unico = (sc.affitto || 0) + sm(tot);
+    const riga = (l, v, c) => `<tr class="${c || ''}"><td>${l}</td><td class="r">${v}</td></tr>`;
+    return `<table class="pr-pcli"><tbody>${riga('<b>Prezzo al cliente</b>', `<b>${M(unico + sm(sep))}</b>`, 'pc-t')}
+      ${riga('In un unico totale', M(unico), 'pc-g')}${riga('Affitto villa', sc.affitto === null ? '—' : M(sc.affitto), 'pc-s')}${tot.map(z => riga(E(z.label), z.vendita === null ? '—' : M(z.vendita), 'pc-s')).join('')}
+      ${sep.length ? riga('Quotati a parte <small class="note">il cliente ha il dettaglio</small>', M(sm(sep)), 'pc-g') + sep.map(z => riga(E(z.label), z.vendita === null ? '—' : M(z.vendita), 'pc-s')).join('') : ''}
+      ${inc.length ? riga('Inclusi senza costo per il cliente', '', 'pc-g') + inc.map(z => riga(E(z.label), E(window.SDB.CARICO_LABEL[z.carico].replace(/^A carico/, 'a carico')), 'pc-s')).join('') : ''}</tbody></table>`; };
   const pagSec = (pre, cur, chi) => { const io = String((CTX && CTX.store && CTX.store.user) || '').toLowerCase(); chi = String(chi || io).toLowerCase();
     const pp = persBors().slice(); if (io && !pp.some(x => x.email === io)) pp.unshift({ email: io, nome: 'I miei contanti (' + io + ')' }); if (chi && !pp.some(x => x.email === chi)) pp.push({ email: chi, nome: chi });
     return `<section class="dsec sec-pag"><h4>Metodo di pagamento <span class="req" title="Obbligatorio">*</span></h4><div class="pag-opts">${PAGAMENTI.map(([k, l]) => `<label class="pag-opt"><input type="radio" name="${pre}-pag" value="${k}" ${cur === k ? 'checked' : ''}><span>${l}</span></label>`).join('')}</div>
@@ -898,13 +907,12 @@
         }
       }
       const cats = {}; x.spese.forEach(s => { const c = s.categoria || 'Altro'; cats[c] = (cats[c] || 0) + (isRest(s) ? -1 : 1) * (Number(s.importo) || 0); });
+      let info2 = [];
       const info = sc ? (() => { // affitto al cliente e vendita dei servizi offerti, sopra il deposito di sicurezza
           const r = sc.righe.filter(([l]) => !/^Prezzo di (vendita|acquisto)/.test(l));
           const iv = sc.acq ? 3 : 2;
-          const add = [['Affitto villa al cliente', x.b && typeof x.b.prezzoVendita === 'number' ? euro(x.b.prezzoVendita) : '—']]
-            .concat(sc.servizi.map(z => [z[0], z[1] !== window.SDB.CARICO_LABEL.parte ? 'incluso · ' + z[1].replace(/^A carico/, 'a carico') : (z[iv] || '—')]));
           let k = r.findIndex(([l]) => /^(Deposito di sicurezza|Pagata al proprietario|Notti pagate libere|Assegnata a|Note)/.test(l)); if (k < 0) k = r.length;
-          r.splice(k, 0, ...add); return r; })() : x.gen ? [['Villa', villa.name], ['Località', villa.location || '']] : [['Villa', villa.name], ['Cliente', x.cliente], ['Check-in', dataIt(x.from)], ['Check-out', dataIt(x.to)], ['Stato', 'Non più in calendario']];
+          info2 = r.slice(k); return r.slice(0, k); })() : x.gen ? [['Villa', villa.name], ['Località', villa.location || '']] : [['Villa', villa.name], ['Cliente', x.cliente], ['Check-in', dataIt(x.from)], ['Check-out', dataIt(x.to)], ['Stato', 'Non più in calendario']];
       root.innerHTML = `<div class="wrap pr-det">
         <a href="#prenotazioni" class="pr-back no-print">← Tutte le prenotazioni</a>
         <div class="head"><div><h1>${esc(villa.name)}</h1><div class="sub">${x.gen ? 'Spese generali della villa' : `${esc(x.cliente)} · ${esc(dataBreve(x.from))} → ${esc(dataBreve(x.to))} · ${nNotti(x.from, x.to)} notti`}</div></div>
@@ -925,7 +933,7 @@
                 ${ed ? `<p class="note no-print" style="margin:6px 0 0"><span id="ut-stato">Si salva da solo quando esci dalla tabella.</span> <span id="ut-msg"></span></p>` : ''}
                 <p class="note">${utIncluse(x.b) ? '<b>Utenze incluse nel prezzo</b> (servizio Utenze spuntato come incluso): i consumi non si fanno pagare.' : '<b>Il totale è una spesa aggiuntiva</b> (servizio Utenze a parte o non spuntato): conta nelle spese totali e nel totale da addebitare al cliente; trattienilo dal deposito o registra una nota "Addebito cliente".'}</p></div>`; })() : ''}
           </div>
-          <div class="card pr-info"><h2>${x.gen ? 'Villa' : 'Prenotazione'}</h2><dl class="pr-kv">${info.map(([l, val0]) => `<dt>${esc(l)}</dt><dd>${esc(val0)}</dd>`).join('')}</dl>
+          <div class="card pr-info"><h2>${x.gen ? 'Villa' : 'Prenotazione'}</h2><dl class="pr-kv">${info.map(([l, val0]) => `<dt>${esc(l)}</dt><dd>${esc(val0)}</dd>`).join('')}</dl>${sc ? pcliHtml(sc) : ''}${info2.length ? `<dl class="pr-kv">${info2.map(([l, val0]) => `<dt>${esc(l)}</dt><dd>${esc(val0)}</dd>`).join('')}</dl>` : ''}
             ${x.b && ctx.commAgenzia && x.b.agenziaId ? (() => { const c = ctx.commAgenzia(x.b), reg = x.spese.filter(s => s.categoria === COMM), regT = reg.reduce((t, s) => t + (Number(s.importo) || 0), 0);
               return `<div class="pr-ag"><h3>Agenzia</h3><dl class="pr-kv"><dt>Agenzia</dt><dd>${esc(c.nome)} · ${esc(String(Math.round(c.perc * 1000) / 10).replace('.', ','))}%</dd>
                 <dt>Da riconoscere</dt><dd><b>${c.importo === null ? '—' : esc(euro(c.importo))}</b> <small class="note">${c.base === null ? 'manca la vendita' : `sulla vendita ${esc(euro(Math.round(c.base)))}`}</small></dd>
