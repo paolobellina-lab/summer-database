@@ -1531,3 +1531,4 @@ dialog.dlg-pvar { width: min(780px, calc(100vw - 32px)); }
 .off-srv-modi { gap: 6px 22px; align-items: center; }
 .off-srv-modi > [data-squota] { position: relative; }
 .off-srv-modi > [data-squota]::before { content: ""; position: absolute; left: -12px; top: 4px; bottom: 4px; border-left: 1px solid var(--line); }
+.off-srv-modi { column-gap: 48px; } .off-srv-modi > [data-squota]::before { left: -24px; }
