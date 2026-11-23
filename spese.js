@@ -914,22 +914,23 @@
             ${x.b && ctx.contratto ? '<button class="btn" type="button" id="pd-contr">Contratto</button>' : ''}
             ${x.b && ctx.canEdit() ? '<button class="btn" type="button" id="pd-mod">Modifica prenotazione</button>' : ''}</div></div>
         <div class="pr-top">
-          ${media(x.villaId, pill(x))}
-          <div class="card pr-info"><h2>${x.gen ? 'Villa' : 'Prenotazione'}</h2><dl class="pr-kv">${info.map(([l, val0]) => `<dt>${esc(l)}</dt><dd>${esc(val0)}</dd>`).join('')}</dl>
-            ${x.b && ctx.commAgenzia && x.b.agenziaId ? (() => { const c = ctx.commAgenzia(x.b), reg = x.spese.filter(s => s.categoria === COMM), regT = reg.reduce((t, s) => t + (Number(s.importo) || 0), 0);
-              return `<div class="pr-ag"><h3>Agenzia</h3><dl class="pr-kv"><dt>Agenzia</dt><dd>${esc(c.nome)} · ${esc(String(Math.round(c.perc * 1000) / 10).replace('.', ','))}%</dd>
-                <dt>Da riconoscere</dt><dd><b>${c.importo === null ? '—' : esc(euro(c.importo))}</b> <small class="note">${c.base === null ? 'manca la vendita' : `sulla vendita ${esc(euro(Math.round(c.base)))}`}</small></dd>
-                ${reg.length ? `<dt>Registrata</dt><dd>${esc(euro(regT))} <small class="note">${reg.length} ${reg.length === 1 ? 'nota' : 'note'} "${COMM}"</small></dd>` : ''}</dl>
-</div>`; })() : ''}
+          <div class="pr-lcol">${media(x.villaId, pill(x))}
             ${x.b ? (() => { const uc = utCalc(x.b, ctx.data().settings), ed = ctx.canEdit();
               const cel = (k, f, v0, ph) => ed ? `<input class="ut-in" data-ut="${k}|${f}" inputmode="decimal" value="${esc(fmtU(v0))}"${ph ? ` placeholder="${esc(ph)}"` : ''}>` : esc(fmtU(v0) || '—');
-              return `<div class="pr-ut"><h3>Utenze</h3><p class="note">Letture dei contatori all'arrivo e all'uscita: il consumo × la tariffa dà quanto far pagare al cliente.</p>
+              return `<div class="card pr-ut"><h2>Utenze</h2><p class="note">Letture dei contatori all'arrivo e all'uscita: il consumo × la tariffa dà quanto far pagare al cliente.</p>
                 <div class="tbl-wrap"><table class="prices ut-t"><thead><tr><th></th><th class="r">Check-in</th><th class="r">Check-out</th><th class="r">Consumo</th><th class="r">€ / unità</th><th class="r">Importo</th></tr></thead><tbody>
                 ${uc.righe.map(r => `<tr data-utr="${r.k}"><td><b>${esc(r.l)}</b> <small class="note">${esc(r.un)}</small></td><td class="r">${cel(r.k, 'in', r.i0)}</td><td class="r">${cel(r.k, 'out', r.o0)}</td>
                   <td class="r" data-utc>${r.cons === null ? '—' : esc(fmtU(r.cons)) + ' ' + esc(r.un)}</td><td class="r">${cel(r.k, 'tariffa', r.tPred ? null : r.t0, r.tPred ? fmtU(r.t0) : '')}</td><td class="r" data-uti>${r.imp === null ? '—' : esc(euro(r.imp))}</td></tr>`).join('')}
                 </tbody><tfoot><tr><td colspan="5"><b>Totale utenze da far pagare</b></td><td class="r"><b id="ut-tot">${uc.tot === null ? '—' : esc(euro(uc.tot))}</b></td></tr></tfoot></table></div>
                 ${ed ? `<p class="note no-print" style="margin:6px 0 0"><span id="ut-stato">Si salva da solo quando esci dalla tabella.</span> <span id="ut-msg"></span></p>` : ''}
                 <p class="note">${utIncluse(x.b) ? '<b>Utenze incluse nel prezzo</b> (servizio Utenze spuntato come incluso): i consumi non si fanno pagare.' : '<b>Il totale è una spesa aggiuntiva</b> (servizio Utenze a parte o non spuntato): conta nelle spese totali e nel totale da addebitare al cliente; trattienilo dal deposito o registra una nota "Addebito cliente".'}</p></div>`; })() : ''}
+          </div>
+          <div class="card pr-info"><h2>${x.gen ? 'Villa' : 'Prenotazione'}</h2><dl class="pr-kv">${info.map(([l, val0]) => `<dt>${esc(l)}</dt><dd>${esc(val0)}</dd>`).join('')}</dl>
+            ${x.b && ctx.commAgenzia && x.b.agenziaId ? (() => { const c = ctx.commAgenzia(x.b), reg = x.spese.filter(s => s.categoria === COMM), regT = reg.reduce((t, s) => t + (Number(s.importo) || 0), 0);
+              return `<div class="pr-ag"><h3>Agenzia</h3><dl class="pr-kv"><dt>Agenzia</dt><dd>${esc(c.nome)} · ${esc(String(Math.round(c.perc * 1000) / 10).replace('.', ','))}%</dd>
+                <dt>Da riconoscere</dt><dd><b>${c.importo === null ? '—' : esc(euro(c.importo))}</b> <small class="note">${c.base === null ? 'manca la vendita' : `sulla vendita ${esc(euro(Math.round(c.base)))}`}</small></dd>
+                ${reg.length ? `<dt>Registrata</dt><dd>${esc(euro(regT))} <small class="note">${reg.length} ${reg.length === 1 ? 'nota' : 'note'} "${COMM}"</small></dd>` : ''}</dl>
+</div>`; })() : ''}
             ${x.b ? `<label class="flag pr-concl no-print" style="margin-top:12px"><input type="checkbox" id="pd-concl" ${x.b.conteggiConclusi ? 'checked' : ''} ${ctx.canEdit() ? '' : 'disabled'}><span><b>Conteggi conclusi</b><small>Deposito, addebiti e affitto al proprietario chiusi: nell'elenco la scheda risulta "Conteggi conclusi"</small></span></label>` : ''}</div>
         </div>
         ${quad ? '' : `<div class="card pr-valori"><h2>Valori</h2><div class="tbl-wrap"><table class="prices pr-val-t"><thead><tr><th>Voce</th>${tab4 ? '<th class="r">Previsto</th><th class="r">Reale</th><th class="r">Differenza</th>' : '<th class="r">Importo</th>'}</tr></thead><tbody>${celle}</tbody></table></div>

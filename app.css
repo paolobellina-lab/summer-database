@@ -1459,3 +1459,8 @@ dialog.dlg-contr { width: min(980px, calc(100vw - 32px)); }
 .srv-tbl .c-uso { justify-self: end; text-align: right; }
 @media (min-width: 721px) { .srv-tbl.srv-noedit tr.srv-tr, .srv-tbl.srv-noedit tr.catv-row { grid-template-areas: "nome off car pdf var var" "sum sum ptar ptar ptar ptar" "sum sum uso uso uso uso"; } }
 .srv-tbl .srv-sum .srv-pr { flex-basis: 100%; }
+/* colonna sinistra del Riepilogo: foto e, sotto, riquadro Utenze */
+.pr-lcol { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.pr-lcol > .vc-media { flex: 1 1 auto; min-height: 280px !important; }
+.pr-lcol > .pr-ut { margin: 0; }
+.pr-lcol > .card.pr-ut { border-top: 1px solid var(--line); padding-top: 18px; }
