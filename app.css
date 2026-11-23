@@ -1448,4 +1448,10 @@ dialog.dlg-contr { width: min(980px, calc(100vw - 32px)); }
 .bs-pv { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 0 0 10px; font-size: 13px; }
 .bs-voci { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; }
 .bs-voci .row input, .dlg > .row input { flex: 1; }
-.srv-tbl .srv-sum .srv-ptar { margin-left: auto; order: 9; justify-content: flex-end; }
+
+/* "Predefinito in": sotto "Modifica prezzi", allineato a destra */
+.srv-tbl tr.srv-tr, .srv-tbl tr.catv-row { grid-template-areas: "nome off car pdf var var" "sum sum ptar ptar ptar ptar" "sum sum uso uso uso act"; }
+.srv-tbl .c-ptar .srv-ptar { flex-wrap: nowrap; white-space: nowrap; }
+.srv-tbl .c-ptar { grid-area: ptar; display: flex !important; justify-content: flex-end; }
+.srv-tbl .c-ptar:empty { display: none !important; }
+@media (max-width: 720px) { .srv-tbl tr.srv-tr, .srv-tbl tr.catv-row { grid-template-areas: "nome nome" "off pdf" "car car" "var var" "ptar ptar" "sum sum" "uso act"; } .srv-tbl .c-ptar { justify-content: flex-start; } }
