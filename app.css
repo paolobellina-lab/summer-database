@@ -1528,3 +1528,6 @@ dialog.dlg-pvar { width: min(780px, calc(100vw - 32px)); }
 .off-seg2 button { line-height: 1.15; padding-top: 3px; padding-bottom: 3px; white-space: normal; text-align: center; }
 .off-seg2 button.grig:not(.on) { background: #efece7; color: #aaa49b; }
 .off-ecc { display: block; color: #b42318; font-size: 11.5px; font-weight: 600; margin-top: 2px; }
+.off-srv-modi { gap: 6px 22px; align-items: center; }
+.off-srv-modi > [data-squota] { position: relative; }
+.off-srv-modi > [data-squota]::before { content: ""; position: absolute; left: -12px; top: 4px; bottom: 4px; border-left: 1px solid var(--line); }
