@@ -1544,3 +1544,4 @@ dialog.dlg-pvar { width: min(780px, calc(100vw - 32px)); }
 .off-seg2 button.def:not(.on) { background: #d4ab6a; color: #3f2a0c; border-color: #b8894a; }
 #off-srv tr[data-ok] > td { border-top: 4px solid var(--surface); }
 .off-tolto b { text-decoration: line-through; opacity: .7; }
+.off-seg2 button.def:not(.on) { background: var(--accent); color: #fff; border-color: var(--accent); }
