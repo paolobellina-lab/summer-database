@@ -1448,3 +1448,4 @@ dialog.dlg-contr { width: min(980px, calc(100vw - 32px)); }
 .bs-pv { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 0 0 10px; font-size: 13px; }
 .bs-voci { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; }
 .bs-voci .row input, .dlg > .row input { flex: 1; }
+.srv-tbl .srv-sum .srv-ptar { margin-left: auto; order: 9; justify-content: flex-end; }
