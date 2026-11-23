@@ -382,8 +382,13 @@
     const incAttiva = x => { if (!x.servizio) return true; const vv = scelte(); return vv.length ? vv.some(v => haServ(v, x.servizio)) : srvDi(x.servizio).on; };
     const incTesti = () => { const sel = incSel(); return S.inclusioniDi(st).filter(x => sel.includes(x.id) && (x.servizio ? inclTutte().includes(x.servizio) : true)).map(x => { const t = (o.lingua === 'en' ? x.en : x.it) || x.it || x.en; const v0 = scelte()[0]; return x.servizio && S.isOre(st, x.servizio) && figOff(x.servizio, v0).length > 1 ? S.nomeFigure(figOff(x.servizio, v0), o.lingua) + ': ' + t : t; }).concat(srvInclusi())
       .concat(String(o.incExtra || '').split('\n').map(t => t.trim()).filter(Boolean)); };
-    const chiInclude = k => { const vv = scelte(); if (!vv.length) return 'Secondo la scheda di ogni villa'; const si = vv.filter(v => inclVilla(v, k)).length;
-      return si === vv.length ? 'Compreso in tutte le ville scelte' : si ? `Compreso in ${si} ${si === 1 ? 'villa' : 'ville'} su ${vv.length}, a parte ${vv.length - si === 1 ? "nell'altra" : 'nelle altre'}` : 'A parte in tutte le ville scelte'; };
+    // come esce il servizio in ogni villa scelta (con Da scheda villa): già nel listino, omaggio, sommato nel totale unico o voce separata
+    const chiInclude = k => { const vv = scelte(); if (!vv.length) return 'Secondo la scheda di ogni villa';
+      const LBL = { listino: 'già compreso nel listino', omaggio: 'omaggio, non sommato', totale: 'sommato nel totale unico', separata: 'voce separata' };
+      const cls = v => inclusoPer(v, k) ? (S.caricoDef(st, v, k, o.tariff) === 'parte' ? 'listino' : 'omaggio') : (quotaOff(k) === 'separato' ? 'separata' : 'totale');
+      const n = {}; vv.forEach(v => { const c = cls(v); n[c] = (n[c] || 0) + 1; }); const ks = Object.keys(n);
+      if (ks.length === 1) return (vv.length === 1 ? 'Nella villa scelta: ' : 'In tutte le ville scelte: ') + LBL[ks[0]];
+      return ks.map(c => LBL[c] + ' in ' + n[c] + ' ' + (n[c] === 1 ? 'villa' : 'ville')).join(' · '); };
     // default tra le ville scelte: il carico più frequente (a parità quello di Impostazioni); eccezioni = le scelte con un carico diverso
     const carScelte = k => { const gen = S.caricoSet(st, k, o.tariff), vv = scelte(); if (!vv.length) return { def: gen, ecc: [] };
       const n = {}; vv.forEach(v => { const c = S.caricoDef(st, v, k, o.tariff); n[c] = (n[c] || 0) + 1; });
