@@ -1526,7 +1526,7 @@ dialog.dlg-pvar { width: min(780px, calc(100vw - 32px)); }
 .dlg .pv-pt tbody th { width: 1%; white-space: nowrap; } .dlg .pv-pt select { padding-left: 6px; padding-right: 22px; font-size: 13px; }
 /* Offerte punto 3: tasti su due righe, default in marroncino, eccezioni in rosso */
 .off-seg2 button { line-height: 1.15; padding-top: 3px; padding-bottom: 3px; white-space: normal; text-align: center; }
-.off-seg2 button.grig:not(.on) { background: #efece7; color: #aaa49b; }
+.off-seg2 button.def:not(.on) { background: #e8d5b5; color: #5b3d14; border-color: #c9a56b; }
 .off-ecc { display: block; color: #b42318; font-size: 11.5px; font-weight: 600; margin-top: 2px; }
 .off-srv-modi { gap: 6px 22px; align-items: center; }
 .off-srv-modi > [data-squota] { position: relative; }
