@@ -277,7 +277,9 @@
   const voceKey = nome => VOCE + nome;
   const isVoceKey = k => String(k || '').startsWith(VOCE);
   const voceNome = k => String(k || '').slice(VOCE.length);
-  const caricoSet = (st, k) => { if (isVoceKey(k)) { const n = voceNome(k); return ((st && st.categorieAggiuntive) || []).includes(n) ? 'parte' : ((st && st.categorieProprietario) || []).includes(n) ? 'proprietario' : 'esmeralda'; }
+  // tar (facoltativo): carico della tariffa (prezziServizi[k].caricoTar = { tariffa: carico }, solo servizi); senza = carico generale
+  const caricoSet = (st, k, tar) => { if (tar && !isVoceKey(k)) { const ct = ((((st && st.prezziServizi) || {})[k] || {}).caricoTar) || {}; if (CARICHI.includes(ct[tar])) return ct[tar]; }
+    if (isVoceKey(k)) { const n = voceNome(k); return ((st && st.categorieAggiuntive) || []).includes(n) ? 'parte' : ((st && st.categorieProprietario) || []).includes(n) ? 'proprietario' : 'esmeralda'; }
     const c = caricoGrezzo(st, k); return c === 'esmeralda' && !(st && st.caricoV2) ? 'parte' : c; };
   // carico com'era salvato (prima del 20/11/2026 "Esmeralda" voleva dire "compreso nel listino": ora è Cliente + Predefinito; caricoV2 = convertito)
   function caricoGrezzo(st, k) { const d = ((st && st.prezziServizi) || {})[k] || {}; return CARICHI.includes(d.carico) ? d.carico : d.incluso === true ? 'esmeralda' : 'parte'; }
@@ -298,7 +300,7 @@
   const migraCarichi = st0 => { const st = JSON.parse(JSON.stringify(st0 || {})); if (st.caricoV2) return st; const ps = st.prezziServizi = st.prezziServizi || {};
     Object.keys(ps).forEach(k => { const pd = predefSet(st0, k); if (!isVoceKey(k) && caricoGrezzo(st0, k) === 'esmeralda') { ps[k].carico = 'parte'; ps[k].incluso = false; } ps[k].predef = pd; });
     st.caricoV2 = true; return st; };
-  const caricoDef = (st, villa, k) => villa && (villa.serviziInclusi || []).includes(k) ? 'proprietario' : caricoSet(st, k);
+  const caricoDef = (st, villa, k, tar) => villa && (villa.serviziInclusi || []).includes(k) ? 'proprietario' : caricoSet(st, k, tar);
   // dettaglio di una prenotazione: carico salvato, altrimenti il vecchio "incluso" (incluso = a carico di Esmeralda)
   const caricoDi = d => d && CARICHI.includes(d.carico) ? d.carico : d && d.incluso === false ? 'parte' : 'esmeralda';
   const TAR_SETT = { settimanale: 1, bisettimanale: 2, mensile: 4, bimensile: 8 };

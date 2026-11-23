@@ -140,17 +140,17 @@
     // un servizio è incluso per una villa se "Includi tutti", oppure con "Predefinito" se la scheda villa lo ha tra i servizi compresi nel prezzo
     // compreso nel prezzo della villa: a carico di Esmeralda (già nelle spese servizi del listino) o del proprietario (scheda villa)
     // compreso nel prezzo per questa villa: omaggio di Esmeralda, a carico del proprietario, o del cliente ma Predefinito (già nel listino)
-    const inclVilla = (v, k) => { const c = S.caricoDef(settings(), v, k); return c !== 'parte' || (S.predefSet(settings(), k, o.tariff) && S.quotaTarDi(settings(), k, o.tariff) === 'totale'); };
+    const inclVilla = (v, k) => { const c = S.caricoDef(settings(), v, k, o.tariff); return c !== 'parte' || (S.predefSet(settings(), k, o.tariff) && S.quotaTarDi(settings(), k, o.tariff) === 'totale'); };
     // chi paga il servizio in questa villa (con Predefinito: Impostazioni e scheda villa)
-    const caricoOff = (v, k) => { const d = srvDi(k); return d.modo === 'pred' ? S.caricoDef(settings(), v, k) : d.modo; };
+    const caricoOff = (v, k) => { const d = srvDi(k); return d.modo === 'pred' ? S.caricoDef(settings(), v, k, o.tariff) : d.modo; };
     // non sommato al prezzo: omaggio di Esmeralda, fornito dal proprietario, o del cliente ma Predefinito (già nel listino)
-    const inclusoPer = (v, k) => { const d = srvDi(k); return d.modo === 'pred' ? inclVilla(v, k) && !(d.quota === 'separato' && S.caricoDef(settings(), v, k) === 'parte') : d.modo !== 'parte'; };
+    const inclusoPer = (v, k) => { const d = srvDi(k); return d.modo === 'pred' ? inclVilla(v, k) && !(d.quota === 'separato' && S.caricoDef(settings(), v, k, o.tariff) === 'parte') : d.modo !== 'parte'; };
     // servizio del cliente sommato al prezzo: "totale" = nel totale unico, "separato" = voce separata con il suo prezzo (di norma da Impostazioni)
     const quotaOff = k => { const d = srvDi(k); return d.quota || S.quotaTarDi(st, k, o.tariff); };
     const srvAttivi = () => srvList().map(x => Object.assign({}, x, srvDi(x.key))).filter(x => x.on).map(x => Object.assign(x, { eur: S.parseMoney(x.prezzo) }));
     const srvAparte = v => srvAttivi().filter(x => !inclusoPer(v, x.key)).map(x => Object.assign({}, x, { eur: prezzoSrv(v, x.key) }));
     // inclusi divisi per chi li paga: a carico del proprietario (scheda villa o Impostazioni), altrimenti Esmeralda
-    const incRighe = (v, inc) => { const c = x => S.caricoDef(st, v, x.key), pr = inc.filter(x => c(x) === 'proprietario'), om = inc.filter(x => c(x) === 'esmeralda'), cl = inc.filter(x => !pr.includes(x) && !om.includes(x));
+    const incRighe = (v, inc) => { const c = x => S.caricoDef(st, v, x.key, o.tariff), pr = inc.filter(x => c(x) === 'proprietario'), om = inc.filter(x => c(x) === 'esmeralda'), cl = inc.filter(x => !pr.includes(x) && !om.includes(x));
       const r = (t, l) => l.length ? `<small class="off-riep-l">${t}: ${esc(l.map(x => x.label).join(', '))}</small>` : '';
       return r('Inclusi nel prezzo', cl) + r('Omaggio Esmeralda', om) + r('Inclusi proprietario', pr); };
     const srvInclVilla = v => srvList().filter(x => srvDi(x.key).on && inclusoPer(v, x.key));
@@ -199,7 +199,7 @@
     const ogniP = fn => Array.from({ length: nP() }, (_, i) => conP(i, () => fn(i)));
     // listino della villa; se un servizio Predefinito a carico del cliente (già nelle spese servizi del listino) è tolto dall'offerta
     // o messo "a parte", il listino si rifà con la stessa formula (agenzia e arrotondamento) senza quel servizio
-    const inListinoOff = (v, k) => S.predefSet(st, k, o.tariff) && S.quotaTarDi(st, k, o.tariff) === 'totale' && S.caricoDef(st, v, k) === 'parte';
+    const inListinoOff = (v, k) => S.predefSet(st, k, o.tariff) && S.quotaTarDi(st, k, o.tariff) === 'totale' && S.caricoDef(st, v, k, o.tariff) === 'parte';
     const prezzoListinoSrv = (v, k) => { const n = (S.TAR_SETT[o.tariff] || 1) * 7, pv = (v.prezziServizi || {})[k], d = (st.prezziServizi || {})[k] || {};
       const z = typeof pv === 'number' ? S.srvPrezzo(st, k, pv, n) : S.srvPrezzoV(st, k, typeof d.vendita === 'number' ? d.vendita : null, n, { villa: v }); return typeof z === 'number' ? z : 0; };
     const srvToltiListino = v => srvList().filter(x => inListinoOff(v, x.key) && (!srvDi(x.key).on || !inclusoPer(v, x.key)));
@@ -415,7 +415,7 @@
         const srvIn = ag.length ? ag.map(x => { const b0 = prezzoSrvBase(v, x.key), cur = (o.srvVilla[v.id] || {})[x.key]; const val0 = cur !== undefined ? cur : typeof x.eur === 'number' ? String(x.eur) : '';
           return `<label class="off-rs-l"><span>${esc(x.label)}</span><input class="off-rs" data-rs="${esc(v.id)}|${esc(x.key)}" inputmode="numeric" value="${esc(val0)}" placeholder="—">${typeof b0 === 'number' && typeof x.eur === 'number' && x.eur !== b0 ? `<small class="note off-mod">scheda ${esc(S.money(b0))}</small>` : ''}</label>`; }).join('') : '<span class="note">—</span>';
         // valore di vendita dei servizi inclusi (scheda villa o Impostazioni, o il prezzo scritto nell'offerta): solo da vedere, non entra nel totale
-        const incV = inc.map(x => ({ x, eur: prezzoSrv(v, x.key), prop: S.caricoDef(st, v, x.key) === 'proprietario', om: S.caricoDef(st, v, x.key) === 'esmeralda' })), incT = incV.reduce((t, y) => t + (typeof y.eur === 'number' ? y.eur : 0), 0);
+        const incV = inc.map(x => ({ x, eur: prezzoSrv(v, x.key), prop: S.caricoDef(st, v, x.key, o.tariff) === 'proprietario', om: S.caricoDef(st, v, x.key, o.tariff) === 'esmeralda' })), incT = incV.reduce((t, y) => t + (typeof y.eur === 'number' ? y.eur : 0), 0);
         const incIn = incV.length ? incV.map(y => `<div class="off-ri-l"><span>${esc(y.x.label)}${y.prop ? ' <small class="note">· proprietario</small>' : y.om ? ' <small class="note">· omaggio</small>' : ''}</span><b>${typeof y.eur === 'number' ? esc(S.money(y.eur)) : '—'}</b></div>`).join('') + (incT ? `<small class="note">valore ${esc(S.money(incT))} · non sommato</small>` : '') : '<span class="note">—</span>';
         const pp = perOf(v), s2 = stato(v), pTag = nP() > 1 ? `<small class="off-riep-p">Periodo ${pi + 1}${pp ? ' · ' + esc(S.dm(pp.from) + ' → ' + S.dm(pp.to)) : ''}${s2 !== 'libera' ? ` · <b class="st-${s2}">${s2 === 'occupata' ? 'occupata, non va nella mail' : 'ND'}</b>` : ''}</small>` : '';
         return `<tr data-rv="${esc(v.id)}" data-rpi="${pi}"${nP() > 1 && pi ? ' class="off-riep-alt"' : ''}><td>${nP() > 1 && pi ? '' : `<b>${esc(v.name)}</b>`}${pTag}${incRighe(v, inc)}</td><td>${affIn}</td><td class="off-ri-c">${incIn}</td><td class="off-rs-c">${srvIn}<small class="note" data-rt>${et ? 'totale servizi ' + esc(S.money(et)) : ''}</small></td><td><b data-rtot>${pr === null ? '—' : S.money(pr + et)}</b></td></tr>`; }).join('')).join('')

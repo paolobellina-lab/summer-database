@@ -1504,3 +1504,23 @@ dialog.dlg-contr { width: min(980px, calc(100vw - 32px)); }
 .srv-tbl .pt-q.sep { background: var(--surface); color: var(--navy, #142861); }
 .dlg .pv-off { display: flex; gap: 8px; align-items: flex-start; margin: 0 0 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; }
 @media (max-width: 720px) { .srv-tbl tr.srv-tr, .srv-tbl tr.catv-row, .srv-tbl.srv-noedit tr.srv-tr, .srv-tbl.srv-noedit tr.catv-row { grid-template-columns: 1fr 1fr; grid-template-areas: "nome nome" "car car" "t1 t2" "t3 t4" "var var" "sum sum" "uso act"; } }
+/* Servizi: riepilogo per periodo nella riga, tabella per periodo nella finestra Modifica… */
+.srv-tbl tr.srv-tr, .srv-tbl tr.catv-row, .srv-tbl.srv-noedit tr.srv-tr, .srv-tbl.srv-noedit tr.catv-row { grid-template-columns: minmax(150px, 1fr) minmax(0, 3fr) auto auto; grid-template-areas: "nome per per var" "sum sum uso act"; }
+.srv-tbl.srv-noedit tr.srv-tr, .srv-tbl.srv-noedit tr.catv-row { grid-template-areas: "nome per per var" "sum sum uso uso"; }
+.srv-tbl td.c-per { grid-area: per; display: block !important; padding: 6px 0; }
+.srv-per { display: flex; flex-wrap: wrap; gap: 4px 6px; }
+.per-chip { display: inline-flex; gap: 5px; align-items: baseline; border-radius: 999px; padding: 2px 10px; font-size: 12px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); white-space: nowrap; }
+.per-chip b { font-weight: 600; color: var(--muted); }
+.per-chip.per-parte { border-color: var(--navy, #142861); }
+.per-chip.per-esmeralda { background: #eef4ec; border-color: #b9d3b0; }
+.per-chip.per-proprietario { background: #f3eee4; border-color: #d8c9a8; }
+.per-chip.per-no { opacity: .6; border-style: dashed; }
+.dlg .pv-per { margin: 0 0 12px; }
+.dlg .pv-per h4 { margin: 0 0 6px; }
+.dlg .pv-pt { width: 100%; border-collapse: collapse; }
+.dlg .pv-pt th, .dlg .pv-pt td { padding: 4px; text-align: left; font-size: 13px; }
+.dlg .pv-pt thead th { color: var(--muted); font-weight: 600; }
+.dlg .pv-pt select { width: 100%; min-width: 0; }
+@media (max-width: 720px) { .srv-tbl tr.srv-tr, .srv-tbl tr.catv-row, .srv-tbl.srv-noedit tr.srv-tr, .srv-tbl.srv-noedit tr.catv-row { grid-template-columns: 1fr auto; grid-template-areas: "nome var" "per per" "sum sum" "uso act"; } .dlg .pv-pt { display: block; overflow-x: auto; } }
+dialog.dlg-pvar { width: min(780px, calc(100vw - 32px)); }
+.dlg .pv-pt tbody th { width: 1%; white-space: nowrap; } .dlg .pv-pt select { padding-left: 6px; padding-right: 22px; font-size: 13px; }

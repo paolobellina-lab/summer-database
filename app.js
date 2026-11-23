@@ -129,7 +129,7 @@ window.SDBStore.ready.then(function () {
   // voci delle note spese con un prezzo di vendita in Impostazioni (chiave 'voce:<nome>'): come i servizi, ma non nella prenotazione né nei testi dell'offerta
   const vociPrezzo = st => catLibere(st).map(c => ({ key: S.voceKey(c), label: c, voce: true })).filter(x => typeof (((st || {}).prezziServizi || {})[x.key] || {}).vendita === 'number');
   // spese servizi del listino = servizi e voci Predefiniti a carico del cliente (il prezzo entra nel listino); Esmeralda = omaggio, non entra
-  const inListino = (st, v, k, t) => S.predefSet(st, k, t) && S.quotaTarDi(st, k, t) === 'totale' && S.caricoDef(st, v, k) === 'parte';
+  const inListino = (st, v, k, t) => S.predefSet(st, k, t) && S.quotaTarDi(st, k, t) === 'totale' && S.caricoDef(st, v, k, t) === 'parte';
   const speseAutoOn = () => { const st = settings(); return servizi(st.servizi).concat(vociPrezzo(st)).some(x => S.TARIFFE.some(t => inListino(st, null, x.key, t.key))); };
   const speseAuto = (v, t) => { const st = settings(), n = (S.TAR_SETT[t] || 1) * 7, det = []; let tot = 0;
     servizi(st.servizi).concat(vociPrezzo(st)).forEach(x => { if (!inListino(st, v, x.key, t)) return; const pv = (v.prezziServizi || {})[x.key], d = (st.prezziServizi || {})[x.key] || {};
@@ -964,7 +964,7 @@ window.SDBStore.ready.then(function () {
         it.querySelector('.srv-prices').hidden = car === 'proprietario' || (car === 'esmeralda' && !canAcq()); it.querySelector('.srv-vend').hidden = car !== 'parte';
         it.querySelector('.srv-quota').hidden = car !== 'parte'; const cn = it.querySelector('.srv-carnota'); cn.hidden = car === 'parte'; cn.textContent = car === 'proprietario' ? 'A carico del proprietario' : 'A carico di Esmeralda (omaggio al cliente)'; if (car !== 'proprietario') riempi(); };
       it.querySelector('.srv-cb').addEventListener('change', e => { it.classList.toggle('on', e.target.checked); it.querySelector('.srv-det').hidden = !e.target.checked;
-        if (e.target.checked && !(b.serviziDett || {})[k]) { const vl = data().villas.find(z => z.id === $('#b-villa').value); modo(S.caricoDef(settings(), vl, k)); } check(); });
+        if (e.target.checked && !(b.serviziDett || {})[k]) { const vl = data().villas.find(z => z.id === $('#b-villa').value); const fr = $('#b-from').value, to = $('#b-to').value, tr = fr && to ? S.tarDaNotti(S.diffDays(fr, to)) : null; modo(S.caricoDef(settings(), vl, k, tr)); const q0 = S.quotaTarDi(settings(), k, tr); it.querySelectorAll('.srv-quota [data-q]').forEach(z => z.classList.toggle('on', z.dataset.q === q0)); pcli(); } check(); });
       it.querySelector('.srv-mode').addEventListener('click', e => { const bt = e.target.closest('button'); if (!bt) return; modo(bt.dataset.car); check(); });
       it.querySelector('.srv-quota').addEventListener('click', e => { const bt = e.target.closest('[data-q]'); if (!bt) return; it.querySelectorAll('.srv-quota [data-q]').forEach(z => z.classList.toggle('on', z === bt)); pcli(); });
     });
@@ -1763,7 +1763,7 @@ window.SDBStore.ready.then(function () {
         <div class="loc-new"><input id="loc-add-in" placeholder="Nuova località"><button type="button" class="btn small" id="loc-add">Aggiungi</button></div>
       </section>`)}
       ${pg('servizi', `<section class="card"><div class="h2-bar"><h2>Servizi delle offerte e delle prenotazioni</h2><button type="button" class="btn small" data-srvord aria-pressed="false">Riordina e togli</button></div>
-        <div class="srv-intro"><p class="note"><b>A carico di</b>: <b>Cliente</b> = lo paga il cliente; <b>Esmeralda</b> = omaggio al cliente (le spese riducono il nostro margine); <b>Proprietario</b> = lo fornisce il proprietario (spese a carico del proprietario). <b>Sett. · Bisett. · Mese · 2 mesi</b>: con la spunta il servizio è <b>offerto di default</b> in quella tariffa (nell'offerta parte già spuntato); per il cliente la scritta dice come si presenta: <b>Totale unico</b> = compreso nel prezzo e già nel listino della villa, <b>A parte</b> = voce separata con il suo prezzo (clic sulla scritta per cambiarla). Senza spunta è un extra da aggiungere a mano. Nelle note spese un servizio spuntato nella prenotazione è una spesa offerta; altrimenti è un extra del cliente (spese aggiuntive). <b>Modifica…</b>: prezzi (a soggiorno, a settimana, al giorno, regole), acquisto previsto (solo per la <b>Verifica di stagione</b>) e "In offerta" (togliendolo il servizio diventa una voce solo delle note spese). Per una sola villa i servizi a carico del proprietario si scelgono nella scheda villa ("Servizi compresi nel prezzo").</p>
+        <div class="srv-intro"><p class="note">Ogni riga mostra <b>come funziona per periodo</b> (Sett. · Bisett. · Mese · 2 mesi): chi paga (<b>Cliente</b>, <b>Omaggio Esmeralda</b> = le spese riducono il nostro margine, <b>Omaggio proprietario</b> = spese a carico del proprietario) e come si presenta nell'offerta (<b>non di default</b> = extra da aggiungere a mano; <b>totale unico</b> = già spuntato, compreso nel prezzo e nel listino della villa; <b>a parte</b> = già spuntato, voce separata con il suo prezzo). Si cambia con <b>Modifica…</b>, insieme ai prezzi (a soggiorno, a settimana, al giorno, regole), all'acquisto previsto (solo per la <b>Verifica di stagione</b>) e a "In offerta" (togliendolo il servizio diventa una voce solo delle note spese). Nelle note spese un servizio spuntato nella prenotazione è una spesa offerta; altrimenti è un extra del cliente (spese aggiuntive). Per una sola villa i servizi a carico del proprietario si scelgono nella scheda villa ("Servizi compresi nel prezzo").</p>
           <div class="srv-prova" id="srv-prova"><h4>Prova</h4><p class="note">Scegli una villa o scrivi le condizioni: ogni servizio e voce mostra qui sotto quanto costa e quanto si vende.</p>
             <div class="pv-sg"><label>Villa <select id="sp-villa"><option value="">— nessuna —</option>${data().villas.slice().sort((x, y) => String(x.name).localeCompare(String(y.name), 'it', { numeric: true })).map(v0 => `<option value="${esc(v0.id)}">${esc(v0.name)}</option>`).join('')}</select></label>
               <label>Località <select id="sp-loc"><option value="">—</option>${Array.from(new Set((st.localita && st.localita.length ? st.localita : locList()).map(x => String(x).trim().toUpperCase()).filter(Boolean))).sort().map(l => `<option value="${esc(l)}">${esc(l)}</option>`).join('')}</select></label>
@@ -1773,7 +1773,7 @@ window.SDBStore.ready.then(function () {
         <form class="loc-new" id="srv-add" autocomplete="off"><input id="srv-add-n" placeholder="Nuovo servizio (es. Baby sitter, Noleggio barca)"><button class="btn small">Aggiungi servizio</button></form>
       </section>
       <section class="card"><div class="h2-bar"><h2>Voci delle note spese</h2><button type="button" class="btn small" data-srvord aria-pressed="false">Riordina e togli</button></div>
-        <p class="note">Categorie delle note spese che non sono servizi (es. carburante, manutenzione): non compaiono nella prenotazione né nei testi dell'offerta. A carico di Cliente = spesa aggiuntiva, Proprietario = a carico del proprietario, Esmeralda = spesa della prenotazione. Con un prezzo di vendita (Modifica…) si possono proporre nell'offerta (punto 3) e compaiono le caselle delle tariffe. Con "In offerta" nella finestra Modifica… la voce diventa un servizio. Rinominare o togliere una voce non cambia gli scontrini già inseriti.</p>
+        <p class="note">Categorie delle note spese che non sono servizi (es. carburante, manutenzione): non compaiono nella prenotazione né nei testi dell'offerta. A carico di Cliente = spesa aggiuntiva, Proprietario = a carico del proprietario, Esmeralda = spesa della prenotazione. Chi paga, i prezzi e come si presenta nell'offerta (con un prezzo di vendita si può proporre al punto 3) si cambiano con Modifica…; con "In offerta" nella stessa finestra la voce diventa un servizio. Rinominare o togliere una voce non cambia gli scontrini già inseriti.</p>
         <div class="tbl-wrap"><table class="prices srv-tbl srv-noedit">
           <tbody id="cat-list"></tbody>
           <tbody><tr class="srv-sep"><td colspan="${canAcq() ? 10 : 9}"><b>Voci fisse</b> <small class="note">regole proprie, non si cambiano</small> <span class="cat-chips">${CAT_FISSE.map(c => `<span>${esc(c)} <small class="note">· ${({ 'Affitto proprietario': 'Esmeralda', 'Commissione agenzia': 'Esmeralda', 'Danni villa': 'cliente (aggiuntiva)', 'Restituzione deposito sicurezza': 'deposito', 'Addebito cliente': 'entrata', 'Addebito proprietario': 'entrata' })[c] || ''}</small></span>`).join('')}</span></td></tr></tbody></table></div>
@@ -2040,16 +2040,21 @@ window.SDBStore.ready.then(function () {
     // riassunto dei prezzi variabili (località, gruppi o fasce) sul tasto della riga
     const varTxt = k => { const pz = prezziSrv()[k] || {}, r = pz.regola || {}, nl = Object.keys(pz.loc || {}).length, cosa = /Ospiti$/.test(r.tipo || '') ? 'ospiti' : 'camere';
       const t = r.tipo && !S.REG_PERS.includes(r.tipo) ? (r.tipo.indexOf('gruppi') === 0 ? `ogni ${r.n || '?'} ${cosa}` : `${(r.fasce || []).length} fasce di ${cosa}`) : ''; return [t, nl ? `${nl} località` : ''].filter(Boolean).join(' · '); };
+    // come funziona per periodo: carico (servizi: per tariffa, caricoTar) e in offerta ('no' = non offerto di default, 'tot' = offerto · totale unico / offerto, 'sep' = offerto · a parte)
+    const perCar = (k, t) => S.caricoSet(st, k, S.isVoceKey(k) ? null : t);
+    const perOff = (k, t) => !(S.predefSet(st, k) && S.predefSet(st, k, t)) ? 'no' : perCar(k, t) === 'parte' && S.quotaTarDi(st, k, t) === 'separato' ? 'sep' : 'tot';
+    const PER_CAR = { esmeralda: 'Omaggio Esmeralda', parte: 'Cliente', proprietario: 'Omaggio proprietario' };
+    const perTxt = (c, o) => c === 'parte' ? 'Cliente · ' + ({ no: 'non di default', tot: 'totale unico', sep: 'a parte' })[o] : PER_CAR[c] + (o === 'no' ? ' · non di default' : '');
+    // riepilogo in sola lettura: periodi uguali uniti (es. "Sett. · Bisett.: Cliente · totale unico")
+    const perHtml = k => { const g = []; S.TARIFFE.forEach(t => { const c = perCar(k, t.key), o = perOff(k, t.key), x = g[g.length - 1]; if (x && x.c === c && x.o === o) x.t.push(t.key); else g.push({ c, o, t: [t.key] }); });
+      return `<span class="srv-per">${g.map(x => `<span class="per-chip per-${x.c}${x.o === 'no' ? ' per-no' : ''}"><b>${x.t.length === S.TARIFFE.length ? 'Tutti i periodi' : x.t.map(t => S.TAR_BREVE[t]).join(' · ')}</b> ${esc(perTxt(x.c, x.o))}</span>`).join('')}</span>`; };
     // riga 2: riepilogo non modificabile (i prezzi si cambiano nella finestra "Prezzi variabili…")
     const prezziTd = k => { const pz = prezziSrv()[k] || {}; const vt = varTxt(k), u = S.srvUnita(st, k);
       const ul = u.giornaliero ? 'al giorno' : u.settimanale ? `a settimana${u.coeff !== 1 ? ` · dalla 2ª sett. × ${String(u.coeff).replace('.', ',')}` : ''}` : 'a soggiorno';
       const cosaF = S.perCamere(st, k) ? 'camere' : 'ospiti';
       const un = S.isOre(st, k) ? `${ul} · personale a ore secondo ${cosaF === 'camere' ? 'le camere' : 'gli ospiti'}: ${S.figureDi(st, k).map(f => f.it + (f.da > 1 ? ` (da ${f.da} ${cosaF})` : '')).join(', ')}` : ul;
       const eur = x => typeof x === 'number' ? fmtNum(x) + ' €' : '—';
-      // tariffe: spunta = offerto di default in quella tariffa; per il cliente la scritta Totale unico / A parte (clic = cambia)
-      const pdOn = t => S.predefSet(st, k) && S.predefSet(st, k, t), car = S.caricoSet(st, k), conTar = !S.isVoceKey(k) || typeof pz.vendita === 'number' || S.predefSet(st, k);
-      const tarTd = (t, n) => `<td class="c-t c-t${n}">${conTar ? `<label class="pt-l" title="Offerto di default nelle offerte ${esc(t.label || t.key)}"><input type="checkbox" data-pt="${t.key}" ${pdOn(t.key) ? 'checked' : ''}> ${S.TAR_BREVE[t.key]}</label>${pdOn(t.key) && car === 'parte' ? `<button type="button" class="pt-q${S.quotaTarDi(st, k, t.key) === 'separato' ? ' sep' : ''}" data-ptq="${t.key}" title="Clic per cambiare: Totale unico = compreso nel prezzo e nel listino; A parte = voce separata">${S.quotaTarDi(st, k, t.key) === 'separato' ? 'A parte' : 'Totale unico'}</button>` : ''}` : ''}</td>`;
-      return S.TARIFFE.map((t, n) => tarTd(t, n + 1)).join('') + `<td class="c-var"><button type="button" class="btn small" data-pvar title="Prezzi, regole, acquisto previsto e In offerta">Modifica…</button></td>
+      return `<td class="c-per">${perHtml(k)}</td>` + `<td class="c-var"><button type="button" class="btn small" data-pvar title="Prezzi, regole, acquisto previsto e In offerta">Modifica…</button></td>
         <td class="srv-sum"><span>${esc(un)}</span>${vt ? `<span class="note">${esc(vt)}</span>` : ''}${provaHtml(k)}</td>`; };
     // riquadro Prova (accanto al testo): le stesse condizioni per tutte le voci, risultato nel riepilogo di ogni riga
     const prova = { villa: '', loc: '', cam: '', osp: '', n: '' };
@@ -2075,7 +2080,6 @@ window.SDBStore.ready.then(function () {
       const tolti = servizi(st.servizi, st.serviziBase || {}, true).filter(x => x.off && !giaVoce(x.label));
       $('#srv-list').innerHTML = list.map((x, i) => { const g = S.caricoSet(st, x.key), gh = !i || S.caricoSet(st, list[i - 1].key) !== g ? grpRow(g) : ''; const n = x.base ? srvBaseUsed(x.key) : srvUsed(x.key); const pz = prezziSrv()[x.key] || {}; const inc = pz.incluso !== false; return gh + `<tr class="srv-tr" data-sk="${esc(x.key)}" data-pk="${esc(x.key)}">
         <td class="c-nome"><input data-sl value="${esc(x.label)}" aria-label="Nome del servizio"></td>
-        <td class="c-car"><div class="seg small srv-car" data-pi>${S.CARICHI.map(c => `<button type="button" data-i="${c}" class="${S.caricoSet(st, x.key) === c ? 'on' : ''}" title="${S.CARICO_LABEL[c]}">${S.CARICO_BREVE[c]}</button>`).join('')}</div></td>
         ${prezziTd(x.key)}
         <td class="note c-uso">${n} prenot.</td>
         <td class="loc-act col-act">${x.base || !n ? '<button type="button" class="btn small danger" data-sd>Togli</button>' : ''}</td></tr>`; }).join('')
@@ -2107,6 +2111,10 @@ window.SDBStore.ready.then(function () {
         d.querySelector('#pv-fl').innerHTML = fz.map((f, i) => `<div class="pv-fr" data-fi="${i}"><span>da</span><input data-fd inputmode="numeric" value="${f.da != null ? f.da : ''}"><span>a</span><input data-ff inputmode="numeric" value="${f.a != null ? f.a : ''}" placeholder="oltre" title="Vuoto = e oltre"><span class="pv-cosa">${cosa}</span>${acq ? `<span>→ acquisto €</span><input data-fa inputmode="numeric" value="${esc(fmt(f.acquisto))}">` : '<span>→</span>'}<span>vendita €</span><input data-fv inputmode="numeric" value="${esc(fmt(f.vendita))}"><button type="button" class="btn small danger" data-fdel>Togli</button></div>`).join('') || '<p class="note">Nessuna fascia.</p>'; };
       d.innerHTML = `<form class="dlg" method="dialog"><h3>Modifica · ${esc(nome)}</h3>
         <label class="flag pv-off"><input type="checkbox" id="pv-off" ${S.isVoceKey(k) ? '' : 'checked'}><span><b>In offerta</b> <small class="note">servizio della prenotazione e delle offerte; senza spunta è solo una voce delle note spese</small></span></label>
+        <div class="pv-per"><h4>Come funziona per periodo</h4><table class="pv-pt"><thead><tr><th></th>${S.TARIFFE.map(t => `<th>${S.TAR_BREVE[t.key]}</th>`).join('')}</tr></thead><tbody>
+          <tr><th>A carico di</th>${S.isVoceKey(k) ? `<td colspan="${S.TARIFFE.length}"><select data-pc="*">${S.CARICHI.map(c => `<option value="${c}" ${perCar(k) === c ? 'selected' : ''}>${PER_CAR[c]}</option>`).join('')}</select></td>` : S.TARIFFE.map(t => `<td><select data-pc="${t.key}">${S.CARICHI.map(c => `<option value="${c}" ${perCar(k, t.key) === c ? 'selected' : ''}>${PER_CAR[c]}</option>`).join('')}</select></td>`).join('')}</tr>
+          <tr><th>In offerta</th>${S.TARIFFE.map(t => `<td><select data-po="${t.key}" data-v="${perOff(k, t.key)}"></select></td>`).join('')}</tr></tbody></table>
+          <p class="note"><b>In offerta</b>: Non di default = extra da aggiungere a mano; Totale unico / A parte / Offerto = già spuntato nell'offerta. Nelle offerte e nel listino vale il periodo scelto; nella prenotazione e nelle note spese quello delle notti (meno di 14 = Sett., 14–27 = Bisett., 28–55 = Mese, 56 e oltre = 2 mesi). <b>Totale unico</b> = compreso nel prezzo e nel listino della villa; <b>a parte</b> = voce separata con il suo prezzo. Gli omaggi non si sommano al prezzo.${S.isVoceKey(k) ? ' Per una voce delle note spese chi paga vale per tutti i periodi (lo usano anche le note spese dell\'app Scontrini).' : ''}</p></div>
         <div class="pv-g"><span>Il prezzo vale</span><select id="pv-u">${[['soggiorno', 'a soggiorno (una volta)'], ['settimana', 'a settimana'], ['giorno', 'al giorno']].map(([v0, l]) => `<option value="${v0}" ${u0 === v0 ? 'selected' : ''}>${l}</option>`).join('')}</select>
           <span id="pv-cw" ${u0 === 'settimana' ? '' : 'hidden'}>dalla 2ª sett. × <input id="pv-c" inputmode="decimal" value="${esc(String(S.srvUnita(st, k).coeff).replace('.', ','))}" title="Coefficiente delle settimane dopo la prima: 1 = stesso prezzo, 0,8 = 20% in meno"></span></div>
         <p class="note">A soggiorno = una volta (es. pulizia finale); a settimana = × settimane (es. pulizia ordinaria); al giorno = × giorni, cioè notti + 1 (es. cuoco).</p>
@@ -2142,13 +2150,24 @@ window.SDBStore.ready.then(function () {
         if (acq) { const na = num(d.querySelector('#pv-na').value); if (typeof na === 'number') acqK[k] = na; }
         const un = d.querySelector('#pv-u').value; o0.unita = un; delete o0.volte;
         if (pers) { leggiG(); o0.figure = gz.map(f => ({ id: f.id, it: f.it, en: f.en, da: f.da || 1, vendita: f.vendita, ore: f.ore })); if (acq) gz.forEach(f => { if (typeof f.acquisto === 'number') acqK[k + '@h:' + f.id] = f.acquisto; }); } if (un === 'settimana') { const ct = String(d.querySelector('#pv-c').value).trim().replace(',', '.'), cv = Number(ct); o0.coeff = ct !== '' && cv >= 0 ? cv : (typeof o0.coeff === 'number' ? o0.coeff : 1); }
-        return { o0, acqK, err }; };
-      d.querySelector('#pv-ok').onclick = () => { const { o0, acqK, err } = leggiTutto();
+        const tutte = S.TARIFFE.map(t => t.key), offT = tutte.filter(t => d.querySelector(`[data-po="${t}"]`).value !== 'no'), sepT = tutte.filter(t => d.querySelector(`[data-po="${t}"]`).value === 'sep');
+        o0.predef = offT.length > 0; if (!offT.length || offT.length === tutte.length) delete o0.predefTar; else o0.predefTar = offT;
+        delete o0.quota; if (sepT.length) { o0.quotaTar = {}; sepT.forEach(t => { o0.quotaTar[t] = 'separato'; }); } else delete o0.quotaTar;
+        let carV = null; if (S.isVoceKey(k)) carV = carDi('*'); else { const cs = tutte.map(carDi); o0.carico = cs[0]; o0.incluso = cs[0] !== 'parte'; if (cs.every(c => c === cs[0])) delete o0.caricoTar; else { o0.caricoTar = {}; tutte.forEach((t, i) => { o0.caricoTar[t] = cs[i]; }); } }
+        return { o0, acqK, err, carV }; };
+      d.querySelector('#pv-ok').onclick = () => { const { o0, acqK, err, carV } = leggiTutto();
         if (err) { toast('Le fasce si sovrappongono o "a" è minore di "da": controlla i numeri'); return; }
         if (acq) { Object.keys(acqSrv).forEach(z => { if (z === k || z.indexOf(k + '@') === 0) delete acqSrv[z]; }); Object.assign(acqSrv, acqK); }
+        if (carV) { const c = S.voceNome(k); st.categorieAggiuntive = catAgg(st).filter(x => x !== c).concat(carV === 'parte' ? [c] : []); st.categorieProprietario = catProp(st).filter(x => x !== c).concat(carV === 'proprietario' ? [c] : []); }
         prezziSrv()[k] = o0; save(); if (acq) salvaAcq(); d.close(); const off = d.querySelector('#pv-off').checked;
         if (!S.isVoceKey(k) && !off) { voceOff(k); return; } if (S.isVoceKey(k) && off) { voceOn(S.voceNome(k)); return; }
         if (S.isVoceKey(k)) drawCat(); else drawSrv(); toast('Salvato'); };
+      const carDi = t => (d.querySelector(`[data-pc="${t}"]`) || d.querySelector('[data-pc="*"]')).value;
+      const opzOff = t => { const sl = d.querySelector(`[data-po="${t}"]`), v0 = sl.value || sl.dataset.v, cl = carDi(t) === 'parte';
+        sl.innerHTML = (cl ? [['no', 'Non di default'], ['tot', 'Totale unico'], ['sep', 'A parte']] : [['no', 'Non di default'], ['tot', 'Offerto']]).map(([v1, l]) => `<option value="${v1}">${l}</option>`).join('');
+        sl.value = !cl && v0 === 'sep' ? 'tot' : v0; };
+      S.TARIFFE.forEach(t => opzOff(t.key));
+      d.querySelector('.pv-pt').addEventListener('change', e => { const c = e.target.closest('[data-pc]'); if (!c) return; S.TARIFFE.forEach(t => { if (c.dataset.pc === '*' || c.dataset.pc === t.key) opzOff(t.key); }); });
       draw(); drawG(); if (d.showModal) d.showModal(); else d.setAttribute('open', ''); };
     // tariffe in cui il servizio è offerto di default (predef + predefTar) e come si presenta al cliente (quotaTar)
     srvTbls.addEventListener('change', e => { if (!e.target.matches('[data-pt]')) return; const k = e.target.closest('[data-pk]').dataset.pk;
@@ -2195,7 +2214,6 @@ window.SDBStore.ready.then(function () {
       const gk = c => carC(c) + (S.predefSet(st, S.voceKey(c)) ? '+' : '');
       const vicino = (c, i, d) => { const g = gk(c); let j = i + d; while (j >= 0 && j < l.length && gk(l[j]) !== g) j += d; return j >= 0 && j < l.length ? j : -1; };
       $('#cat-list').innerHTML = ord.map(({ c, i }, n0) => (!n0 || carC(ord[n0 - 1].c) !== carC(c) ? grpRow(carC(c)) : '') + `<tr class="catv-row" data-ci="${i}" data-pk="${esc(S.voceKey(c))}"><td class="c-nome"><input data-cn value="${esc(c)}" aria-label="Nome della voce"></td>
-        <td class="c-car"><div class="seg small srv-car">${S.CARICHI.map(k => `<button type="button" data-ccar="${k}" class="${carC(c) === k ? 'on' : ''}" title="${S.CARICO_LABEL[k]}">${S.CARICO_BREVE[k]}</button>`).join('')}</div></td>
         ${prezziTd(S.voceKey(c))}<td class="note c-uso">nota spese</td>
         <td class="col-act"><span class="inc-act"><button type="button" class="btn small" data-cmv="-1" ${vicino(c, i, -1) >= 0 ? '' : 'disabled'} aria-label="Sposta su">↑</button><button type="button" class="btn small" data-cmv="1" ${vicino(c, i, 1) >= 0 ? '' : 'disabled'} aria-label="Sposta giù">↓</button><button type="button" class="btn small danger" data-cdel>Togli</button></span></td></tr>`).join('') || `<tr><td colspan="10" class="note">Nessuna voce.</td></tr>`;
     };
