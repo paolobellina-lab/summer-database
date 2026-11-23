@@ -1455,3 +1455,6 @@ dialog.dlg-contr { width: min(980px, calc(100vw - 32px)); }
 .srv-tbl .c-ptar { grid-area: ptar; display: flex !important; justify-content: flex-end; }
 .srv-tbl .c-ptar:empty { display: none !important; }
 @media (max-width: 720px) { .srv-tbl tr.srv-tr, .srv-tbl tr.catv-row { grid-template-areas: "nome nome" "off pdf" "car car" "var var" "ptar ptar" "sum sum" "uso act"; } .srv-tbl .c-ptar { justify-content: flex-start; } }
+/* numero di prenotazioni sotto "Predefinito in", a destra (senza "Riordina e togli" la colonna delle azioni non c'è) */
+.srv-tbl .c-uso { justify-self: end; text-align: right; }
+@media (min-width: 721px) { .srv-tbl.srv-noedit tr.srv-tr, .srv-tbl.srv-noedit tr.catv-row { grid-template-areas: "nome off car pdf var var" "sum sum ptar ptar ptar ptar" "sum sum uso uso uso uso"; } }
