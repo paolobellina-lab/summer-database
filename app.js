@@ -327,6 +327,9 @@ window.SDBStore.ready.then(function () {
     const assegn = (data().assegnazioni || []).filter(a => (a.prenotazioni || []).includes(b.id) || (a.ville || []).includes(b.villaId)).map(a => a.nome || a.email);
     const righe = [
       ['Villa', v.name], ['Località', v.location || ''], ['Cliente', b.cliente || ''],
+      ...(b.telefono ? [['Telefono', b.telefono]] : []), ...(b.email ? [['Email', b.email]] : []),
+      ...(b.leader && (b.leader.nome || b.leader.tel) ? [['Party leader', [b.leader.nome, b.leader.tel].filter(Boolean).join(' · ')]] : []),
+      ...((b.persone || []).length ? [['Persone del gruppo', b.persone.map(x => [x.nome, x.tel].filter(Boolean).join(' · ')).join('\n')]] : []),
       ['Check-in', S.dmy(b.from) + (b.earlyIn ? ' · early check-in' : '')], ['Check-out', S.dmy(b.to) + (b.lateOut ? ' · late check-out' : '')],
       ['Notti', String(notti)], ['Stato', statoLabel(b.status) + (conScad(b.status) ? (b.scadenzaOpzione ? ' · scade il ' + S.dmy(b.scadenzaOpzione) : ' · scadenza non indicata') : '')],
       ['Prezzo di vendita concordato', typeof b.prezzoVendita === 'number' ? S.money(b.prezzoVendita) : '—']
@@ -816,6 +819,11 @@ window.SDBStore.ready.then(function () {
       <section class="dsec sec-cli"><h4>Cliente e prezzo</h4>
       <div class="row"><label class="field"><span>Cliente</span><input id="b-cliente" value="${esc(b.cliente)}" placeholder="Cognome cliente"></label>
       <label class="field b-osp-f" title="Per i servizi con prezzo a gruppi o fasce di ospiti (es. transfer ogni 6 persone). Vuoto = capienza della villa"><span>Ospiti</span><input id="b-osp" inputmode="numeric" value="${b.ospiti > 0 ? esc(String(b.ospiti)) : ''}" placeholder="capienza villa"></label></div>
+      <div class="row"><label class="field"><span>Telefono del cliente</span><input id="b-tel" inputmode="tel" value="${esc(b.telefono || '')}" placeholder="+39 …"></label>
+      <label class="field"><span>Email del cliente</span><input id="b-mail" inputmode="email" value="${esc(b.email || '')}"></label></div>
+      <div class="b-occ"><div class="b-occ-h"><b>Occupanti</b><small class="note">Party leader e persone del gruppo, con il cellulare se c'è. Li vedono anche i concierge nell'app Scontrini.</small>
+        ${isAdmin() && existing && window.SDBContratto ? '<button type="button" class="btn small" id="b-occ-ct" hidden>Riprendi dal contratto</button>' : ''}</div>
+        <div id="b-occ-list"></div><button type="button" class="btn small" id="b-occ-add">+ Aggiungi persona</button></div>
       <div class="row">
         <label class="field"><span>Vendita concordata €</span><input id="b-sale" inputmode="numeric" value="${typeof b.prezzoVendita === 'number' ? esc(fmtNum(b.prezzoVendita)) : ''}"></label>
         <label class="field"${canAcq() ? '' : ' hidden'}><span>Acquisto concordato €</span><input id="b-buy" inputmode="numeric" value="${typeof b.prezzoAcquisto === 'number' && !b.acquistoDi ? esc(fmtNum(b.prezzoAcquisto)) : ''}"${b.acquistoDi ? ' disabled placeholder="compreso nell\'acquisto unico"' : ''}></label>
@@ -885,8 +893,23 @@ window.SDBStore.ready.then(function () {
     $('#b-sw').addEventListener('click', e => { const s = e.target.closest('.sw[data-c]'); if (!s) return; color = s.dataset.c; colorTouched = true; paint(); });
     $('#b-color').addEventListener('input', e => { color = e.target.value; colorTouched = true; paint(); });
     $('#b-status').addEventListener('change', e => { if (!colorTouched) { color = statoColor(e.target.value); paint(); } $('#b-scad-w').hidden = !conScad(e.target.value); });
+    // occupanti: prima riga = party leader (bookings.leader = { nome, tel }), poi le persone del gruppo (bookings.persone = [{ nome, tel }])
+    let occ = [Object.assign({ nome: '', tel: '' }, b.leader || {})].concat((b.persone || []).map(x => Object.assign({ nome: '', tel: '' }, x)));
+    const occDraw = () => { $('#b-occ-list').innerHTML = occ.map((x, i) => `<div class="row b-occ-r"><label class="field"><span>${i ? 'Persona ' + (i + 1) : 'Party leader'}</span><input data-on="${i}" value="${esc(x.nome)}" placeholder="${i ? 'Nome e cognome' : esc($('#b-cliente') ? $('#b-cliente').value || 'Nome e cognome' : 'Nome e cognome')}"></label>
+      <label class="field"><span>Cellulare</span><input data-ot="${i}" inputmode="tel" value="${esc(x.tel)}"></label>${i ? `<button type="button" class="btn small b-occ-x" data-ox="${i}" title="Togli">×</button>` : '<span class="b-occ-x"></span>'}</div>`).join(''); };
+    function occLeggi() { const pul = x => ({ nome: String(x.nome || '').trim(), tel: String(x.tel || '').trim() }); const l = occ.map(pul);
+      const ld = l[0] && (l[0].nome || l[0].tel) ? l[0] : null; return { leader: ld, persone: l.slice(1).filter(x => x.nome || x.tel) }; }
+    occDraw();
+    $('#b-occ-list').addEventListener('input', e => { const t = e.target; if (t.dataset.on != null) occ[+t.dataset.on].nome = t.value; if (t.dataset.ot != null) occ[+t.dataset.ot].tel = t.value; });
+    $('#b-occ-list').addEventListener('click', e => { const x = e.target.closest('[data-ox]'); if (x) { occ.splice(+x.dataset.ox, 1); occDraw(); } });
+    $('#b-occ-add').onclick = () => { occ.push({ nome: '', tel: '' }); occDraw(); const l = $$('#b-occ-list [data-on]'); if (l.length) l[l.length - 1].focus(); };
+    // dal contratto: party leader = anagrafica (nome, cognome, telefono), persone = righe di "Persons in your party" (senza età né documenti)
+    if ($('#b-occ-ct')) store.getContratto(b.id).then(c => { const C = (c && c.cliente) || {}; const nm = [C.nome, C.cognome].filter(Boolean).join(' ').trim();
+      const pers = String((c && c.persone) || '').split('\n').map(r => r.replace(/[,;(\-–]?\s*\(?\d{1,2}\s*(anni|years?|y\.?o\.?)?\)?\s*$/i, '').trim()).filter(Boolean);
+      if (!nm && !pers.length) return; const bt = $('#b-occ-ct'); bt.hidden = false;
+      bt.onclick = () => { occ = [{ nome: nm || occ[0].nome, tel: C.tel || occ[0].tel }].concat(pers.map(p => ({ nome: p, tel: '' }))); occDraw(); toast('Occupanti ripresi dal contratto'); }; }).catch(() => {});
     let acqDi = b.acquistoDi || null;
-    const read = () => ({ villaId: $('#b-villa').value, status: $('#b-status').value, from: $('#b-from').value, to: $('#b-to').value, cliente: $('#b-cliente').value.trim(), note: $('#b-note').value.trim(), color: colorTouched ? color : null, earlyIn: $('#b-early').checked, lateOut: $('#b-late').checked,
+    const read = () => ({ villaId: $('#b-villa').value, status: $('#b-status').value, from: $('#b-from').value, to: $('#b-to').value, cliente: $('#b-cliente').value.trim(), telefono: $('#b-tel').value.trim() || null, email: $('#b-mail').value.trim().toLowerCase() || null, ...occLeggi(), note: $('#b-note').value.trim(), color: colorTouched ? color : null, earlyIn: $('#b-early').checked, lateOut: $('#b-late').checked,
       acquistoDi: acqDi,
       scadenzaOpzione: conScad($('#b-status').value) && $('#b-scad').value ? $('#b-scad').value : null,
       agenziaId: $('#b-ag') ? $('#b-ag').value || null : (b.agenziaId || null),
