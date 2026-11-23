@@ -431,7 +431,7 @@
           + (omg.length && omg.some(y => typeof y.eur === 'number') ? `<small class="note">omaggi non sommati</small>` : '') + agTot.map(rsIn).join('') : '<span class="note">—</span>';
         const srvIn = sep.length ? sep.map(rsIn).join('') : '<span class="note">—</span>';
         const pp = perOf(v), s2 = stato(v), pTag = nP() > 1 ? `<small class="off-riep-p">Periodo ${pi + 1}${pp ? ' · ' + esc(S.dm(pp.from) + ' → ' + S.dm(pp.to)) : ''}${s2 !== 'libera' ? ` · <b class="st-${s2}">${s2 === 'occupata' ? 'occupata, non va nella mail' : 'ND'}</b>` : ''}</small>` : '';
-        return `<tr data-rv="${esc(v.id)}" data-rpi="${pi}"${nP() > 1 && pi ? ' class="off-riep-alt"' : ''}><td>${nP() > 1 && pi ? '' : `<b>${esc(v.name)}</b>`}${pTag}${incRighe(v, inc)}</td><td>${affIn}${defIn}</td><td class="off-ri-c off-rs-c">${incIn}</td><td class="off-rs-c">${srvIn}</td><td><b data-rtot>${pr === null ? '—' : S.money(pr + et)}</b><small class="note" data-rt>${et ? 'di cui servizi ' + esc(S.money(et)) : ''}</small></td></tr>`; }).join('')).join('')
+        return `<tr data-rv="${esc(v.id)}" data-rpi="${pi}"${nP() > 1 && pi ? ' class="off-riep-alt"' : ''}><td>${nP() > 1 && pi ? '' : `<b>${esc(v.name)}</b>`}${pTag}${incRighe(v, inc)}</td><td>${affIn}${defIn}</td><td class="off-ri-c off-rs-c">${incIn}</td><td class="off-rs-c">${srvIn}</td><td><b data-rtot>${pr === null ? '—' : S.money(pr + et)}</b><small class="note" data-rt hidden></small></td></tr>`; }).join('')).join('')
         : '<tr><td colspan="5" class="note">Scegli le ville al punto 2.</td></tr>';
     };
     const drawTexts = () => {
@@ -551,7 +551,7 @@
       const bt = e.target.closest('[data-smode] button'); if (!bt || bt.disabled) return; const k = bt.closest('[data-ok]').dataset.ok; const cur = Object.assign({}, o.srv[k]); delete cur.incluso; o.srv[k] = Object.assign(cur, { modo: bt.dataset.m }); drawSrv(); drawTexts(); save(); });
     // riepilogo prezzi per villa: affitto e servizi modificabili qui (l'affitto è lo stesso campo del punto 2)
     const totRiga = vid => { const v = scelte().find(z => z.id === vid), tr = $(`#off-riep tr[data-rv="${CSS.escape(vid)}"][data-rpi="${o.pAtt}"]`); if (!v || !tr) return;
-      const pr = prezzoDi(v), et = extraTot(v); tr.querySelector('[data-rtot]').textContent = pr === null ? '—' : S.money(pr + et); tr.querySelector('[data-rt]').textContent = et ? 'di cui servizi ' + S.money(et) : ''; };
+      const pr = prezzoDi(v), et = extraTot(v); tr.querySelector('[data-rtot]').textContent = pr === null ? '—' : S.money(pr + et);  };
     $('#off-riep').addEventListener('input', e => { const a = e.target.closest('[data-rp]'), r = e.target.closest('[data-rs]'); if (!a && !r) return;
       const pi = Number((e.target.closest('[data-rpi]') || {}).dataset ? e.target.closest('[data-rpi]').dataset.rpi : o.pAtt) || 0; const attivo = pi === o.pAtt;
       conP(pi, () => {
