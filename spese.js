@@ -112,10 +112,10 @@
     const tot = L.filter(z => z.carico === 'parte' && z.quota === 'totale'), sep = L.filter(z => z.carico === 'parte' && z.quota !== 'totale'), inc = L.filter(z => z.carico !== 'parte');
     const sm = l => l.reduce((t, z) => t + (z.vendita || 0), 0), unico = (sc.affitto || 0) + sm(tot);
     const riga = (l, v, c) => `<tr class="${c || ''}"><td>${l}</td><td class="r">${v}</td></tr>`;
-    return `<table class="pr-pcli"><tbody>${riga('<b>Prezzo al cliente</b>', `<b>${M(unico + sm(sep))}</b>`, 'pc-t')}
-      ${riga('In un unico totale', M(unico), 'pc-g')}${riga('Affitto villa', sc.affitto === null ? '—' : M(sc.affitto), 'pc-s')}${tot.map(z => riga(E(z.label), z.vendita === null ? '—' : M(z.vendita), 'pc-s')).join('')}
-      ${sep.length ? riga('Quotati a parte <small class="note">il cliente ha il dettaglio</small>', M(sm(sep)), 'pc-g') + sep.map(z => riga(E(z.label), z.vendita === null ? '—' : M(z.vendita), 'pc-s')).join('') : ''}
-      ${inc.length ? riga('Inclusi senza costo per il cliente', '', 'pc-g') + inc.map(z => riga(E(z.label), E(window.SDB.CARICO_LABEL[z.carico].replace(/^A carico/, 'a carico')), 'pc-s')).join('') : ''}</tbody></table>`; };
+    return `<table class="pr-pcli"><tbody>      ${riga('Totale unico', M(unico), 'pc-g')}${riga('di cui affitto villa', sc.affitto === null ? '—' : M(sc.affitto), 'pc-s')}${tot.map(z => riga((E(z.label) + (z.ore ? ` <small class="note">ore previste: ${E(z.ore)}</small>` : '')), z.vendita === null ? '—' : M(z.vendita), 'pc-s')).join('')}
+      ${sep.length ? riga('+ Voci separate <small class="note">il cliente ha il dettaglio</small>', M(sm(sep)), 'pc-g') + sep.map(z => riga((E(z.label) + (z.ore ? ` <small class="note">ore previste: ${E(z.ore)}</small>` : '')), z.vendita === null ? '—' : M(z.vendita), 'pc-s')).join('') : ''}
+      ${riga('<b>= Prezzo al cliente</b>', `<b>${M(unico + sm(sep))}</b>`, 'pc-t')}
+      ${inc.length ? riga('Inclusi senza costo per il cliente', '', 'pc-g') + inc.map(z => riga((E(z.label) + (z.ore ? ` <small class="note">ore previste: ${E(z.ore)}</small>` : '')), E(window.SDB.CARICO_LABEL[z.carico].replace(/^A carico/, 'a carico')), 'pc-s')).join('') : ''}</tbody></table>`; };
   const pagSec = (pre, cur, chi) => { const io = String((CTX && CTX.store && CTX.store.user) || '').toLowerCase(); chi = String(chi || io).toLowerCase();
     const pp = persBors().slice(); if (io && !pp.some(x => x.email === io)) pp.unshift({ email: io, nome: 'I miei contanti (' + io + ')' }); if (chi && !pp.some(x => x.email === chi)) pp.push({ email: chi, nome: chi });
     return `<section class="dsec sec-pag"><h4>Metodo di pagamento <span class="req" title="Obbligatorio">*</span></h4><div class="pag-opts">${PAGAMENTI.map(([k, l]) => `<label class="pag-opt"><input type="radio" name="${pre}-pag" value="${k}" ${cur === k ? 'checked' : ''}><span>${l}</span></label>`).join('')}</div>

@@ -1484,3 +1484,12 @@ dialog.dlg-contr { width: min(980px, calc(100vw - 32px)); }
 .b-pcli { margin-top: 8px; padding: 8px 10px; border: 1px dashed var(--line); border-radius: 8px; display: grid; gap: 2px; font-size: 13.5px; }
 .b-pcli:empty { display: none; }
 .srv-quota { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 4px 0; }
+.b-pcli > div:not(.pc-n):not(.pc-err) { display: flex; justify-content: space-between; gap: 12px; }
+.b-pcli .pc-g { font-weight: 600; margin-top: 4px; }
+.b-pcli .pc-g b { font-weight: 700; }
+.b-pcli .pc-s { padding-left: 14px; color: var(--muted); }
+.b-pcli .pc-s b { font-weight: 500; color: var(--fg); }
+.b-pcli .pc-t { border-top: 1px solid var(--line); padding-top: 4px; margin-top: 4px; font-size: 14.5px; }
+.b-pcli .pc-err { color: #b3261e; font-size: 12.5px; }
+.off-srv-modi { display: flex; flex-wrap: wrap; gap: 4px 8px; }
+.srv-quo { margin-top: 4px; }

@@ -346,7 +346,7 @@ window.SDBStore.ready.then(function () {
     const totVendita = (typeof b.prezzoVendita === 'number' ? b.prezzoVendita : 0) + sv.vendita;
     const totAcquisto = acq ? (typeof b.prezzoAcquisto === 'number' ? b.prezzoAcquisto : 0) + sv.acquisto : null;
     // come è stato presentato al cliente ogni servizio a parte: 'totale' (prezzo unico con l'affitto) o 'separato' (prezzo a parte)
-    const srvInfo = servizi(null, null, true).filter(x => hasSrv(b, x)).map(x => { const d = srvDet(b, x.key); return { k: x.key, label: x.label, carico: d.carico, vendita: typeof d.vendita === 'number' ? d.vendita : null, quota: d.quota === 'totale' ? 'totale' : 'separato' }; });
+    const srvInfo = servizi(null, null, true).filter(x => hasSrv(b, x)).map(x => { const d = srvDet(b, x.key); return { k: x.key, label: x.label, carico: d.carico, vendita: typeof d.vendita === 'number' ? d.vendita : null, quota: d.quota === 'totale' ? 'totale' : 'separato', ore: d.orePreviste || '' }; });
     return { srvInfo, affitto: typeof b.prezzoVendita === 'number' ? b.prezzoVendita : null, id: b.id, villaId: b.villaId, villa: v.name, cliente: b.cliente || 'Senza nome', from: b.from, to: b.to, righe, servizi: srvRighe, acq, totVendita, totAcquisto, haPrezzo: typeof b.prezzoVendita === 'number', deposito: typeof b.deposito === 'number' ? b.deposito : null };
   }
   // pagina Prenotazioni: riepilogo di una prenotazione, oppure l'elenco filtrato per villa
@@ -827,7 +827,7 @@ window.SDBStore.ready.then(function () {
         ${isAdmin() && existing && window.SDBContratto ? '<button type="button" class="btn small" id="b-occ-ct" hidden>Riprendi dal contratto</button>' : ''}</div>
         <div id="b-occ-list"></div><button type="button" class="btn small" id="b-occ-add">+ Aggiungi persona</button></div>
       <div class="row">
-        <label class="field"><span>Affitto villa al cliente €</span><input id="b-sale" inputmode="numeric" value="${typeof b.prezzoVendita === 'number' ? esc(fmtNum(b.prezzoVendita)) : ''}"></label>
+        <label class="field" title="Il prezzo unico dato al cliente: affitto + servizi nel totale. L'affitto della villa si calcola togliendo i servizi nel totale"><span>Totale unico €</span><input id="b-tot" inputmode="numeric" value="${(() => { if (typeof b.prezzoVendita !== 'number') return ''; let t = b.prezzoVendita; servizi(null, null, true).forEach(x => { if (!hasSrv(b, x)) return; const d = srvDet(b, x.key); if (d.carico === 'parte' && d.quota === 'totale' && typeof d.vendita === 'number') t += d.vendita; }); return esc(fmtNum(t)); })()}"><input type="hidden" id="b-sale" value="${typeof b.prezzoVendita === 'number' ? esc(fmtNum(b.prezzoVendita)) : ''}"></label>
         <label class="field"${canAcq() ? '' : ' hidden'}><span>Acquisto concordato €</span><input id="b-buy" inputmode="numeric" value="${typeof b.prezzoAcquisto === 'number' && !b.acquistoDi ? esc(fmtNum(b.prezzoAcquisto)) : ''}"${b.acquistoDi ? ' disabled placeholder="compreso nell\'acquisto unico"' : ''}></label>
       </div>
       ${(() => { const rt = b.acquistoDi ? data().bookings.find(x => x.id === b.acquistoDi) : null; const coll = existing ? data().bookings.filter(x => x.acquistoDi === b.id) : [];
@@ -859,7 +859,8 @@ window.SDBStore.ready.then(function () {
               <label class="field"${canAcq() ? '' : ' hidden'}><span>Acquisto €</span><input data-sa inputmode="numeric" value="${typeof d.acquisto === 'number' ? esc(fmtNum(d.acquisto)) : ''}"></label>
               <label class="field srv-vend"${d.carico === 'parte' ? '' : ' hidden'}><span>Vendita €</span><input data-sv inputmode="numeric" value="${typeof d.vendita === 'number' ? esc(fmtNum(d.vendita)) : ''}"></label>
             </div>
-            <div class="srv-quota"${d.carico === 'parte' ? '' : ' hidden'}><span class="note">Prezzo al cliente</span><div class="seg small">${[['totale', 'Nel totale con l\'affitto'], ['separato', 'Separato (con il dettaglio)']].map(([q, l]) => `<button type="button" data-q="${q}" class="${(d.quota === 'totale' ? 'totale' : 'separato') === q ? 'on' : ''}">${l}</button>`).join('')}</div></div>
+            <div class="srv-quota"${d.carico === 'parte' ? '' : ' hidden'}><span class="note">Prezzo al cliente</span><div class="seg small">${[['totale', 'Totale unico'], ['separato', 'Voce separata']].map(([q, l]) => `<button type="button" data-q="${q}" class="${((b.serviziDett || {})[x.key] ? (d.quota === 'totale' ? 'totale' : 'separato') : (((settings().prezziServizi || {})[x.key] || {}).quota === 'separato' ? 'separato' : 'totale')) === q ? 'on' : ''}">${l}</button>`).join('')}</div></div>
+            ${S.isOre(settings(), x.key) ? `<label class="field"><span>Ore previste (dall'offerta)</span><input data-so value="${esc(d.orePreviste || '')}" placeholder="es. Chef 6 h/giorno × 14 gg = 84 h"></label>` : ''}
             <p class="note srv-carnota"${d.carico === 'parte' ? ' hidden' : ''}>${d.carico === 'proprietario' ? 'A carico del proprietario' : 'A carico di Esmeralda (omaggio al cliente)'}</p>
             <p class="note srv-calc" data-sc hidden></p>
             <label class="field"><span>Note</span><input data-sn value="${esc(d.note)}" placeholder="es. 3 cene, orari, fornitore"></label>
@@ -923,15 +924,20 @@ window.SDBStore.ready.then(function () {
     const num = el => { const v = S.parseMoney(el.value); return typeof v === 'number' ? v : null; };
     // dettagli dei servizi: tengo anche quelli di servizi non spuntati o non più in elenco, così non si perdono
     // riepilogo del prezzo al cliente: affitto + servizi "nel totale" (prezzo unico) e servizi quotati a parte
-    function pcli() { const el = $('#b-pcli'); if (!el) return; const aff = money('#b-sale'); const tot = [], sep = [], inc = [];
+    function pcli() { const el = $('#b-pcli'); if (!el) return; const totU = money('#b-tot'); const tot = [], sep = [], inc = [];
       $$('#bform .srv-item').forEach(it => { if (!it.querySelector('.srv-cb').checked) return; const lb = it.querySelector('.flag b').textContent; const car = (it.querySelector('.srv-mode .on') || { dataset: {} }).dataset.car || 'parte';
         if (car !== 'parte') { inc.push(lb); return; } const v = num(it.querySelector('[data-sv]')) || 0, q = (it.querySelector('.srv-quota .on') || { dataset: {} }).dataset.q || 'separato'; (q === 'totale' ? tot : sep).push([lb, v]); });
-      const sm = l => l.reduce((t, x) => t + x[1], 0), unico = (aff || 0) + sm(tot), tutto = unico + sm(sep);
-      if (aff === null && !tot.length && !sep.length) { el.innerHTML = ''; return; }
-      el.innerHTML = `<div class="b-pcli-t"><b>Prezzo al cliente ${esc(S.money(tutto))}</b></div>
-        <div>In un unico totale <b>${esc(S.money(unico))}</b> <small class="note">affitto${tot.length ? ' + ' + tot.map(x => esc(x[0])).join(', ') : ''}</small></div>
-        ${sep.length ? `<div>Quotati a parte <b>${esc(S.money(sm(sep)))}</b> <small class="note">${sep.map(x => esc(x[0]) + ' ' + esc(S.money(x[1]))).join(', ')}</small></div>` : ''}
-        ${inc.length ? `<div><small class="note">Inclusi senza costo per il cliente: ${inc.map(esc).join(', ')}</small></div>` : ''}`; }
+      const sm = l => l.reduce((t, x) => t + x[1], 0);
+      // affitto della villa = totale unico − servizi nel totale (è il dato salvato in prezzoVendita)
+      const aff = totU === null ? null : Math.max(0, totU - sm(tot)); $('#b-sale').value = aff === null ? '' : fmtNum(aff);
+      if (totU === null && !sep.length) { el.innerHTML = totU === null && tot.length ? '<small class="note">Scrivi il totale unico: l\'affitto si calcola togliendo i servizi nel totale.</small>' : ''; return; }
+      const r = (l, v, c) => `<div class="${c || ''}"><span>${l}</span><b>${v}</b></div>`;
+      el.innerHTML = r('Totale unico', totU === null ? '—' : esc(S.money(totU)), 'pc-g')
+        + r('di cui affitto villa', aff === null ? '—' : esc(S.money(aff)), 'pc-s') + tot.map(x => r('di cui ' + esc(x[0]), esc(S.money(x[1])), 'pc-s')).join('')
+        + (totU !== null && sm(tot) > totU ? '<div class="pc-err">I servizi nel totale superano il totale unico</div>' : '')
+        + (sep.length ? r('+ Voci separate', esc(S.money(sm(sep))), 'pc-g') + sep.map(x => r(esc(x[0]), esc(S.money(x[1])), 'pc-s')).join('') : '')
+        + r('= Prezzo al cliente', esc(S.money((totU || 0) + sm(sep))), 'pc-t')
+        + (inc.length ? `<div class="pc-n"><small class="note">Inclusi senza costo per il cliente: ${inc.map(esc).join(', ')}</small></div>` : ''); }
     $('#bform').addEventListener('input', () => pcli()); $('#bform').addEventListener('change', () => pcli()); $('#bform').addEventListener('click', e => { if (e.target.closest('.srv-mode')) setTimeout(pcli, 0); });
     setTimeout(pcli, 0);
     function readSrv() {
@@ -939,7 +945,7 @@ window.SDBStore.ready.then(function () {
       $$('#bform .srv-item').forEach(it => {
         const k = it.dataset.sk; const cb = it.querySelector('.srv-cb');
         const car = (it.querySelector('.srv-mode .on') || {}).dataset ? it.querySelector('.srv-mode .on').dataset.car : 'parte';
-        const qq = it.querySelector('.srv-quota .on'); const d = { carico: car, incluso: car !== 'parte', acquisto: num(it.querySelector('[data-sa]')), vendita: num(it.querySelector('[data-sv]')), quota: car === 'parte' ? (qq ? qq.dataset.q : 'separato') : null, note: it.querySelector('[data-sn]').value.trim() };
+        const qq = it.querySelector('.srv-quota .on'); const d = { carico: car, incluso: car !== 'parte', acquisto: num(it.querySelector('[data-sa]')), vendita: num(it.querySelector('[data-sv]')), quota: car === 'parte' ? (qq ? qq.dataset.q : 'separato') : null, orePreviste: it.querySelector('[data-so]') ? it.querySelector('[data-so]').value.trim() || null : (((b.serviziDett || {})[k] || {}).orePreviste || null), note: it.querySelector('[data-sn]').value.trim() };
         if (!cb.checked && d.acquisto === null && d.vendita === null && !d.note) delete out[k]; else out[k] = d;
       });
       return out;
@@ -979,7 +985,7 @@ window.SDBStore.ready.then(function () {
     // regola: check-out e check-in possono cadere nello stesso giorno (massimo 2 affitti in quel giorno);
     // se due affitti condividono anche una sola notte il salvataggio è bloccato.
     let blocked = false;
-    const check = () => {
+    const check = () => { pcli();
       const x = read(); const n = x.from && x.to ? S.diffDays(x.from, x.to) : 0; srvCalc(n);
       $('#b-nights').textContent = n > 0 ? `${n} notti · ${S.dmy(x.from)} → ${S.dmy(x.to)}` : 'Il check-out deve essere dopo il check-in.';
       // il vuoto per pieno non si scontra con gli affitti (anzi li contiene), solo con un altro vuoto per pieno
@@ -1017,7 +1023,7 @@ window.SDBStore.ready.then(function () {
       if (!clash.length && !swapBad.length && ndHit.length) $('#b-warn').innerHTML += `<div class="warn">Il listino segna ND dal ${ndHit.map(s => S.dm(s.from) + ' al ' + S.dm(s.to)).join(', ')}. Puoi salvare se la villa è stata confermata.</div>`;
       // prezzi
       const li = n > 0 ? listinoFor(vv, x.from, x.to) : null;
-      $('#b-sale').placeholder = li ? fmtNum(li.sale) : '';
+      $('#b-tot').placeholder = li ? fmtNum(li.sale) : '';
       $('#b-buy').placeholder = li && li.net ? fmtNum(li.net) : '';
       const sv = srvTot(x); const hasSv = sv.vendita || sv.acquisto;
       const mg = typeof x.prezzoVendita === 'number' && typeof x.prezzoAcquisto === 'number' ? x.prezzoVendita + sv.vendita - x.prezzoAcquisto - sv.acquisto : null;
@@ -1031,7 +1037,7 @@ window.SDBStore.ready.then(function () {
         mg !== null && canAcq() ? `Guadagno${hasSv ? ' con i servizi' : ''}: <b>${S.money(mg)}</b>${totV ? ` (${Math.round(mg / totV * 1000) / 10}%)` : ''}` : ''
       ].filter(Boolean).join('<br>');
       const sh = $('#b-srv-hint'); if (sh) sh.innerHTML = hasSv ? `Servizi a parte: vendita <b>${S.money(sv.vendita)}</b>${canAcq() ? ` · acquisto ${S.money(sv.acquisto)}` : ''} · si sommano al prezzo dell'affitto.` : '';
-      const ul = $('#b-uselist'); if (ul) ul.onclick = () => { $('#b-sale').value = fmtNum(li.sale); if (li.net) $('#b-buy').value = fmtNum(li.net); check(); };
+      const ul = $('#b-uselist'); if (ul) ul.onclick = () => { $('#b-tot').value = fmtNum(li.sale); if (li.net) $('#b-buy').value = fmtNum(li.net); check(); };
       const sb = $('#b-save'); if (sb) sb.disabled = !(n > 0) || blocked;
       paint();
     };
@@ -2062,7 +2068,7 @@ window.SDBStore.ready.then(function () {
       $('#srv-list').innerHTML = list.map((x, i) => { const g = S.caricoSet(st, x.key), gh = !i || S.caricoSet(st, list[i - 1].key) !== g ? grpRow(g) : ''; const n = x.base ? srvBaseUsed(x.key) : srvUsed(x.key); const pz = prezziSrv()[x.key] || {}; const inc = pz.incluso !== false; return gh + `<tr class="srv-tr" data-sk="${esc(x.key)}" data-pk="${esc(x.key)}">
         <td class="c-nome"><input data-sl value="${esc(x.label)}" aria-label="Nome del servizio"></td>
         <td class="srv-off"><input type="checkbox" data-voff checked title="Togli la spunta per farla diventare una voce solo delle note spese" aria-label="In offerta e prenotazione"></td>
-        <td class="c-car"><div class="seg small srv-car" data-pi>${S.CARICHI.map(c => `<button type="button" data-i="${c}" class="${S.caricoSet(st, x.key) === c ? 'on' : ''}" title="${S.CARICO_LABEL[c]}">${S.CARICO_BREVE[c]}</button>`).join('')}</div></td>
+        <td class="c-car"><div class="seg small srv-car" data-pi>${S.CARICHI.map(c => `<button type="button" data-i="${c}" class="${S.caricoSet(st, x.key) === c ? 'on' : ''}" title="${S.CARICO_LABEL[c]}">${S.CARICO_BREVE[c]}</button>`).join('')}</div>${S.caricoSet(st, x.key) === 'parte' ? `<div class="seg small srv-quo" data-pq title="Di norma nelle offerte: Sommato = nel totale unico con l'affitto; Non sommato = voce separata con il suo prezzo">${[['totale', 'Sommato'], ['separato', 'Non sommato']].map(([q, l]) => `<button type="button" data-q="${q}" class="${((prezziSrv()[x.key] || {}).quota === 'separato' ? 'separato' : 'totale') === q ? 'on' : ''}">${l}</button>`).join('')}</div>` : ''}</td>
         ${prezziTd(x.key)}
         <td class="note c-uso">${n} prenot.</td>
         <td class="loc-act col-act">${x.base || !n ? '<button type="button" class="btn small danger" data-sd>Togli</button>' : ''}</td></tr>`; }).join('')
@@ -2143,7 +2149,8 @@ window.SDBStore.ready.then(function () {
     $('.srv-tbl').addEventListener('change', e => { if (!e.target.matches('[data-pu]')) return; const row = e.target.closest('[data-pk]'), k = row.dataset.pk, sett = e.target.value === 'settimana';
       prezziSrv()[k] = Object.assign({}, prezziSrv()[k], { unita: sett ? 'settimana' : 'soggiorno' }); if (sett && typeof prezziSrv()[k].coeff !== 'number') prezziSrv()[k].coeff = 1; delete prezziSrv()[k].volte;
       row.querySelector('.srv-volte').hidden = !sett; save(); });
-    $('#srv-list').addEventListener('click', e => { const bt = e.target.closest('[data-pi] button'); if (!bt) return; const k = bt.closest('[data-sk]').dataset.sk;
+    $('#srv-list').addEventListener('click', e => { const bq = e.target.closest('[data-pq] button'); if (bq) { const k = bq.closest('[data-sk]').dataset.sk; prezziSrv()[k] = Object.assign({}, prezziSrv()[k], { quota: bq.dataset.q }); save(); drawSrv(); return; }
+      const bt = e.target.closest('[data-pi] button'); if (!bt) return; const k = bt.closest('[data-sk]').dataset.sk;
       prezziSrv()[k] = Object.assign({}, prezziSrv()[k], { carico: bt.dataset.i, incluso: bt.dataset.i !== 'parte' }); save(); drawSrv(); });
     // ---- inclusioni delle offerte (settings.inclusioni) ----
     const incList = () => (st.inclusioni = JSON.parse(JSON.stringify(S.inclusioniDi(st))));

@@ -83,10 +83,11 @@
     // spuntati di norma: i Predefiniti di Impostazioni e quelli compresi nella scheda di una villa scelta (a carico del proprietario)
     const srvDefOn = k => (nP() > 1 ? ogniP(() => S.predefSet(st, k, o.tariff)).some(Boolean) : S.predefSet(st, k, o.tariff)) || (o.ville || []).some(id => { const v = (data().villas || []).find(z => z.id === id); return v && (v.serviziInclusi || []).includes(k); });
     const srvDi = k => { const d = (st.prezziServizi || {})[k] || {}; const x = o.srv[k] || {};
-      const modo = ['pred', 'inc', 'parte'].includes(x.modo) ? x.modo : x.incluso === true ? 'inc' : x.incluso === false ? 'parte' : 'pred';
+      // a carico di: Predefinito (Impostazioni + scheda villa) · Esmeralda (omaggio) · Cliente (sommato) · Proprietario; il vecchio "Includi tutti" vale come Esmeralda
+      const m0 = x.modo === 'inc' ? 'esmeralda' : x.modo, modo = ['pred', 'esmeralda', 'parte', 'proprietario'].includes(m0) ? m0 : x.incluso === true ? 'esmeralda' : x.incluso === false ? 'parte' : 'pred';
       // non ancora toccato nell'offerta: spuntato di norma se compreso nel prezzo (a carico di Esmeralda o del proprietario, in Impostazioni
       // o nella scheda di una delle ville scelte); togliendo la spunta il servizio non c'è più (né testo né valore)
-      return { on: x.on === undefined ? srvDefOn(k) : !!x.on, modo, prezzo: x.prezzo !== undefined && String(x.prezzo).trim() !== '' ? String(x.prezzo) : '' }; };
+      return { on: x.on === undefined ? srvDefOn(k) : !!x.on, modo, quota: x.quota === 'separato' || x.quota === 'totale' ? x.quota : null, prezzo: x.prezzo !== undefined && String(x.prezzo).trim() !== '' ? String(x.prezzo) : '' }; };
     // prezzo di un servizio per una villa: quello scritto qui nell'offerta (uguale per tutte), altrimenti quello della scheda villa, altrimenti Impostazioni
     // prezzo "di base" (senza modifiche nell'offerta): scheda villa, altrimenti Impostazioni; se settimanale, sulle settimane del periodo
     const prezzoSrvBase = (v, k) => { const pe = v ? perOf(v) : null, notti = pe && pe.from && pe.to ? S.diffDays(pe.from, pe.to) : 0;
@@ -129,12 +130,23 @@
     const linkWb = v => [!conCod() && o.linkWB && vis(v, 'webBrochure') && String(v.webBrochure || '').trim(), conCod() && o.linkWBA && vis(v, 'webBrochureAnonima') && String(v.webBrochureAnonima || '').trim()].filter(u => u && /^https?:\/\//i.test(u));
     // servizi a ore (es. cuoco): il nome segue le figure presenti per gli ospiti della villa ("Chef and Butler")
     const figOff = (k, v) => S.oreCalc(st, k, 7, { villa: v, ospiti: ospK(k), over: o.srvOre[k] }).righe;
+    // ore previste nell'offerta per i servizi a ore: "Chef 6 h/giorno × 14 gg = 84 h; Butler …" (per la prenotazione)
+    const oreTxt = (k, v) => { if (!S.isOre(st, k)) return null; const pe = perOf(v), n = pe && pe.from && pe.to ? S.diffDays(pe.from, pe.to) : 7;
+      const r = S.oreCalc(st, k, n, { villa: v, ospiti: ospK(k), over: o.srvOre[k], giorni: giorniOre(k, pe), settimane: settOre(k) });
+      const un = r.unita === 'settimana' ? 'sett.' : r.unita === 'soggiorno' ? '' : 'gg', uh = r.unita === 'settimana' ? 'h/sett.' : r.unita === 'soggiorno' ? 'h' : 'h/giorno';
+      const l = r.righe.filter(f => typeof f.ore === 'number').map(f => `${f.it || f.en} ${String(f.ore).replace('.', ',')} ${uh}${un ? ` × ${String(Math.round(f.giorni * 10) / 10).replace('.', ',')} ${un}` : ''} = ${String(Math.round(f.ore * f.giorni * 10) / 10).replace('.', ',')} h`);
+      return l.length ? l.join('; ') : null; };
     const srvNome = (x, v) => { if (x && S.isOre(st, x.key)) { const n = S.nomeFigure(figOff(x.key, v), o.lingua); if (n) return n; } return o.lingua === 'en' ? (SRV_EN[x.key] || x.label) : x.label; };
     // un servizio è incluso per una villa se "Includi tutti", oppure con "Predefinito" se la scheda villa lo ha tra i servizi compresi nel prezzo
     // compreso nel prezzo della villa: a carico di Esmeralda (già nelle spese servizi del listino) o del proprietario (scheda villa)
     // compreso nel prezzo per questa villa: omaggio di Esmeralda, a carico del proprietario, o del cliente ma Predefinito (già nel listino)
     const inclVilla = (v, k) => { const c = S.caricoDef(settings(), v, k); return c !== 'parte' || S.predefSet(settings(), k, o.tariff); };
-    const inclusoPer = (v, k) => { const d = srvDi(k); return d.modo === 'inc' || (d.modo === 'pred' && inclVilla(v, k)); };
+    // chi paga il servizio in questa villa (con Predefinito: Impostazioni e scheda villa)
+    const caricoOff = (v, k) => { const d = srvDi(k); return d.modo === 'pred' ? S.caricoDef(settings(), v, k) : d.modo; };
+    // non sommato al prezzo: omaggio di Esmeralda, fornito dal proprietario, o del cliente ma Predefinito (già nel listino)
+    const inclusoPer = (v, k) => { const d = srvDi(k); return d.modo === 'pred' ? inclVilla(v, k) : d.modo !== 'parte'; };
+    // servizio del cliente sommato al prezzo: "totale" = nel totale unico, "separato" = voce separata con il suo prezzo (di norma da Impostazioni)
+    const quotaOff = k => { const d = srvDi(k); return d.quota || (((st.prezziServizi || {})[k] || {}).quota === 'separato' ? 'separato' : 'totale'); };
     const srvAttivi = () => srvList().map(x => Object.assign({}, x, srvDi(x.key))).filter(x => x.on).map(x => Object.assign(x, { eur: S.parseMoney(x.prezzo) }));
     const srvAparte = v => srvAttivi().filter(x => !inclusoPer(v, x.key)).map(x => Object.assign({}, x, { eur: prezzoSrv(v, x.key) }));
     // inclusi divisi per chi li paga: a carico del proprietario (scheda villa o Impostazioni), altrimenti Esmeralda
@@ -147,15 +159,20 @@
     // per il cliente: un servizio a parte con prezzo risulta incluso (il prezzo è già nel totale); a parte senza prezzo non compare
     const incluseVilla = v => srvAttivi().filter(x => inclusoPer(v, x.key) || (typeof x.eur === 'number' && x.eur > 0));
     const prezzoTot = v => { const pr = prezzoDi(v); return pr === null ? null : pr + extraTot(v); };
+    // voci separate (servizi del cliente con il prezzo scritto a parte) e totale unico = affitto + servizi nel totale
+    const sepVilla = v => srvAparte(v).filter(x => quotaOff(x.key) === 'separato' && typeof x.eur === 'number' && x.eur > 0).map(x => Object.assign({}, x, { nome: srvNome(x, v) }));
+    const prezzoUnico = v => { const pr = prezzoTot(v); return pr === null ? null : pr - sepVilla(v).reduce((t, x) => t + x.eur, 0); };
     // elenco comune: "Includi tutti", oppure "A parte tutti" con un prezzo; con "Predefinito" il servizio va sempre sotto le singole ville
     const prezzato = x => typeof x.eur === 'number' && x.eur > 0;
     // il cliente "ha" il servizio in questa villa: se non è spuntato nell'offerta, mai (tolto dall'offerta);
     // se è spuntato: Includi tutti → sì; A parte tutti → se ha un prezzo; Predefinito → se la scheda lo comprende o se ha un prezzo
-    const haServ = (v, k) => { const d = srvDi(k), sch = inclVilla(v, k); if (!d.on) return false;
-      if (d.modo === 'inc') return true; const pr = prezzoSrv(v, k), conPrezzo = typeof pr === 'number' && pr > 0;
-      return d.modo === 'parte' ? conPrezzo : sch || conPrezzo; };
+    const haServ = (v, k) => { const d = srvDi(k); if (!d.on) return false;
+      if (inclusoPer(v, k)) return true; const pr = prezzoSrv(v, k); if (!(typeof pr === 'number' && pr > 0)) return false;
+      return quotaOff(k) !== 'separato'; };
+    // il servizio è nell'offerta per questa villa (compreso, nel totale unico o voce separata): va nella prenotazione
+    const inOfferta = (v, k) => { const d = srvDi(k); if (!d.on) return false; if (inclusoPer(v, k)) return true; const pr = prezzoSrv(v, k); return typeof pr === 'number' && pr > 0; };
     // elenco comune: i servizi che hanno tutte le ville dell'offerta (compresi o a pagamento); gli altri vanno sotto le ville che li hanno
-    const inclTutte = () => { const vv = scelte(); return vv.length ? srvList().filter(x => vv.every(v => haServ(v, x.key)) && oreUguale(x.key)).map(x => x.key) : srvAttivi().filter(x => x.modo === 'inc').map(x => x.key); };
+    const inclTutte = () => { const vv = scelte(); return vv.length ? srvList().filter(x => vv.every(v => haServ(v, x.key)) && oreUguale(x.key)).map(x => x.key) : srvAttivi().filter(x => x.modo === 'esmeralda' || x.modo === 'proprietario').map(x => x.key); };
     const descrSel = k => { const sel = incSel(); return S.inclusioniDi(st).filter(i => i.servizio === k && sel.includes(i.id)); };
     const testiSrv = (k, v) => { if (S.isVoceKey(k)) return []; let l = descrSel(k).map(i => (o.lingua === 'en' ? i.en : i.it) || i.it || i.en); const x = srvList().find(z => z.key === k);
       if (l.length && S.isOre(st, k) && figOff(k, v).length > 1) l = [srvNome(x || { key: k, label: k }, v) + ': ' + l.join(', ')];
@@ -373,8 +390,9 @@
       const tit = t => `<tr class="off-srv-grp"><td colspan="3">${t}</td></tr>`;
       $('#off-srv').innerHTML = (pre.length ? tit('Servizi predefiniti') : '') + pre.concat(ext).map((x, i) => { const d = srvDi(x.key); return (i === pre.length && ext.length ? tit('Servizi extra') : '') + `<tr data-ok="${esc(x.key)}" class="${d.on ? 'on' : ''}">
         <td><label class="off-inc"><input type="checkbox" data-son ${d.on ? 'checked' : ''}><span>${esc(x.label)}${x.voce ? ' <small class="note" title="Voce delle note spese: entra nel prezzo, ma non è scritta nella mail">· voce</small>' : ''}</span></label></td>
-        <td><div class="seg small" data-smode>${[['pred', 'Predefinito'], ['inc', 'Includi tutti'], ['parte', 'A parte tutti']].map(([m, t]) => `<button type="button" data-m="${m}" class="${d.modo === m ? 'on' : ''}" ${d.on ? '' : 'disabled'}>${t}</button>`).join('')}</div>${d.on && d.modo === 'pred' ? `<small class="note off-srv-who">${esc(chiInclude(x.key))}</small>` : ''}</td>
-        <td><input data-sprz inputmode="numeric" value="${esc(d.prezzo)}" placeholder="da scheda villa" title="Vuoto: per ogni villa il prezzo della sua scheda (o quello di Impostazioni). Scritto: uguale per tutte le ville; 0 = senza prezzo" ${d.on && d.modo !== 'inc' ? '' : 'disabled'} aria-label="Prezzo di ${esc(x.label)}"></td></tr>` + extraRow(x, d); }).join('');
+        <td><div class="off-srv-modi"><div class="seg small" data-smode title="A carico di">${[['pred', 'Predefinito'], ['esmeralda', 'Esmeralda'], ['parte', 'Cliente'], ['proprietario', 'Proprietario']].map(([m, t]) => `<button type="button" data-m="${m}" class="${d.modo === m ? 'on' : ''}" ${d.on ? '' : 'disabled'}>${t}</button>`).join('')}</div>
+          ${d.modo === 'parte' || d.modo === 'pred' ? `<div class="seg small" data-squota title="Come lo vede il cliente (solo a carico del cliente)">${[['totale', 'Totale unico'], ['separato', 'Voce separata']].map(([q, t]) => `<button type="button" data-q="${q}" class="${quotaOff(x.key) === q ? 'on' : ''}" ${d.on ? '' : 'disabled'}>${t}</button>`).join('')}</div>` : ''}</div>${d.on && d.modo === 'pred' ? `<small class="note off-srv-who">${esc(chiInclude(x.key))}</small>` : ''}</td>
+        <td><input data-sprz inputmode="numeric" value="${esc(d.prezzo)}" placeholder="da scheda villa" title="Vuoto: per ogni villa il prezzo della sua scheda (o quello di Impostazioni). Scritto: uguale per tutte le ville; 0 = senza prezzo" ${d.on && (d.modo === 'parte' || d.modo === 'pred') ? '' : 'disabled'} aria-label="Prezzo di ${esc(x.label)}"></td></tr>` + extraRow(x, d); }).join('');
     };
     // sotto il servizio spuntato: ospiti occupanti (se il prezzo li usa), giorni (servizi al giorno) o settimane (a settimana) e il personale a ore
     const extraRow = (x, d) => { if (!d.on) return ''; const k = x.key, u = S.srvUnita(st, k), pers = S.isOre(st, k), osp = usaOspiti(k);
@@ -516,7 +534,8 @@
     $('#off-srv').addEventListener('change', e => { const c = e.target.closest('[data-son]'); if (!c) return; const k = c.closest('[data-ok]').dataset.ok; o.srv[k] = Object.assign({}, o.srv[k], { on: c.checked });
       // spuntando il servizio si spuntano anche le sue descrizioni collegate (poi si possono togliere una per una)
       if (c.checked) { const sel = incSel().slice(); S.inclusioniDi(st).filter(i => i.servizio === k).forEach(i => { if (!sel.includes(i.id)) sel.push(i.id); }); o.incSel = sel; } drawSrv(); drawTexts(); save(); });
-    $('#off-srv').addEventListener('click', e => { const bt = e.target.closest('[data-smode] button'); if (!bt || bt.disabled) return; const k = bt.closest('[data-ok]').dataset.ok; const cur = Object.assign({}, o.srv[k]); delete cur.incluso; o.srv[k] = Object.assign(cur, { modo: bt.dataset.m }); drawSrv(); drawTexts(); save(); });
+    $('#off-srv').addEventListener('click', e => { const bq = e.target.closest('[data-squota] button'); if (bq && !bq.disabled) { const k = bq.closest('[data-ok]').dataset.ok; o.srv[k] = Object.assign({}, o.srv[k], { quota: bq.dataset.q }); drawSrv(); drawTexts(); save(); return; }
+      const bt = e.target.closest('[data-smode] button'); if (!bt || bt.disabled) return; const k = bt.closest('[data-ok]').dataset.ok; const cur = Object.assign({}, o.srv[k]); delete cur.incluso; o.srv[k] = Object.assign(cur, { modo: bt.dataset.m }); drawSrv(); drawTexts(); save(); });
     // riepilogo prezzi per villa: affitto e servizi modificabili qui (l'affitto è lo stesso campo del punto 2)
     const totRiga = vid => { const v = scelte().find(z => z.id === vid), tr = $(`#off-riep tr[data-rv="${CSS.escape(vid)}"][data-rpi="${o.pAtt}"]`); if (!v || !tr) return;
       const pr = prezzoDi(v), et = extraTot(v); tr.querySelector('[data-rtot]').textContent = pr === null ? '—' : S.money(pr + et); tr.querySelector('[data-rt]').textContent = et ? 'totale servizi ' + S.money(et) : ''; };
@@ -588,8 +607,8 @@
           if (vis(v, 'descrizione')) B.push({ p: anonTxt(v, v.descrizione) });
           if (vis(v, 'servizi')) B.push({ h2: l.servizi }, { p: anonTxt(v, v.servizi) });
           if (!conCod() && vis(v, 'linkSito')) B.push({ p: `${l.sito}: ${v.linkSito}`, small: true });
-          if (nP() > 1) { const rv = righeVille().find(z => z.v.id === v.id); rv.per.forEach(q => B.push({ price: [q.lab, q.pr === null ? l.richiesta : euro(q.pr)] })); }
-          else { const pr = prezzoTot(v); B.push({ price: [l.prezzo, pr === null ? l.richiesta : euro(pr)] }); }
+          { const rv = righeVille().find(z => z.v.id === v.id); rv.per.forEach(q => { B.push({ price: [nP() > 1 ? q.lab : l.prezzo, q.pu === null ? l.richiesta : euro(q.pu)] });
+            if (q.sep.length) { q.sep.forEach(x => B.push({ p: `+ ${x.nome}: ${euro(x.eur)}`, small: true })); B.push({ p: `${TOT()}: ${euro(q.pr)}`, bold: true }); } }); }
           linkWb(v).forEach(u => B.push({ p: `${l.webBro}: ${u}`, small: true }));
           const iv = inclSoloVilla(v); if (iv.length) B.push({ p: `${l.inclVilla}: ${iv.map(x => testiSrv(x.key, v).join(', ')).join('; ')}`, small: true });
           if ((o.note[v.id] || '').trim()) B.push({ p: o.note[v.id].trim(), small: true });
@@ -604,6 +623,7 @@
     });
 
     // dati di ogni villa per mail, WhatsApp e PDF: dalla villa più cara, quelle su richiesta in fondo (come nell'esempio delle offerte)
+    const TOT = () => o.lingua === 'en' ? 'Total' : 'Totale';
     const eurT = n => new Intl.NumberFormat('it-IT', { maximumFractionDigits: 0, useGrouping: 'always' }).format(n) + ' €';
     function righeVille() {
       const l = L();
@@ -615,7 +635,9 @@
         return (o.lingua === 'en' ? `${mese ? mese[0].toUpperCase() + mese.slice(1) + ' ' : ''}${tarEn} ${l.tariffa}` : `${l.tariffa} ${tar.toLowerCase()}${mese ? ' ' + mese : ''}`) + (diverso ? ' ' + rangeTxt(p, o.lingua) : ''); };
       return scelte().map(v => {
         // un prezzo per ogni periodo; con più periodi solo quelli in cui la villa è libera
-        const tutti = ogniP(i => { const pr = prezzoTot(v); return { i, disp: stato(v) === 'libera', p: perOf(v), pr, lab: labDi(v), prTxt: pr === null ? l.richiesta : eurT(pr) }; });
+        // pr = prezzo totale (per l'ordine), pu = totale unico mostrato come prezzo, sep = voci separate con il loro prezzo
+        const tutti = ogniP(i => { const pr = prezzoTot(v), pu = prezzoUnico(v), sep = pr === null ? [] : sepVilla(v).map(x => ({ nome: x.nome, eur: x.eur }));
+          return { i, disp: stato(v) === 'libera', p: perOf(v), pr, pu, sep, lab: labDi(v), prTxt: pu === null ? l.richiesta : eurT(pu), totTxt: pr === null ? '' : eurT(pr) }; });
         const per = nP() > 1 ? tutti.filter(q => q.disp) : tutti, f = per[0] || tutti[0];
         return { v, per: per.length ? per : [f], p: f.p, pr: f.pr, lab: f.lab, prTxt: f.prTxt }; })
         .sort((a, b) => (b.pr === null ? -1 : b.pr) - (a.pr === null ? -1 : a.pr)).map(z => { const v = z.v;
@@ -642,7 +664,8 @@
         const titolo = esc(r.titolo);
         h += P(`<b${acc !== '#000000' ? ` style="color:${acc};font-size:${z.size + 2}px"` : ''}>${r.sito ? link(r.sito, titolo) : titolo}</b>${r.codice ? ` <b style="${acc !== '#000000' ? 'font-weight:normal;font-size:' + (z.size - 2) + 'px;letter-spacing:1px;color:' + z.testo : ''}">${esc(r.codice)}</b>` : ''}`);
         if (r.video) h += P(`${esc(l.video)} ${link(r.video, esc(l.qui))}${r.psw ? ' (psw: ' + esc(r.psw) + ')' : ''}`);
-        r.per.forEach((q, j) => { h += P(`<b>${esc(q.lab)}:</b> ${q.pr === null ? esc(l.richiesta) : eurT(q.pr)}${!j && r.nota ? ' - ' + esc(r.nota) + ' -' : ''}`); });
+        r.per.forEach((q, j) => { h += P(`<b>${esc(q.lab)}:</b> ${q.pu === null ? esc(l.richiesta) : eurT(q.pu)}${!j && r.nota ? ' - ' + esc(r.nota) + ' -' : ''}`);
+          if (q.sep.length) { q.sep.forEach(x => { h += P(`+ ${esc(x.nome)}: ${eurT(x.eur)}`); }); h += P(`<b>${esc(TOT())}: ${q.totTxt}</b>`); } });
         r.wb.forEach(u => { h += P(`${esc(l.webBro)}: ${link(u, esc(l.qui))}`); });
         if (r.incl) h += P(`${esc(l.inclVilla)}: ${esc(r.incl)}`);
         h += sep ? HR : BR;
@@ -666,7 +689,7 @@
         r0.push(B(r.titolo) + (r.codice ? ' (' + r.codice + ')' : ''));
         if (r.sito) r0.push(r.sito);
         if (r.video) r0.push(`${l.video}: ${r.video}${r.psw ? ' (psw: ' + r.psw + ')' : ''}`);
-        r.per.forEach((q, j) => r0.push(`${q.lab}: ${B(q.prTxt)}${!j && r.nota ? ' – ' + r.nota : ''}`));
+        r.per.forEach((q, j) => { r0.push(`${q.lab}: ${B(q.prTxt)}${!j && r.nota ? ' – ' + r.nota : ''}`); if (q.sep.length) { q.sep.forEach(x => r0.push(`+ ${x.nome}: ${eurT(x.eur)}`)); r0.push(`${TOT()}: ${B(q.totTxt)}`); } });
         r.wb.forEach(u => r0.push(`${l.webBro}: ${u}`));
         if (r.incl) r0.push(`${l.inclVilla}: ${r.incl}`);
         r0.push('');
@@ -767,7 +790,8 @@
         for (const q of r.per) { if (y + 110 > FONDO) await nuova();
           linea(y); g.font = font(nP() > 1 ? 19 : 23, true); g.fillStyle = GOLD; g.fillText(q.lab.toUpperCase().slice(0, 70), M, y + 62);
           g.font = font(40, true); g.fillStyle = NAVY; g.textAlign = 'right'; g.fillText(q.prTxt, W - M, y + 66); g.textAlign = 'left';
-          linea(y + 96); y += 116; }
+          linea(y + 96); y += 116;
+          if (q.sep.length) { for (const x of q.sep) await riga('+ ' + x.nome, eurT(x.eur)); await riga(TOT(), q.totTxt); } }
         if (r.nota) await testo(r.nota, { px: 23, it: true, dopo: 8 });
         if (r.incl) await riga(l.inclVilla, r.incl);
         if (r.video) await riga(l.video, l.qui, r.video);
@@ -798,8 +822,8 @@
             return { id: v.id, name: v.name, disp, prezzo: prezzoTot(v), affitto: prezzoDi(v), listino: typeof li === 'number' ? li : null,
               voci: srvList().filter(x => x.voce && haServ(v, x.key)).map(x => x.label),
               // servizi dell'offerta per la prenotazione (Prenota): carico e prezzo di vendita (solo a carico del cliente)
-              srvPren: srvList().filter(x => !x.voce && haServ(v, x.key)).map(x => { const c = S.caricoDef(st, v, x.key), pr = prezzoSrv(v, x.key);
-                return { k: x.key, carico: c, vendita: c === 'parte' && typeof pr === 'number' ? pr : null, incluso: inclusoPer(v, x.key) }; }),
+              srvPren: srvList().filter(x => !x.voce && inOfferta(v, x.key)).map(x => { const c = caricoOff(v, x.key), pr = prezzoSrv(v, x.key);
+                return { k: x.key, carico: c, vendita: c === 'parte' && typeof pr === 'number' ? pr : null, incluso: inclusoPer(v, x.key), quota: c === 'parte' ? (inclusoPer(v, x.key) ? 'totale' : quotaOff(x.key)) : null, ore: oreTxt(x.key, v) }; }),
               servizi: srvAparte(v).map(x => { const b0 = prezzoSrvBase(v, x.key); return { k: x.key, label: x.label, prezzo: typeof x.eur === 'number' ? x.eur : null, base: typeof b0 === 'number' ? b0 : null }; }) }; });
     async function salvaStorico(tipo, html) {
       if (!store.saveOfferta) return;
@@ -930,7 +954,7 @@
         const srvPre = {}; let venSrv = 0;
         if (sp) { srvPre.serviziDett = {}; srvPre.servizi = [];
           sp.forEach(q => { if (base.includes(q.k)) srvPre[q.k] = true; else srvPre.servizi.push(q.k);
-            srvPre.serviziDett[q.k] = { carico: q.carico, incluso: q.carico !== 'parte', acquisto: null, vendita: q.vendita, quota: q.carico === 'parte' ? 'totale' : null, note: '' }; if (typeof q.vendita === 'number') venSrv += q.vendita; }); }
+            srvPre.serviziDett[q.k] = { carico: q.carico, incluso: q.carico !== 'parte', acquisto: null, vendita: q.vendita, quota: q.carico === 'parte' ? (q.quota === 'separato' ? 'separato' : 'totale') : null, orePreviste: q.ore || null, note: '' }; if (typeof q.vendita === 'number') venSrv += q.vendita; }); }
         const tot = typeof z.r.prezzo === 'number' ? z.r.prezzo : null, aff = tot == null ? undefined : sp ? Math.max(0, tot - venSrv) : tot;
         ctx.openBooking({ villaId: z.v.id, from, to,
           pre: Object.assign({ cliente: x.cliente || '', telefono: x.telefono || null, email: x.email || null, leader: x.cliente || x.telefono ? { nome: x.cliente || '', tel: x.telefono || '' } : null, ospiti: (() => { const a = x.stato ? Object.values(x.stato.srvOsp || {}).map(Number).filter(n => n > 0) : []; return a.length ? Math.max(...a) : x.stato && Number(x.stato.ospiti) > 0 ? Number(x.stato.ospiti) : null; })(), status: stato, prezzoVendita: aff, ...((() => { const id = x.agenziaId || (x.stato && x.stato.agenziaId); const a = id && (st.agenzie || []).find(y => y && y.id === id); return a ? { agenziaId: a.id, agenziaPerc: Number(a.perc) || 0 } : {}; })()), vociOfferta: Array.isArray(z.r.voci) ? z.r.voci : undefined, note: `Da offerta del ${dataBreve(x.quando)}${x.email ? ' · ' + x.email : ''}${x.telefono ? ' · ' + x.telefono : ''}` }, srvPre),
