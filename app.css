@@ -1547,3 +1547,5 @@ dialog.dlg-pvar { width: min(780px, calc(100vw - 32px)); }
 .off-seg2 button.def:not(.on) { background: var(--accent); color: #fff; border-color: var(--accent); }
 /* pulsanti delle finestre sempre visibili in fondo, anche da pc */
 .dlg .foot { position: sticky; bottom: -18px; z-index: 2; background: var(--surface); padding-block: 10px 18px; margin-bottom: -18px; border-top: 1px solid var(--line); }
+/* finestre alte (prezzi, prenotazione…): in alto e più basse, così il fondo con i pulsanti resta sopra la barra delle applicazioni anche se la finestra del browser è più grande dello schermo */
+@media (min-width: 721px) { dialog.dlg-pvar { margin: 12px auto auto; max-height: calc(100dvh - 110px); } }
