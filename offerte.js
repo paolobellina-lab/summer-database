@@ -423,7 +423,7 @@
         // listino: i servizi che di norma (Impostazioni, scheda villa) sono già compresi in questo periodo; barrati se tolti o messi a parte in questa offerta
         const isDef = k => S.predefSet(st, k) && S.predefSet(st, k, o.tariff) && inclVilla(v, k);
         const defL = srvList().filter(x => isDef(x.key)), defIn = defL.length ? `<div class="off-li-d">${defL.map(x => { const tolto = !srvDi(x.key).on || !inclusoPer(v, x.key);
-          return `<div class="off-ri-l${tolto ? ' off-tolto' : ''}" title="${tolto ? 'Tolto o messo a parte in questa offerta' : 'Compreso di norma'}"><span>${esc(x.label)}${tag(x.key)}</span></div>`; }).join('')}</div>` : '';
+          return `<div class="off-ri-l${tolto ? ' off-tolto' : ''}" title="${tolto ? 'Tolto o messo a parte in questa offerta' : 'Compreso di norma'}"><span>${esc(x.label)}${tag(x.key)}</span><b>${(e0 => typeof e0 === 'number' ? esc(S.money(e0)) : '—')(prezzoSrv(v, x.key))}</b></div>`; }).join('')}</div>` : '';
         // servizi inclusi: di norma non compresi, in questa offerta nel totale unico (omaggi: valore non sommato; del cliente: prezzo sommato e modificabile)
         const sep = ag.filter(x => quotaOff(x.key) === 'separato'), agTot = ag.filter(x => quotaOff(x.key) !== 'separato');
         const omg = inc.filter(x => !isDef(x.key)).map(x => ({ x, eur: prezzoSrv(v, x.key) }));
