@@ -270,7 +270,7 @@
         <div class="field"><span>Le tariffe includono</span><div class="off-incl" id="off-incl"></div>
           <textarea id="off-incx" rows="2" placeholder="Altre voci solo per questa offerta (una per riga)">${esc(o.incExtra || '')}</textarea>
           <small class="note">L'elenco e le voci spuntate di norma si cambiano in Impostazioni → Servizi e inclusioni.</small></div>
-        <div class="field"><span>Riepilogo prezzi per villa</span><div class="tbl-wrap"><table class="prices off-riep"><thead><tr><th>Villa</th><th>Affitto</th><th title="Valore di vendita dei servizi compresi nel prezzo: solo per riferimento, non si somma al totale">Servizi inclusi</th><th>Servizi a parte</th><th>Totale</th></tr></thead><tbody id="off-riep"></tbody></table></div></div>
+        <div class="field"><span>Riepilogo prezzi per villa</span><div class="tbl-wrap"><table class="prices off-riep"><thead><tr><th>Villa</th><th title="Affitto di listino e servizi che di norma (Impostazioni) sono già compresi; barrati quelli tolti o messi a parte in questa offerta">Listino</th><th title="Servizi che di norma non sono compresi ma in questa offerta sono nel totale unico (omaggi non sommati)">Servizi inclusi</th><th title="Servizi mostrati al cliente come voce separata">Servizi voce separata</th><th>Totale</th></tr></thead><tbody id="off-riep"></tbody></table></div></div>
       </section>
       <section class="card"><h2>4 · Offerta</h2>
         <div class="row off-row">
@@ -417,13 +417,21 @@
       const vv = scelte();
       $('#off-riep').innerHTML = vv.length ? vv.map(v => ogniP(pi => { const pr = prezzoDi(v), et = extraTot(v), inc = srvInclVilla(v), ag = srvAparte(v), li = listinoOf(v);
         const affIn = `<input class="off-rp" data-rp="${esc(v.id)}" inputmode="numeric" value="${esc(o.prezzi[v.id] !== undefined ? o.prezzi[v.id] : typeof li === 'number' ? String(li) : '')}" placeholder="su richiesta">${typeof li === 'number' && pr !== null && pr !== li ? `<small class="note off-mod">listino ${esc(S.money(li))}</small>` : ''}`;
-        const srvIn = ag.length ? ag.map(x => { const b0 = prezzoSrvBase(v, x.key), cur = (o.srvVilla[v.id] || {})[x.key]; const val0 = cur !== undefined ? cur : typeof x.eur === 'number' ? String(x.eur) : '';
-          return `<label class="off-rs-l"><span>${esc(x.label)}</span><input class="off-rs" data-rs="${esc(v.id)}|${esc(x.key)}" inputmode="numeric" value="${esc(val0)}" placeholder="—">${typeof b0 === 'number' && typeof x.eur === 'number' && x.eur !== b0 ? `<small class="note off-mod">scheda ${esc(S.money(b0))}</small>` : ''}</label>`; }).join('') : '<span class="note">—</span>';
-        // valore di vendita dei servizi inclusi (scheda villa o Impostazioni, o il prezzo scritto nell'offerta): solo da vedere, non entra nel totale
-        const incV = inc.map(x => ({ x, eur: prezzoSrv(v, x.key), prop: S.caricoDef(st, v, x.key, o.tariff) === 'proprietario', om: S.caricoDef(st, v, x.key, o.tariff) === 'esmeralda' })), incT = incV.reduce((t, y) => t + (typeof y.eur === 'number' ? y.eur : 0), 0);
-        const incIn = incV.length ? incV.map(y => `<div class="off-ri-l"><span>${esc(y.x.label)}${y.prop ? ' <small class="note">· proprietario</small>' : y.om ? ' <small class="note">· omaggio</small>' : ''}</span><b>${typeof y.eur === 'number' ? esc(S.money(y.eur)) : '—'}</b></div>`).join('') + (incT ? `<small class="note">valore ${esc(S.money(incT))} · non sommato</small>` : '') : '<span class="note">—</span>';
+        const rsIn = x => { const b0 = prezzoSrvBase(v, x.key), cur = (o.srvVilla[v.id] || {})[x.key]; const val0 = cur !== undefined ? cur : typeof x.eur === 'number' ? String(x.eur) : '';
+          return `<label class="off-rs-l"><span>${esc(x.label)}</span><input class="off-rs" data-rs="${esc(v.id)}|${esc(x.key)}" inputmode="numeric" value="${esc(val0)}" placeholder="—">${typeof b0 === 'number' && typeof x.eur === 'number' && x.eur !== b0 ? `<small class="note off-mod">scheda ${esc(S.money(b0))}</small>` : ''}</label>`; };
+        const tag = k => { const c = S.caricoDef(st, v, k, o.tariff); return c === 'proprietario' ? ' <small class="note">· proprietario</small>' : c === 'esmeralda' ? ' <small class="note">· omaggio</small>' : ''; };
+        // listino: i servizi che di norma (Impostazioni, scheda villa) sono già compresi in questo periodo; barrati se tolti o messi a parte in questa offerta
+        const isDef = k => S.predefSet(st, k) && S.predefSet(st, k, o.tariff) && inclVilla(v, k);
+        const defL = srvList().filter(x => isDef(x.key)), defIn = defL.length ? `<div class="off-li-d">${defL.map(x => { const tolto = !srvDi(x.key).on || !inclusoPer(v, x.key);
+          return `<div class="off-ri-l${tolto ? ' off-tolto' : ''}" title="${tolto ? 'Tolto o messo a parte in questa offerta' : 'Compreso di norma'}"><span>${esc(x.label)}${tag(x.key)}</span></div>`; }).join('')}</div>` : '';
+        // servizi inclusi: di norma non compresi, in questa offerta nel totale unico (omaggi: valore non sommato; del cliente: prezzo sommato e modificabile)
+        const sep = ag.filter(x => quotaOff(x.key) === 'separato'), agTot = ag.filter(x => quotaOff(x.key) !== 'separato');
+        const omg = inc.filter(x => !isDef(x.key)).map(x => ({ x, eur: prezzoSrv(v, x.key) }));
+        const incIn = omg.length || agTot.length ? omg.map(y => `<div class="off-ri-l"><span>${esc(y.x.label)}${tag(y.x.key)}</span><b>${typeof y.eur === 'number' ? esc(S.money(y.eur)) : '—'}</b></div>`).join('')
+          + (omg.length && omg.some(y => typeof y.eur === 'number') ? `<small class="note">omaggi non sommati</small>` : '') + agTot.map(rsIn).join('') : '<span class="note">—</span>';
+        const srvIn = sep.length ? sep.map(rsIn).join('') : '<span class="note">—</span>';
         const pp = perOf(v), s2 = stato(v), pTag = nP() > 1 ? `<small class="off-riep-p">Periodo ${pi + 1}${pp ? ' · ' + esc(S.dm(pp.from) + ' → ' + S.dm(pp.to)) : ''}${s2 !== 'libera' ? ` · <b class="st-${s2}">${s2 === 'occupata' ? 'occupata, non va nella mail' : 'ND'}</b>` : ''}</small>` : '';
-        return `<tr data-rv="${esc(v.id)}" data-rpi="${pi}"${nP() > 1 && pi ? ' class="off-riep-alt"' : ''}><td>${nP() > 1 && pi ? '' : `<b>${esc(v.name)}</b>`}${pTag}${incRighe(v, inc)}</td><td>${affIn}</td><td class="off-ri-c">${incIn}</td><td class="off-rs-c">${srvIn}<small class="note" data-rt>${et ? 'totale servizi ' + esc(S.money(et)) : ''}</small></td><td><b data-rtot>${pr === null ? '—' : S.money(pr + et)}</b></td></tr>`; }).join('')).join('')
+        return `<tr data-rv="${esc(v.id)}" data-rpi="${pi}"${nP() > 1 && pi ? ' class="off-riep-alt"' : ''}><td>${nP() > 1 && pi ? '' : `<b>${esc(v.name)}</b>`}${pTag}${incRighe(v, inc)}</td><td>${affIn}${defIn}</td><td class="off-ri-c off-rs-c">${incIn}</td><td class="off-rs-c">${srvIn}</td><td><b data-rtot>${pr === null ? '—' : S.money(pr + et)}</b><small class="note" data-rt>${et ? 'di cui servizi ' + esc(S.money(et)) : ''}</small></td></tr>`; }).join('')).join('')
         : '<tr><td colspan="5" class="note">Scegli le ville al punto 2.</td></tr>';
     };
     const drawTexts = () => {
@@ -543,7 +551,7 @@
       const bt = e.target.closest('[data-smode] button'); if (!bt || bt.disabled) return; const k = bt.closest('[data-ok]').dataset.ok; const cur = Object.assign({}, o.srv[k]); delete cur.incluso; o.srv[k] = Object.assign(cur, { modo: bt.dataset.m }); drawSrv(); drawTexts(); save(); });
     // riepilogo prezzi per villa: affitto e servizi modificabili qui (l'affitto è lo stesso campo del punto 2)
     const totRiga = vid => { const v = scelte().find(z => z.id === vid), tr = $(`#off-riep tr[data-rv="${CSS.escape(vid)}"][data-rpi="${o.pAtt}"]`); if (!v || !tr) return;
-      const pr = prezzoDi(v), et = extraTot(v); tr.querySelector('[data-rtot]').textContent = pr === null ? '—' : S.money(pr + et); tr.querySelector('[data-rt]').textContent = et ? 'totale servizi ' + S.money(et) : ''; };
+      const pr = prezzoDi(v), et = extraTot(v); tr.querySelector('[data-rtot]').textContent = pr === null ? '—' : S.money(pr + et); tr.querySelector('[data-rt]').textContent = et ? 'di cui servizi ' + S.money(et) : ''; };
     $('#off-riep').addEventListener('input', e => { const a = e.target.closest('[data-rp]'), r = e.target.closest('[data-rs]'); if (!a && !r) return;
       const pi = Number((e.target.closest('[data-rpi]') || {}).dataset ? e.target.closest('[data-rpi]').dataset.rpi : o.pAtt) || 0; const attivo = pi === o.pAtt;
       conP(pi, () => {
