@@ -1536,3 +1536,10 @@ dialog.dlg-pvar { width: min(780px, calc(100vw - 32px)); }
 .off-li-d { margin-top: 6px; display: grid; gap: 2px; font-size: 12.5px; color: var(--muted); }
 .off-tolto span { text-decoration: line-through; opacity: .7; }
 .off-riep td [data-rt] { display: block; margin-top: 2px; }
+/* Offerte punto 3: nome del servizio più grande; riga del servizio colorata, riga dei dettagli chiara */
+#off-srv tr[data-ok] > td { background: var(--accent-soft); }
+#off-srv tr[data-ok] > td:first-child { border-radius: 6px 0 0 6px; } #off-srv tr[data-ok] > td:last-child { border-radius: 0 6px 6px 0; }
+#off-srv .off-inc span { font-size: 15px; font-weight: 600; }
+#off-srv .off-ore { background: var(--surface); border: 1px solid var(--line); }
+.off-seg2 button.def:not(.on) { background: #d4ab6a; color: #3f2a0c; border-color: #b8894a; }
+#off-srv tr[data-ok] > td { border-top: 4px solid var(--surface); }
