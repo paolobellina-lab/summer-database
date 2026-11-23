@@ -140,13 +140,13 @@
     // un servizio è incluso per una villa se "Includi tutti", oppure con "Predefinito" se la scheda villa lo ha tra i servizi compresi nel prezzo
     // compreso nel prezzo della villa: a carico di Esmeralda (già nelle spese servizi del listino) o del proprietario (scheda villa)
     // compreso nel prezzo per questa villa: omaggio di Esmeralda, a carico del proprietario, o del cliente ma Predefinito (già nel listino)
-    const inclVilla = (v, k) => { const c = S.caricoDef(settings(), v, k); return c !== 'parte' || S.predefSet(settings(), k, o.tariff); };
+    const inclVilla = (v, k) => { const c = S.caricoDef(settings(), v, k); return c !== 'parte' || (S.predefSet(settings(), k, o.tariff) && S.quotaTarDi(settings(), k, o.tariff) === 'totale'); };
     // chi paga il servizio in questa villa (con Predefinito: Impostazioni e scheda villa)
     const caricoOff = (v, k) => { const d = srvDi(k); return d.modo === 'pred' ? S.caricoDef(settings(), v, k) : d.modo; };
     // non sommato al prezzo: omaggio di Esmeralda, fornito dal proprietario, o del cliente ma Predefinito (già nel listino)
-    const inclusoPer = (v, k) => { const d = srvDi(k); return d.modo === 'pred' ? inclVilla(v, k) : d.modo !== 'parte'; };
+    const inclusoPer = (v, k) => { const d = srvDi(k); return d.modo === 'pred' ? inclVilla(v, k) && !(d.quota === 'separato' && S.caricoDef(settings(), v, k) === 'parte') : d.modo !== 'parte'; };
     // servizio del cliente sommato al prezzo: "totale" = nel totale unico, "separato" = voce separata con il suo prezzo (di norma da Impostazioni)
-    const quotaOff = k => { const d = srvDi(k); return d.quota || (((st.prezziServizi || {})[k] || {}).quota === 'separato' ? 'separato' : 'totale'); };
+    const quotaOff = k => { const d = srvDi(k); return d.quota || S.quotaTarDi(st, k, o.tariff); };
     const srvAttivi = () => srvList().map(x => Object.assign({}, x, srvDi(x.key))).filter(x => x.on).map(x => Object.assign(x, { eur: S.parseMoney(x.prezzo) }));
     const srvAparte = v => srvAttivi().filter(x => !inclusoPer(v, x.key)).map(x => Object.assign({}, x, { eur: prezzoSrv(v, x.key) }));
     // inclusi divisi per chi li paga: a carico del proprietario (scheda villa o Impostazioni), altrimenti Esmeralda
@@ -199,7 +199,7 @@
     const ogniP = fn => Array.from({ length: nP() }, (_, i) => conP(i, () => fn(i)));
     // listino della villa; se un servizio Predefinito a carico del cliente (già nelle spese servizi del listino) è tolto dall'offerta
     // o messo "a parte", il listino si rifà con la stessa formula (agenzia e arrotondamento) senza quel servizio
-    const inListinoOff = (v, k) => S.predefSet(st, k, o.tariff) && S.caricoDef(st, v, k) === 'parte';
+    const inListinoOff = (v, k) => S.predefSet(st, k, o.tariff) && S.quotaTarDi(st, k, o.tariff) === 'totale' && S.caricoDef(st, v, k) === 'parte';
     const prezzoListinoSrv = (v, k) => { const n = (S.TAR_SETT[o.tariff] || 1) * 7, pv = (v.prezziServizi || {})[k], d = (st.prezziServizi || {})[k] || {};
       const z = typeof pv === 'number' ? S.srvPrezzo(st, k, pv, n) : S.srvPrezzoV(st, k, typeof d.vendita === 'number' ? d.vendita : null, n, { villa: v }); return typeof z === 'number' ? z : 0; };
     const srvToltiListino = v => srvList().filter(x => inListinoOff(v, x.key) && (!srvDi(x.key).on || !inclusoPer(v, x.key)));
@@ -266,7 +266,7 @@
       </section>
       <section class="card"><h2>3 · Servizi e prezzi</h2>
         <div class="field"><span>Servizi</span><div class="tbl-wrap"><table class="prices off-srv"><thead><tr><th>Servizio</th><th>Nell'offerta</th><th>Prezzo €</th></tr></thead><tbody id="off-srv"></tbody></table></div>
-          <small class="note off-srv-note">Spunta i servizi da proporre. <b>Predefinito</b>: incluso nelle ville che lo hanno tra i "Servizi compresi nel prezzo" della scheda, a parte (con il prezzo sommato) nelle altre. <b>Includi tutti</b>: incluso per tutte le ville. <b>A parte tutti</b>: si somma al prezzo di ogni villa. Nella mail il cliente vede i servizi sempre come <b>compresi</b> e un solo prezzo, già con i servizi a parte sommati; un servizio a parte senza prezzo non compare. Con il prezzo vuoto ogni villa usa il prezzo della sua scheda (Listino prezzi → Servizi non compresi), o quello di Impostazioni se la scheda non lo ha; un prezzo scritto qui vale per tutte le ville di questa offerta (0 = senza prezzo).</small></div>
+          <small class="note off-srv-note">Spunta i servizi da proporre. <b>Da scheda villa</b>: come in Impostazioni (offerto di default, totale unico o a parte secondo il periodo) e nella scheda della villa (servizi compresi = omaggio del proprietario). <b>Omaggio Esmeralda</b> e <b>Omaggio proprietario</b>: compreso, non si somma. <b>A carico cliente</b>: si somma al prezzo. Con il cliente: <b>Totale unico</b> = compreso nel prezzo mostrato; <b>Voce separata</b> = riga a parte con il suo prezzo e il totale. Un servizio a parte senza prezzo non compare. Con il prezzo vuoto ogni villa usa il prezzo della sua scheda, o quello di Impostazioni; un prezzo scritto qui vale per tutte le ville di questa offerta (0 = senza prezzo).</small></div>
         <div class="field"><span>Le tariffe includono</span><div class="off-incl" id="off-incl"></div>
           <textarea id="off-incx" rows="2" placeholder="Altre voci solo per questa offerta (una per riga)">${esc(o.incExtra || '')}</textarea>
           <small class="note">L'elenco e le voci spuntate di norma si cambiano in Impostazioni → Servizi e inclusioni.</small></div>
@@ -390,7 +390,7 @@
       const tit = t => `<tr class="off-srv-grp"><td colspan="3">${t}</td></tr>`;
       $('#off-srv').innerHTML = (pre.length ? tit('Servizi predefiniti') : '') + pre.concat(ext).map((x, i) => { const d = srvDi(x.key); return (i === pre.length && ext.length ? tit('Servizi extra') : '') + `<tr data-ok="${esc(x.key)}" class="${d.on ? 'on' : ''}">
         <td><label class="off-inc"><input type="checkbox" data-son ${d.on ? 'checked' : ''}><span>${esc(x.label)}${x.voce ? ' <small class="note" title="Voce delle note spese: entra nel prezzo, ma non è scritta nella mail">· voce</small>' : ''}</span></label></td>
-        <td><div class="off-srv-modi"><div class="seg small" data-smode title="A carico di">${[['pred', 'Predefinito'], ['esmeralda', 'Esmeralda'], ['parte', 'Cliente'], ['proprietario', 'Proprietario']].map(([m, t]) => `<button type="button" data-m="${m}" class="${d.modo === m ? 'on' : ''}" ${d.on ? '' : 'disabled'}>${t}</button>`).join('')}</div>
+        <td><div class="off-srv-modi"><div class="seg small" data-smode title="A carico di">${[['pred', 'Da scheda villa'], ['esmeralda', 'Omaggio Esmeralda'], ['parte', 'A carico cliente'], ['proprietario', 'Omaggio proprietario']].map(([m, t]) => `<button type="button" data-m="${m}" class="${d.modo === m ? 'on' : ''}" ${d.on ? '' : 'disabled'}>${t}</button>`).join('')}</div>
           ${d.modo === 'parte' || d.modo === 'pred' ? `<div class="seg small" data-squota title="Come lo vede il cliente (solo a carico del cliente)">${[['totale', 'Totale unico'], ['separato', 'Voce separata']].map(([q, t]) => `<button type="button" data-q="${q}" class="${quotaOff(x.key) === q ? 'on' : ''}" ${d.on ? '' : 'disabled'}>${t}</button>`).join('')}</div>` : ''}</div>${d.on && d.modo === 'pred' ? `<small class="note off-srv-who">${esc(chiInclude(x.key))}</small>` : ''}</td>
         <td><input data-sprz inputmode="numeric" value="${esc(d.prezzo)}" placeholder="da scheda villa" title="Vuoto: per ogni villa il prezzo della sua scheda (o quello di Impostazioni). Scritto: uguale per tutte le ville; 0 = senza prezzo" ${d.on && (d.modo === 'parte' || d.modo === 'pred') ? '' : 'disabled'} aria-label="Prezzo di ${esc(x.label)}"></td></tr>` + extraRow(x, d); }).join('');
     };

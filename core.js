@@ -286,6 +286,9 @@
   const TAR_BREVE = { settimanale: 'Sett.', bisettimanale: 'Bisett.', mensile: 'Mese', bimensile: '2 mesi' };
   const predefTarDi = (st, k) => { const a = ((((st && st.prezziServizi) || {})[k] || {}).predefTar); return Array.isArray(a) ? a : null; };
   // tariffa di una prenotazione dalle notti: < 14 settimanale, 14–27 bisettimanale, 28–55 mensile, 56+ bimensile
+  // come si presenta al cliente un servizio offerto di default in quella tariffa: 'totale' (nel totale unico e nel listino) o 'separato' (a parte);
+  // prezziServizi[k].quotaTar = { tariffa: 'separato'|'totale' }, altrimenti il vecchio prezziServizi[k].quota (Sommato / Non sommato)
+  const quotaTarDi = (st, k, tar) => { const d = ((st && st.prezziServizi) || {})[k] || {}; const q = d.quotaTar && tar ? d.quotaTar[tar] : null; return q === 'separato' || q === 'totale' ? q : (d.quota === 'separato' ? 'separato' : 'totale'); };
   const tarDaNotti = n => n >= 56 ? 'bimensile' : n >= 28 ? 'mensile' : n >= 14 ? 'bisettimanale' : 'settimanale';
   const predefSet = (st, k, tar) => { const b = predefBase(st, k); if (!b || !tar) return b; const a = predefTarDi(st, k); return !a || a.includes(tar); };
   const predefBase = (st, k) => { const d = ((st && st.prezziServizi) || {})[k] || {}; if (typeof d.predef === 'boolean') return d.predef; if (st && st.caricoV2) return false;
@@ -299,5 +302,5 @@
   // dettaglio di una prenotazione: carico salvato, altrimenti il vecchio "incluso" (incluso = a carico di Esmeralda)
   const caricoDi = d => d && CARICHI.includes(d.carico) ? d.carico : d && d.incluso === false ? 'parte' : 'esmeralda';
   const TAR_SETT = { settimanale: 1, bisettimanale: 2, mensile: 4, bimensile: 8 };
-  window.SDB = { TAR_BREVE, predefTarDi, tarDaNotti, isOre, perCamere, regolaDi, unitaDi, srvGiorni, REG_PERS, figureDi, oreCalc, nomeFigure, fasceDi, srvAdatta, srvPrezzoV, REGOLE, numCampo, predefSet, migraCarichi, voceKey, isVoceKey, voceNome, CARICHI, CARICO_LABEL, CARICO_BREVE, caricoSet, caricoDef, caricoDi, TAR_SETT, MARGINE_MIN, AGENZIA_DEF, srvUnita, srvSettimane, srvFattore, srvPrezzo, MARE, mareLivello, mareLabel, INCLUSIONI, inclusioniDi, CAMPI_SCHEDA, CAMPI_NASCOSTI_DEFAULT, nascostiDi, periodsFor, autoPeriods, autoPeriodsFor, cambioDi, STATUS_COLOR, PALETTE, inkFor, DAY, MESI, MESI_L, GG, parse, iso, addDays, diffDays, dm, dmy, TARIFFE, STATI, defaultSettings, defaultPeriods, salePrice, priceAt, emptyPricing, money, short, parseMoney, uid };
+  window.SDB = { quotaTarDi, TAR_BREVE, predefTarDi, tarDaNotti, isOre, perCamere, regolaDi, unitaDi, srvGiorni, REG_PERS, figureDi, oreCalc, nomeFigure, fasceDi, srvAdatta, srvPrezzoV, REGOLE, numCampo, predefSet, migraCarichi, voceKey, isVoceKey, voceNome, CARICHI, CARICO_LABEL, CARICO_BREVE, caricoSet, caricoDef, caricoDi, TAR_SETT, MARGINE_MIN, AGENZIA_DEF, srvUnita, srvSettimane, srvFattore, srvPrezzo, MARE, mareLivello, mareLabel, INCLUSIONI, inclusioniDi, CAMPI_SCHEDA, CAMPI_NASCOSTI_DEFAULT, nascostiDi, periodsFor, autoPeriods, autoPeriodsFor, cambioDi, STATUS_COLOR, PALETTE, inkFor, DAY, MESI, MESI_L, GG, parse, iso, addDays, diffDays, dm, dmy, TARIFFE, STATI, defaultSettings, defaultPeriods, salePrice, priceAt, emptyPricing, money, short, parseMoney, uid };
 })();
