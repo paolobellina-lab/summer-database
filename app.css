@@ -1545,3 +1545,5 @@ dialog.dlg-pvar { width: min(780px, calc(100vw - 32px)); }
 #off-srv tr[data-ok] > td { border-top: 4px solid var(--surface); }
 .off-tolto b { text-decoration: line-through; opacity: .7; }
 .off-seg2 button.def:not(.on) { background: var(--accent); color: #fff; border-color: var(--accent); }
+/* pulsanti delle finestre sempre visibili in fondo, anche da pc */
+.dlg .foot { position: sticky; bottom: -18px; z-index: 2; background: var(--surface); padding-block: 10px 18px; margin-bottom: -18px; border-top: 1px solid var(--line); }
