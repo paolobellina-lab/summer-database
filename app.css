@@ -1581,3 +1581,7 @@ html { overflow-x: clip; }
 .dlg-pvar .pv-gd .pv-gr { grid-template-columns: 1.3fr 1.1fr 62px 90px auto; }
 .dlg-pvar .pv-gd .pv-gr.acq { grid-template-columns: 1.3fr 1.1fr 62px repeat(2, 90px) auto; }
 @media (max-width: 640px) { .dlg-pvar .pv-gd .pv-gr, .dlg-pvar .pv-gd .pv-gr.acq { grid-template-columns: 1fr 1fr 1fr; } }
+/* finestra prenotazione: riquadro Affitto al proprietario */
+.sec-prop { --sec-bg: #eaf1ec; --sec-ink: #3f6b4e; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .sec-prop { --sec-bg: #1c2a21; --sec-ink: #a9d3b6; } }
+:root[data-theme="dark"] .sec-prop { --sec-bg: #1c2a21; --sec-ink: #a9d3b6; }

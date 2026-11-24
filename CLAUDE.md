@@ -158,6 +158,8 @@ Prezzi di acquisto dall'Excel: "Importa backup" riconosce anche un file `{ tipo:
 ## Finestra prenotazione
 **Contatti e occupanti** (dal 23/11/2026), nel riquadro Cliente e prezzo: `bookings.telefono`, `bookings.email` (minuscolo), `bookings.leader = { nome, tel }` (party leader, prima riga) e `bookings.persone = [{ nome, tel }]` (persone del gruppo; niente documenti né età). Righe `.b-occ-r` (`occ`, `occDraw`, `occLeggi`), "+ Aggiungi persona", per gli amministratori "Riprendi dal contratto" (`#b-occ-ct`: nome, cognome e telefono dell'anagrafica + righe di "Persons in your party" senza le età). Prenota dello Storico passa telefono, email e party leader (nome del cliente). In `schedaPren` (Riepilogo, Word): Telefono, Email, Party leader, Persone del gruppo. Restano in `bookings` (non protetti): li vedono anche i concierge nelle Schede prenotazioni dell'app Scontrini (scelta del proprietario).
 
+**Affitto al proprietario** (v249): riquadro a parte `section.sec-prop` dopo Cliente e prezzo (prima di Agenzia) con Acquisto concordato (`#b-buy`, solo `canAcq`), avviso Acquisto unico e "Giorni pagati al proprietario diversi" (`#b-pag`, `#b-pag-box`), tolti da Cliente e prezzo e da Date.
+
 `openBooking` (`form#bform`): da pc (≥ 1000 px) larga 920 px, una colonna sola (scelta del proprietario: niente due colonne; i contenitori `.bcols` / `.bcol` restano con `display: contents`). "Assegnata a (app Scontrini)" (`.b-assegn`) sta in cima, sotto il titolo.
 
 ## Conferme

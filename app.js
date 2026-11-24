@@ -809,14 +809,6 @@ window.SDBStore.ready.then(function () {
         <label class="flag"><input type="checkbox" id="b-early" ${b.earlyIn ? 'checked' : ''}><span><b>Early check-in</b><small>Il giorno di arrivo resta tutto a questo affitto</small></span></label>
         <label class="flag"><input type="checkbox" id="b-late" ${b.lateOut ? 'checked' : ''}><span><b>Late check-out</b><small>Il giorno di partenza resta tutto a questo affitto</small></span></label>
       </div>
-      <label class="flag b-pag-flag"><input type="checkbox" id="b-pag" ${b.pagatoDal ? 'checked' : ''}><span><b>Giorni pagati al proprietario diversi</b><small>Se paghi la villa al proprietario per più giorni di quelli prenotati dal cliente</small></span></label>
-      <div id="b-pag-box" ${b.pagatoDal ? '' : 'hidden'}>
-        <div class="row">
-          <label class="field"><span>Pagata dal</span><input type="date" id="b-pag-from" value="${esc(b.pagatoDal || b.from || '')}"></label>
-          <label class="field"><span>Pagata fino al</span><input type="date" id="b-pag-to" value="${esc(b.pagatoAl || b.to || '')}"></label>
-        </div>
-        <div id="b-pag-info"></div>
-      </div>
       </section>
       <section class="dsec sec-cli"><h4>Cliente e prezzo</h4>
       <div class="row"><label class="field"><span>Cliente</span><input id="b-cliente" value="${esc(b.cliente)}" placeholder="Cognome cliente"></label>
@@ -828,12 +820,7 @@ window.SDBStore.ready.then(function () {
         <div id="b-occ-list"></div><button type="button" class="btn small" id="b-occ-add">+ Aggiungi persona</button></div>
       <div class="row">
         <label class="field" title="Il prezzo unico dato al cliente: affitto + servizi nel totale. L'affitto della villa si calcola togliendo i servizi nel totale"><span>Totale unico €</span><input id="b-tot" inputmode="numeric" value="${(() => { if (typeof b.prezzoVendita !== 'number') return ''; let t = b.prezzoVendita; servizi(null, null, true).forEach(x => { if (!hasSrv(b, x)) return; const d = srvDet(b, x.key); if (d.carico === 'parte' && d.quota === 'totale' && typeof d.vendita === 'number') t += d.vendita; }); return esc(fmtNum(t)); })()}"><input type="hidden" id="b-sale" value="${typeof b.prezzoVendita === 'number' ? esc(fmtNum(b.prezzoVendita)) : ''}"></label>
-        <label class="field"${canAcq() ? '' : ' hidden'}><span>Acquisto concordato €</span><input id="b-buy" inputmode="numeric" value="${typeof b.prezzoAcquisto === 'number' && !b.acquistoDi ? esc(fmtNum(b.prezzoAcquisto)) : ''}"${b.acquistoDi ? ' disabled placeholder="compreso nell\'acquisto unico"' : ''}></label>
       </div>
-      ${(() => { const rt = b.acquistoDi ? data().bookings.find(x => x.id === b.acquistoDi) : null; const coll = existing ? data().bookings.filter(x => x.acquistoDi === b.id) : [];
-        const dsc = x => `${esc(x.cliente || statoLabel(x.status))} ${S.dm(x.from)} → ${S.dm(x.to)}`;
-        return rt ? `<div class="warn b-acq-un" id="b-acq-un"><b>Acquisto unico dal proprietario</b> con ${dsc(rt)}: l'acquisto si conta una volta sola, in quella prenotazione. Vendita e spese di questa restano separate. <button type="button" class="btn small" id="b-acq-open" data-id="${esc(rt.id)}">Apri</button> <button type="button" class="btn small" id="b-acq-off">Scollega</button></div>`
-          : coll.length ? `<div class="warn b-acq-un"><b>Acquisto unico dal proprietario</b> anche per: ${coll.map(dsc).join(', ')}. L'acquisto di questa prenotazione vale per tutte.</div>` : ''; })()}
       <div class="row">
         <label class="field"><span>Deposito di sicurezza €</span><input id="b-dep" inputmode="numeric" value="${typeof b.deposito === 'number' ? esc(fmtNum(b.deposito)) : ''}" placeholder="ricevuto dal cliente"></label>
         <div class="field b-dep-note"><span>&nbsp;</span><small class="note">La restituzione si registra come nota spesa "Restituzione deposito sicurezza".</small></div>
@@ -841,6 +828,24 @@ window.SDBStore.ready.then(function () {
       <div class="b-pcli" id="b-pcli"></div>
       <div class="pricehint" id="b-hint"></div>
       <div id="b-spese"></div>
+      </section>
+      <section class="dsec sec-prop"><h4>Affitto al proprietario</h4>
+      <div class="row">
+        <label class="field"${canAcq() ? '' : ' hidden'}><span>Acquisto concordato €</span><input id="b-buy" inputmode="numeric" value="${typeof b.prezzoAcquisto === 'number' && !b.acquistoDi ? esc(fmtNum(b.prezzoAcquisto)) : ''}"${b.acquistoDi ? ' disabled placeholder="compreso nell\'acquisto unico"' : ''}></label>
+        <div class="field b-dep-note"><span>&nbsp;</span><small class="note">Quanto si paga al proprietario per la villa (previsto). Il pagato si registra come nota spesa "Affitto proprietario".</small></div>
+      </div>
+      ${(() => { const rt = b.acquistoDi ? data().bookings.find(x => x.id === b.acquistoDi) : null; const coll = existing ? data().bookings.filter(x => x.acquistoDi === b.id) : [];
+        const dsc = x => `${esc(x.cliente || statoLabel(x.status))} ${S.dm(x.from)} → ${S.dm(x.to)}`;
+        return rt ? `<div class="warn b-acq-un" id="b-acq-un"><b>Acquisto unico dal proprietario</b> con ${dsc(rt)}: l'acquisto si conta una volta sola, in quella prenotazione. Vendita e spese di questa restano separate. <button type="button" class="btn small" id="b-acq-open" data-id="${esc(rt.id)}">Apri</button> <button type="button" class="btn small" id="b-acq-off">Scollega</button></div>`
+          : coll.length ? `<div class="warn b-acq-un"><b>Acquisto unico dal proprietario</b> anche per: ${coll.map(dsc).join(', ')}. L'acquisto di questa prenotazione vale per tutte.</div>` : ''; })()}
+      <label class="flag b-pag-flag"><input type="checkbox" id="b-pag" ${b.pagatoDal ? 'checked' : ''}><span><b>Giorni pagati al proprietario diversi</b><small>Se paghi la villa al proprietario per più giorni di quelli prenotati dal cliente</small></span></label>
+      <div id="b-pag-box" ${b.pagatoDal ? '' : 'hidden'}>
+        <div class="row">
+          <label class="field"><span>Pagata dal</span><input type="date" id="b-pag-from" value="${esc(b.pagatoDal || b.from || '')}"></label>
+          <label class="field"><span>Pagata fino al</span><input type="date" id="b-pag-to" value="${esc(b.pagatoAl || b.to || '')}"></label>
+        </div>
+        <div id="b-pag-info"></div>
+      </div>
       </section>
       <section class="dsec sec-ag"><h4>Agenzia</h4>
 <div class="row">
