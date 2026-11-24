@@ -1559,3 +1559,21 @@ dialog.dlg-pvar { width: min(780px, calc(100vw - 32px)); }
 .off-pills button.on { background: var(--navy, #142861); color: #fff; }
 .off-pills button.def:not(.on) { background: #fff; border-color: var(--accent); color: #7a5a24; }
 .off-pills button:disabled { opacity: .5; cursor: default; }
+/* barra in alto: da pc nome e menu stanno sempre in una riga (il nome non si stringe, il menu si compatta) */
+@media (min-width: 761px) {
+  .topbar .brand { flex-shrink: 0; }
+  .nav { min-width: 0; }
+}
+@media (min-width: 761px) and (max-width: 2200px) {
+  .brand span { display: none; }
+  .nav a { letter-spacing: .08em; padding: 8px 8px; }
+}
+@media (min-width: 761px) and (max-width: 1600px) {
+  .nav a { font-size: 13.5px; letter-spacing: .05em; padding: 8px 6px; }
+  .brand b { font-size: 21px; }
+}
+@media (min-width: 761px) and (max-width: 1200px) {
+  .nav a { font-size: 12.5px; letter-spacing: .02em; padding: 8px 4px; }
+}
+/* niente scorrimento orizzontale della pagina intera (la barra in alto non si sposta più a sinistra) */
+html { overflow-x: clip; }
