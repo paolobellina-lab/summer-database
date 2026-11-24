@@ -131,7 +131,7 @@
     // servizi a ore (es. cuoco): il nome segue le figure presenti per gli ospiti della villa ("Chef and Butler")
     const figOff = (k, v) => S.oreCalc(st, k, 7, { villa: v, ospiti: ospK(k), over: o.srvOre[k] }).righe;
     // ore previste nell'offerta per i servizi a ore: "Chef 6 h/giorno × 14 gg = 84 h; Butler …" (per la prenotazione)
-    const oreTxt = (k, v) => { if (!S.isOre(st, k)) return null; const pe = perOf(v), n = pe && pe.from && pe.to ? S.diffDays(pe.from, pe.to) : 7;
+    const oreTxt = (k, v) => { if (!S.isOre(st, k) || S.isGiorn(st, k)) return null; const pe = perOf(v), n = pe && pe.from && pe.to ? S.diffDays(pe.from, pe.to) : 7;
       const r = S.oreCalc(st, k, n, { villa: v, ospiti: ospK(k), over: o.srvOre[k], giorni: giorniOre(k, pe), settimane: settOre(k) });
       const un = r.unita === 'settimana' ? 'sett.' : r.unita === 'soggiorno' ? '' : 'gg', uh = r.unita === 'settimana' ? 'h/sett.' : r.unita === 'soggiorno' ? 'h' : 'h/giorno';
       const l = r.righe.filter(f => typeof f.ore === 'number').map(f => `${f.it || f.en} ${String(f.ore).replace('.', ',')} ${uh}${un ? ` × ${String(Math.round(f.giorni * 10) / 10).replace('.', ',')} ${un}` : ''} = ${String(Math.round(f.ore * f.giorni * 10) / 10).replace('.', ',')} h`);
@@ -417,7 +417,7 @@
       const ov = o.srvOre[k] || {}, f2 = v => typeof v === 'number' ? String(v).replace('.', ',') : '';
       return `<tr class="off-ore-r"><td colspan="3"><div class="off-ore"><div class="off-ore-h"><span class="note">${nota}</span>${osp ? ospIn(k) : ''}${tempo}</div>
         ${pers ? S.figureDi(st, k).map(f => { const z = ov[f.id] || {};
-        return `<div class="off-ore-f"><b>${esc(f.it)}</b><small class="note">${f.da > 1 ? 'da ' + f.da + ' ' + cosa : 'sempre'}</small><span><input data-ofv="${esc(k)}|${esc(f.id)}" inputmode="decimal" value="${esc(z.vendita != null ? String(z.vendita) : '')}" placeholder="${esc(f2(f.vendita))}"> €/h</span><span><input data-ofo="${esc(k)}|${esc(f.id)}" inputmode="decimal" value="${esc(z.ore != null ? String(z.ore) : '')}" placeholder="${esc(f2(f.ore))}"> ${hl}</span></div>`; }).join('') : ''}</div></td></tr>`; };
+        return `<div class="off-ore-f"><b>${esc(f.it)}</b><small class="note">${f.da > 1 ? 'da ' + f.da + ' ' + cosa : 'sempre'}</small><span><input data-ofv="${esc(k)}|${esc(f.id)}" inputmode="decimal" value="${esc(z.vendita != null ? String(z.vendita) : '')}" placeholder="${esc(f2(f.vendita))}"> ${S.isGiorn(st, k) ? '€/giorno' : '€/h'}</span>${S.isGiorn(st, k) ? '' : `<span><input data-ofo="${esc(k)}|${esc(f.id)}" inputmode="decimal" value="${esc(z.ore != null ? String(z.ore) : '')}" placeholder="${esc(f2(f.ore))}"> ${hl}</span>`}</div>`; }).join('') : ''}</div></td></tr>`; };
     const drawRiep = () => {
       const vv = scelte();
       $('#off-riep').innerHTML = vv.length ? vv.map(v => ogniP(pi => { const pr = prezzoDi(v), et = extraTot(v), inc = srvInclVilla(v), ag = srvAparte(v), li = listinoOf(v);

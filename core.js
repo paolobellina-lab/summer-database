@@ -228,8 +228,9 @@
      Ospiti = quelli dell'offerta / prenotazione, se no la capienza della villa (guests); camere = camere della villa (totalBedrooms).
      Acquisto: stessi criteri, importi in meta/servizi_acquisto con chiavi '<k>@loc:<LOCALITÀ>' e '<k>@f:<fino>' (opz.acq = quella mappa). */
   const numCampo = x => { const m = String(x == null ? '' : x).match(/\d+/g); return m ? m.map(Number).reduce((a, b) => a + b, 0) : 0; };
-  const REGOLE = [['', 'Prezzo fisso'], ['gruppiOspiti', 'A gruppi di ospiti'], ['gruppiCamere', 'A gruppi di camere'], ['fasceOspiti', 'A fasce di ospiti'], ['fasceCamere', 'A fasce di camere'], ['personaleOspiti', 'Personale a ore secondo gli ospiti'], ['personaleCamere', 'Personale a ore secondo le camere']];
-  const REG_PERS = ['personaleOspiti', 'personaleCamere'];
+  const REGOLE = [['', 'Prezzo fisso'], ['gruppiOspiti', 'A gruppi di ospiti'], ['gruppiCamere', 'A gruppi di camere'], ['fasceOspiti', 'A fasce di ospiti'], ['fasceCamere', 'A fasce di camere'], ['personaleOspiti', 'Personale a ore secondo gli ospiti'], ['personaleCamere', 'Personale a ore secondo le camere'], ['personaleGiornoOspiti', 'Personale al giorno secondo gli ospiti'], ['personaleGiornoCamere', 'Personale al giorno secondo le camere']];
+  // personale: a ore (€/h × ore × giorni) o al giorno (€/giorno × giorni), con le figure che entrano secondo gli ospiti o le camere
+  const REG_PERS = ['personaleOspiti', 'personaleCamere', 'personaleGiornoOspiti', 'personaleGiornoCamere'], REG_GIORNO = ['personaleGiornoOspiti', 'personaleGiornoCamere'];
   const regolaDi = (st, k) => { const d = ((st && st.prezziServizi) || {})[k] || {}; if (d.regola && REG_PERS.includes(d.regola.tipo)) return d.regola; if (d.unita === 'ore') return { tipo: 'personaleOspiti' }; return d.regola && d.regola.tipo ? d.regola : null; };
   const srvAdatta = (st, k, base, opz) => { opz = opz || {}; const d = ((st && st.prezziServizi) || {})[k] || {}, v = opz.villa || null; let p = base;
     const loc = v && v.location ? String(v.location).trim().toUpperCase() : '';
@@ -248,19 +249,20 @@
      protetta: chiave '<k>@h:<id>'. Totale = Σ figure attive (€/h × ore × giorni), giorni = notti del soggiorno. opz.over = { id: { vendita, ore } }
      = valori cambiati nella singola offerta; opz.giorni = giorni effettivi se il servizio non è tutti i giorni (es. solo weekend). */
   const isOre = (st, k) => { const r = regolaDi(st, k); return !!(r && REG_PERS.includes(r.tipo)); };
-  const perCamere = (st, k) => { const r = regolaDi(st, k); return !!(r && r.tipo === 'personaleCamere'); };
+  const perCamere = (st, k) => { const r = regolaDi(st, k); return !!(r && (r.tipo === 'personaleCamere' || r.tipo === 'personaleGiornoCamere')); };
+  const isGiorn = (st, k) => { const r = regolaDi(st, k); return !!(r && REG_GIORNO.includes(r.tipo)); };
   const FIG_DEF = [{ id: 'f1', it: 'Cuoco', en: 'Chef', da: 1, vendita: null, ore: 6 }];
   const figureDi = (st, k) => { const f = ((((st && st.prezziServizi) || {})[k]) || {}).figure; return Array.isArray(f) && f.length ? f : FIG_DEF; };
   const nOr = (x, y) => { const z = typeof x === 'string' ? Number(x.replace(/\./g, '').replace(',', '.')) : x; return typeof z === 'number' && isFinite(z) && String(x).trim() !== '' ? z : y; };
   const oreCalc = (st, k, notti, opz) => { opz = opz || {}; const v = opz.villa || null, over = opz.over || {};
     const osp = (Number(opz.ospiti) > 0 ? Number(opz.ospiti) : numCampo(v && v.guests)) || 1, cam = numCampo(v && v.totalBedrooms) || 1, cc = perCamere(st, k), q = cc ? cam : osp;
     // le figure danno il prezzo di base (€/h × ore); l'unità moltiplica: al giorno × giorni, a settimana × settimane (coeff), a soggiorno una volta
-    const g = srvFattore(st, k, notti, { giorni: opz.giorni, settimane: opz.settimane }), u = srvUnita(st, k);
+    const gd = isGiorn(st, k), g = gd ? (Number(opz.giorni) >= 0 && opz.giorni != null ? Number(opz.giorni) : srvGiorni(notti)) : srvFattore(st, k, notti, { giorni: opz.giorni, settimane: opz.settimane }), u = srvUnita(st, k);
     const righe = figureDi(st, k).filter(f => q >= (Number(f.da) || 1)).map(f => { const o2 = over[f.id] || {};
-      const ore = nOr(o2.ore, typeof f.ore === 'number' ? f.ore : null), vh = nOr(o2.vendita, typeof f.vendita === 'number' ? f.vendita : null), ah = opz.acq ? nOr(o2.acquisto, opz.acq[k + '@h:' + f.id]) : null;
+      const ore = gd ? 1 : nOr(o2.ore, typeof f.ore === 'number' ? f.ore : null), vh = nOr(o2.vendita, typeof f.vendita === 'number' ? f.vendita : null), ah = opz.acq ? nOr(o2.acquisto, opz.acq[k + '@h:' + f.id]) : null;
       return { id: f.id, it: f.it, en: f.en, ore, giorni: g, vh, ah, v: vh != null && ore != null ? Math.round(vh * ore * g) : null, a: ah != null && ore != null ? Math.round(ah * ore * g) : null }; });
     const tot = c => righe.some(r => typeof r[c] === 'number') ? righe.reduce((t, r) => t + (r[c] || 0), 0) : null;
-    return { righe, ospiti: osp, camere: cam, perCamere: cc, unita: u.unita, giorni: g, vendita: tot('v'), acquisto: tot('a') }; };
+    return { righe, ospiti: osp, camere: cam, perCamere: cc, giorn: gd, unita: gd ? 'giorno' : u.unita, giorni: g, vendita: tot('v'), acquisto: tot('a') }; };
   // nomi delle figure attive per la mail: "Chef", "Chef and Butler", "Chef, Butler, extra Waiter and Kitchen Aid"
   const nomeFigure = (righe, lingua) => { const n = righe.map(r => (lingua === 'en' ? r.en : r.it) || r.it || r.en).filter(Boolean); const e = lingua === 'en' ? ' and ' : ' e ';
     return n.length < 2 ? (n[0] || '') : n.slice(0, -1).join(', ') + e + n[n.length - 1]; };
@@ -304,5 +306,5 @@
   // dettaglio di una prenotazione: carico salvato, altrimenti il vecchio "incluso" (incluso = a carico di Esmeralda)
   const caricoDi = d => d && CARICHI.includes(d.carico) ? d.carico : d && d.incluso === false ? 'parte' : 'esmeralda';
   const TAR_SETT = { settimanale: 1, bisettimanale: 2, mensile: 4, bimensile: 8 };
-  window.SDB = { quotaTarDi, TAR_BREVE, predefTarDi, tarDaNotti, isOre, perCamere, regolaDi, unitaDi, srvGiorni, REG_PERS, figureDi, oreCalc, nomeFigure, fasceDi, srvAdatta, srvPrezzoV, REGOLE, numCampo, predefSet, migraCarichi, voceKey, isVoceKey, voceNome, CARICHI, CARICO_LABEL, CARICO_BREVE, caricoSet, caricoDef, caricoDi, TAR_SETT, MARGINE_MIN, AGENZIA_DEF, srvUnita, srvSettimane, srvFattore, srvPrezzo, MARE, mareLivello, mareLabel, INCLUSIONI, inclusioniDi, CAMPI_SCHEDA, CAMPI_NASCOSTI_DEFAULT, nascostiDi, periodsFor, autoPeriods, autoPeriodsFor, cambioDi, STATUS_COLOR, PALETTE, inkFor, DAY, MESI, MESI_L, GG, parse, iso, addDays, diffDays, dm, dmy, TARIFFE, STATI, defaultSettings, defaultPeriods, salePrice, priceAt, emptyPricing, money, short, parseMoney, uid };
+  window.SDB = { isGiorn, REG_GIORNO, quotaTarDi, TAR_BREVE, predefTarDi, tarDaNotti, isOre, perCamere, regolaDi, unitaDi, srvGiorni, REG_PERS, figureDi, oreCalc, nomeFigure, fasceDi, srvAdatta, srvPrezzoV, REGOLE, numCampo, predefSet, migraCarichi, voceKey, isVoceKey, voceNome, CARICHI, CARICO_LABEL, CARICO_BREVE, caricoSet, caricoDef, caricoDi, TAR_SETT, MARGINE_MIN, AGENZIA_DEF, srvUnita, srvSettimane, srvFattore, srvPrezzo, MARE, mareLivello, mareLabel, INCLUSIONI, inclusioniDi, CAMPI_SCHEDA, CAMPI_NASCOSTI_DEFAULT, nascostiDi, periodsFor, autoPeriods, autoPeriodsFor, cambioDi, STATUS_COLOR, PALETTE, inkFor, DAY, MESI, MESI_L, GG, parse, iso, addDays, diffDays, dm, dmy, TARIFFE, STATI, defaultSettings, defaultPeriods, salePrice, priceAt, emptyPricing, money, short, parseMoney, uid };
 })();

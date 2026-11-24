@@ -1577,3 +1577,7 @@ dialog.dlg-pvar { width: min(780px, calc(100vw - 32px)); }
 }
 /* niente scorrimento orizzontale della pagina intera (la barra in alto non si sposta più a sinistra) */
 html { overflow-x: clip; }
+/* personale al giorno: niente colonna delle ore */
+.dlg-pvar .pv-gd .pv-gr { grid-template-columns: 1.3fr 1.1fr 62px 90px auto; }
+.dlg-pvar .pv-gd .pv-gr.acq { grid-template-columns: 1.3fr 1.1fr 62px repeat(2, 90px) auto; }
+@media (max-width: 640px) { .dlg-pvar .pv-gd .pv-gr, .dlg-pvar .pv-gd .pv-gr.acq { grid-template-columns: 1fr 1fr 1fr; } }
