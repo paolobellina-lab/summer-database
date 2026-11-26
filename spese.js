@@ -666,7 +666,7 @@
       V.l.filter(x => (!vf || x.villaId === vf) && inPer(x)).forEach(x => { const per = new Map();
         x.spese.forEach(sp => { const kd = keyDi(sp); if (!kd) return; const r = riga(kd.k, kd.label, kd.voce, kd.fuori); r.note++; per.set(kd.k, (per.get(kd.k) || 0) + (Number(sp.importo) || 0)); });
         const notti = x.from && x.to ? S.diffDays(x.from, x.to) : 0;
-        per.forEach((tot, k) => { const r = R0.get(k); r.pren++; r.reale += tot; const pv0 = S.srvPrezzoV(st, k, typeof acqP[k] === 'number' ? acqP[k] : null, notti, { villa: villaDi(x.villaId), ospiti: x.b && x.b.ospiti, acq: acqP }); if (typeof pv0 === 'number') { r.prev += pv0; r.realeP += tot; r.nPrev++; } }); });
+        per.forEach((tot, k) => { const r = R0.get(k); r.pren++; r.reale += tot; const pv0 = S.srvPrezzoV(st, k, typeof acqP[k] === 'number' ? acqP[k] : null, notti, { villa: villaDi(x.villaId), ospiti: x.b && x.b.ospiti, ore: x.b && ((x.b.serviziDett || {})[k] || {}).ore, acq: acqP }); if (typeof pv0 === 'number') { r.prev += pv0; r.realeP += tot; r.nPrev++; } }); });
       if (!da && !a0) V.generali.filter(x => !vf || x.villaId === vf).forEach(x => x.spese.forEach(sp => { const kd = keyDi(sp); if (!kd) return; const r = riga(kd.k, kd.label, kd.voce, kd.fuori); r.note++; r.gen += Number(sp.importo) || 0; }));
       const righe = [...R0.values()].sort((p, q) => (p.voce - q.voce) || p.label.localeCompare(q.label, 'it'));
       const pctS = (r0, p0) => p0 ? ((r0 - p0) / p0 * 100) : null;

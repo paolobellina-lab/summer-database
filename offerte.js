@@ -91,7 +91,7 @@
     // prezzo di un servizio per una villa: quello scritto qui nell'offerta (uguale per tutte), altrimenti quello della scheda villa, altrimenti Impostazioni
     // prezzo "di base" (senza modifiche nell'offerta): scheda villa, altrimenti Impostazioni; se settimanale, sulle settimane del periodo
     const prezzoSrvBase = (v, k) => { const pe = v ? perOf(v) : null, notti = pe && pe.from && pe.to ? S.diffDays(pe.from, pe.to) : 0;
-      const tempo = { giorni: giorniOre(k, pe), settimane: settOre(k) };
+      const tempo = { giorni: giorniOre(k, pe), settimane: settOre(k), ore: oreH(k) };
       const pv = (v && v.prezziServizi || {})[k]; if (typeof pv === 'number') return S.srvPrezzo(st, k, pv, notti, tempo); const d = (st.prezziServizi || {})[k] || {};
       return S.srvPrezzoV(st, k, typeof d.vendita === 'number' ? d.vendita : null, notti, Object.assign({ villa: v, ospiti: ospK(k), over: o.srvOre[k] }, tempo)); };
     // servizi a ore: giorni della settimana in cui c'è il servizio (o.srvOre[k]._gg = [0..6], 0 = domenica; mancante = tutti) → giorni del soggiorno che cadono in quei giorni
@@ -105,6 +105,8 @@
     const giorniOre = (k, pe) => { if (!S.srvUnita(st, k).giornaliero) return null; const nn = (o.srvOre[k] || {})._n; if (nn != null && nn !== '' && Number(nn) >= 0) return Number(nn); const g = ggSel(k); if (g.length === 7 || !pe || !pe.from || !pe.to) return g.length === 7 ? null : pe && pe.from && pe.to ? 0 : null; let n = 0;
       for (let d = new Date(pe.from + 'T00:00:00'), e = new Date(pe.to + 'T00:00:00'); d <= e; d.setDate(d.getDate() + 1)) if (g.includes(d.getDay())) n++; return n; };
     // servizi a settimana: settimane scritte nell'offerta (_s); vuoto = notti / 7
+    // servizi a ore (senza personale): ore scritte nell'offerta (_h); vuoto = ore di norma di Impostazioni
+    const oreH = k => { if (!S.srvUnita(st, k).orario) return null; const h = (o.srvOre[k] || {})._h; return h != null && h !== '' && Number(h) >= 0 ? Number(h) : null; };
     const settOre = k => { if (!S.srvUnita(st, k).settimanale) return null; const sw = (o.srvOre[k] || {})._s; return sw != null && sw !== '' && Number(sw) >= 0 ? Number(sw) : null; };
     // ordine: prezzo scritto per questa villa nel riepilogo → prezzo scritto per tutte al punto 3 → base
     const prezzoSrv = (v, k) => { const y = v && (o.srvVilla[v.id] || {})[k]; if (y !== undefined && String(y).trim() !== '') return S.parseMoney(y);
@@ -406,18 +408,19 @@
     };
     // sotto il servizio spuntato: ospiti occupanti (se il prezzo li usa), giorni (servizi al giorno) o settimane (a settimana) e il personale a ore
     const extraRow = (x, d) => { if (!d.on) return ''; const k = x.key, u = S.srvUnita(st, k), pers = S.isOre(st, k), osp = usaOspiti(k);
-      if (!pers && !osp && !u.giornaliero && !u.settimanale) return '';
+      if (!pers && !osp && !u.giornaliero && !u.settimanale && !u.orario) return '';
       const v0 = scelte()[0], pe = v0 ? perOf(v0) : null, notti = pe && pe.from && pe.to ? S.diffDays(pe.from, pe.to) : null;
       const tempo = u.giornaliero ? (() => { const tot = notti != null ? notti + 1 : null, n0 = giorniOre(k, pe);
           return `<span class="off-gg" data-ogg="${esc(k)}"><span class="off-ggn"><input data-ogn="${esc(k)}" inputmode="numeric" value="${esc(String(n0 != null ? n0 : tot != null ? tot : ''))}" title="Giorni con il servizio (notti + 1): si calcola dai giorni scelti, oppure scrivilo tu">gg / ${tot != null ? tot : '—'}gg</span><button type="button" class="btn small" data-gwe>Solo weekend</button><button type="button" class="btn small" data-gall>Tutti</button></span>`; })()
         : u.settimanale ? (() => { const tot = notti != null ? Math.round(notti / 7 * 100) / 100 : null, s0 = settOre(k), f = z => String(z).replace('.', ',');
-          return `<span class="off-ggn"><input data-osw="${esc(k)}" inputmode="decimal" value="${esc(s0 != null ? f(s0) : tot != null ? f(tot) : '')}" title="Settimane con il servizio: vuoto = tutto il soggiorno">sett. / ${tot != null ? f(tot) : '—'} sett.</span>`; })() : '';
-      const nota = pers ? `Personale di questa offerta (vuoto = Impostazioni; entra secondo ${S.perCamere(st, k) ? 'le camere della villa' : 'gli ospiti'})` : osp ? 'Il prezzo cambia con gli ospiti' : u.giornaliero ? 'Servizio al giorno' : 'Servizio a settimana';
+          return `<span class="off-ggn"><input data-osw="${esc(k)}" inputmode="decimal" value="${esc(s0 != null ? f(s0) : tot != null ? f(tot) : '')}" title="Settimane con il servizio: vuoto = tutto il soggiorno">sett. / ${tot != null ? f(tot) : '—'} sett.</span>`; })()
+        : u.orario ? (() => { const h0 = oreH(k), hd = ((st.prezziServizi || {})[k] || {}).ore; return `<span class="off-ggn"><input data-ooh="${esc(k)}" inputmode="decimal" value="${esc(h0 != null ? String(h0).replace('.', ',') : '')}" placeholder="${esc(String(hd || 1).replace('.', ','))}" title="Ore del servizio in questa offerta: vuoto = ore di norma">h</span>`; })() : '';
+      const nota = pers ? `Personale di questa offerta (vuoto = Impostazioni; entra secondo ${S.perCamere(st, k) ? 'le camere della villa' : 'gli ospiti'})` : osp ? 'Il prezzo cambia con gli ospiti' : u.giornaliero ? 'Servizio al giorno' : u.orario ? 'Servizio a ore: prezzo all\'ora × ore' : 'Servizio a settimana';
       const hl = u.giornaliero ? 'h/giorno' : u.settimanale ? 'h/sett.' : 'h in tutto', cosa = S.perCamere(st, k) ? 'camere' : 'ospiti';
       const ov = o.srvOre[k] || {}, f2 = v => typeof v === 'number' ? String(v).replace('.', ',') : '';
       return `<tr class="off-ore-r"><td colspan="3"><div class="off-ore"><div class="off-ore-h"><span class="note">${nota}</span>${osp ? ospIn(k) : ''}${tempo}</div>
         ${pers ? S.figureDi(st, k).map(f => { const z = ov[f.id] || {};
-        return `<div class="off-ore-f"><b>${esc(f.it)}</b><small class="note">${f.da > 1 ? 'da ' + f.da + ' ' + cosa : 'sempre'}</small><span><input data-ofv="${esc(k)}|${esc(f.id)}" inputmode="decimal" value="${esc(z.vendita != null ? String(z.vendita) : '')}" placeholder="${esc(f2(f.vendita))}"> ${S.isGiorn(st, k) ? '€/giorno' : '€/h'}</span>${S.isGiorn(st, k) ? '' : `<span><input data-ofo="${esc(k)}|${esc(f.id)}" inputmode="decimal" value="${esc(z.ore != null ? String(z.ore) : '')}" placeholder="${esc(f2(f.ore))}"> ${hl}</span>`}</div>`; }).join('') : ''}</div></td></tr>`; };
+        return `<div class="off-ore-f"><b>${esc(f.it)}</b><small class="note">${f.da > 1 ? 'da ' + f.da + ' ' + cosa : 'sempre'}</small><span><input data-ofv="${esc(k)}|${esc(f.id)}" inputmode="decimal" value="${esc(z.vendita != null ? String(z.vendita) : '')}" placeholder="${esc(f2(f.vendita))}"> ${S.isGiorn(st, k) ? S.lblPrezzo(st, k) : '€/h'}</span>${S.isGiorn(st, k) ? '' : `<span><input data-ofo="${esc(k)}|${esc(f.id)}" inputmode="decimal" value="${esc(z.ore != null ? String(z.ore) : '')}" placeholder="${esc(f2(f.ore))}"> ${hl}</span>`}</div>`; }).join('') : ''}</div></td></tr>`; };
     const drawRiep = () => {
       const vv = scelte();
       $('#off-riep').innerHTML = vv.length ? vv.map(v => ogniP(pi => { const pr = prezzoDi(v), et = extraTot(v), inc = srvInclVilla(v), ag = srvAparte(v), li = listinoOf(v);
@@ -543,6 +546,8 @@
       const b = e.target.closest('[data-gg]'); if (b) { const n = Number(b.dataset.gg); g = g.includes(n) ? g.filter(z => z !== n) : g.concat(n); if (!g.length) return; }
       else if (e.target.closest('[data-gwe]')) g = [6, 0]; else if (e.target.closest('[data-gall]')) g = [0, 1, 2, 3, 4, 5, 6]; else return;
       ov._gg = g.length === 7 ? undefined : g; delete ov._n; drawSrv(); drawRiep(); drawTexts(); save(); });
+    $('#off-srv').addEventListener('change', e => { const w = e.target.closest('[data-ooh]'); if (!w) return; const ov = o.srvOre[w.dataset.ooh] = o.srvOre[w.dataset.ooh] || {}, t0 = String(w.value).trim().replace(',', '.');
+      if (t0 === '' || !(Number(t0) >= 0)) delete ov._h; else ov._h = Number(t0); drawSrv(); drawRiep(); drawTexts(); save(); });
     $('#off-srv').addEventListener('change', e => { const w = e.target.closest('[data-osw]'); if (!w) return; const ov = o.srvOre[w.dataset.osw] = o.srvOre[w.dataset.osw] || {}, t0 = String(w.value).trim().replace(',', '.');
       if (t0 === '' || !(Number(t0) >= 0)) delete ov._s; else ov._s = Number(t0); drawSrv(); drawRiep(); drawTexts(); save(); });
     $('#off-srv').addEventListener('change', e => { const t = e.target.closest('[data-ogn]'); if (!t) return; const k = t.dataset.ogn, ov = o.srvOre[k] = o.srvOre[k] || {}, n = String(t.value).replace(/\D/g, '');
@@ -841,7 +846,7 @@
               voci: srvList().filter(x => x.voce && haServ(v, x.key)).map(x => x.label),
               // servizi dell'offerta per la prenotazione (Prenota): carico e prezzo di vendita (solo a carico del cliente)
               srvPren: srvList().filter(x => !x.voce && inOfferta(v, x.key)).map(x => { const c = caricoOff(v, x.key), pr = prezzoSrv(v, x.key);
-                return { k: x.key, carico: c, vendita: c === 'parte' && typeof pr === 'number' ? pr : null, incluso: inclusoPer(v, x.key), quota: c === 'parte' ? (inclusoPer(v, x.key) ? 'totale' : quotaOff(x.key)) : null, ore: oreTxt(x.key, v) }; }),
+                return { k: x.key, carico: c, vendita: c === 'parte' && typeof pr === 'number' ? pr : null, incluso: inclusoPer(v, x.key), quota: c === 'parte' ? (inclusoPer(v, x.key) ? 'totale' : quotaOff(x.key)) : null, ore: oreTxt(x.key, v), oreH: S.srvUnita(st, x.key).orario ? (oreH(x.key) ?? (((st.prezziServizi || {})[x.key] || {}).ore || null)) : null }; }),
               servizi: srvAparte(v).map(x => { const b0 = prezzoSrvBase(v, x.key); return { k: x.key, label: x.label, prezzo: typeof x.eur === 'number' ? x.eur : null, base: typeof b0 === 'number' ? b0 : null }; }) }; });
     async function salvaStorico(tipo, html) {
       if (!store.saveOfferta) return;
@@ -972,7 +977,7 @@
         const srvPre = {}; let venSrv = 0;
         if (sp) { srvPre.serviziDett = {}; srvPre.servizi = [];
           sp.forEach(q => { if (base.includes(q.k)) srvPre[q.k] = true; else srvPre.servizi.push(q.k);
-            srvPre.serviziDett[q.k] = { carico: q.carico, incluso: q.carico !== 'parte', acquisto: null, vendita: q.vendita, quota: q.carico === 'parte' ? (q.quota === 'separato' ? 'separato' : 'totale') : null, orePreviste: q.ore || null, note: '' }; if (typeof q.vendita === 'number') venSrv += q.vendita; }); }
+            srvPre.serviziDett[q.k] = { carico: q.carico, incluso: q.carico !== 'parte', acquisto: null, vendita: q.vendita, quota: q.carico === 'parte' ? (q.quota === 'separato' ? 'separato' : 'totale') : null, orePreviste: q.ore || null, ore: typeof q.oreH === 'number' ? q.oreH : null, note: '' }; if (typeof q.vendita === 'number') venSrv += q.vendita; }); }
         const tot = typeof z.r.prezzo === 'number' ? z.r.prezzo : null, aff = tot == null ? undefined : sp ? Math.max(0, tot - venSrv) : tot;
         ctx.openBooking({ villaId: z.v.id, from, to,
           pre: Object.assign({ cliente: x.cliente || '', telefono: x.telefono || null, email: x.email || null, leader: x.cliente || x.telefono ? { nome: x.cliente || '', tel: x.telefono || '' } : null, ospiti: (() => { const a = x.stato ? Object.values(x.stato.srvOsp || {}).map(Number).filter(n => n > 0) : []; return a.length ? Math.max(...a) : x.stato && Number(x.stato.ospiti) > 0 ? Number(x.stato.ospiti) : null; })(), status: stato, prezzoVendita: aff, ...((() => { const id = x.agenziaId || (x.stato && x.stato.agenziaId); const a = id && (st.agenzie || []).find(y => y && y.id === id); return a ? { agenziaId: a.id, agenziaPerc: Number(a.perc) || 0 } : {}; })()), vociOfferta: Array.isArray(z.r.voci) ? z.r.voci : undefined, note: `Da offerta del ${dataBreve(x.quando)}${x.email ? ' · ' + x.email : ''}${x.telefono ? ' · ' + x.telefono : ''}` }, srvPre),
