@@ -1592,3 +1592,12 @@ html { overflow-x: clip; }
 .v-srv-qs { display: flex; flex-wrap: wrap; gap: 6px 14px; flex-basis: 100%; }
 .v-srv-q { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
 .v-srv-q input[inputmode] { width: 70px; text-align: right; }
+/* offerte punto 3: stato del servizio a tre clic (incluso / non incluso / nascosto) e riga snella quando non è offerto */
+.off-tri { width: 22px; height: 22px; flex: none; padding: 0; border: 1.5px solid var(--line); border-radius: 5px; background: var(--surface); font-size: 14px; line-height: 1; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+.off-tri.st-on { background: #2e7d4f; border-color: #2e7d4f; color: #fff; }
+.off-tri.st-escl { background: #b3261e; border-color: #b3261e; color: #fff; }
+#off-srv tr.off td, #off-srv tr.escl td { background: transparent; padding-top: 4px; padding-bottom: 4px; }
+#off-srv tr.off .off-inc span { color: var(--muted); font-weight: 400; }
+.off-nincl { color: #b3261e; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+.per-chip.per-escl { color: #b3261e; }
+#off-srv tr.off td:first-child, #off-srv tr.escl td:first-child { white-space: nowrap; }

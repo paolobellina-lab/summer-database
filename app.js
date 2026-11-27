@@ -2063,12 +2063,12 @@ window.SDBStore.ready.then(function () {
       const t = r.tipo && !S.REG_PERS.includes(r.tipo) ? (r.tipo.indexOf('gruppi') === 0 ? `ogni ${r.n || '?'} ${cosa}` : `${(r.fasce || []).length} fasce di ${cosa}`) : ''; return [t, nl ? `${nl} località` : ''].filter(Boolean).join(' · '); };
     // come funziona per periodo: carico (servizi: per tariffa, caricoTar) e in offerta ('no' = non offerto di default, 'tot' = offerto · totale unico / offerto, 'sep' = offerto · a parte)
     const perCar = (k, t) => S.caricoSet(st, k, S.isVoceKey(k) ? null : t);
-    const perOff = (k, t) => !(S.predefSet(st, k) && S.predefSet(st, k, t)) ? 'no' : perCar(k, t) === 'parte' && S.quotaTarDi(st, k, t) === 'separato' ? 'sep' : 'tot';
+    const perOff = (k, t) => !(S.predefSet(st, k) && S.predefSet(st, k, t)) ? (S.esclTarDi(st, k, t) ? 'escl' : 'no') : perCar(k, t) === 'parte' && S.quotaTarDi(st, k, t) === 'separato' ? 'sep' : 'tot';
     const PER_CAR = { esmeralda: 'Omaggio Esmeralda', parte: 'Cliente', proprietario: 'Omaggio proprietario' };
-    const perTxt = (c, o) => c === 'parte' ? 'Cliente · ' + ({ no: 'non di default', tot: 'totale unico', sep: 'a parte' })[o] : PER_CAR[c] + (o === 'no' ? ' · non di default' : '');
+    const perTxt = (c, o) => o === 'escl' ? (c === 'parte' ? 'Cliente' : PER_CAR[c]) + ' · non incluso' : c === 'parte' ? 'Cliente · ' + ({ no: 'non di default', tot: 'totale unico', sep: 'a parte' })[o] : PER_CAR[c] + (o === 'no' ? ' · non di default' : '');
     // riepilogo in sola lettura: periodi uguali uniti (es. "Sett. · Bisett.: Cliente · totale unico")
     const perHtml = k => { const g = []; S.TARIFFE.forEach(t => { const c = perCar(k, t.key), o = perOff(k, t.key), x = g[g.length - 1]; if (x && x.c === c && x.o === o) x.t.push(t.key); else g.push({ c, o, t: [t.key] }); });
-      return `<span class="srv-per">${g.map(x => `<span class="per-chip per-${x.c}${x.o === 'no' ? ' per-no' : ''}"><b>${x.t.length === S.TARIFFE.length ? 'Tutti i periodi' : x.t.map(t => S.TAR_BREVE[t]).join(' · ')}</b> ${esc(perTxt(x.c, x.o))}</span>`).join('')}</span>`; };
+      return `<span class="srv-per">${g.map(x => `<span class="per-chip per-${x.c}${x.o === 'no' ? ' per-no' : x.o === 'escl' ? ' per-no per-escl' : ''}"><b>${x.t.length === S.TARIFFE.length ? 'Tutti i periodi' : x.t.map(t => S.TAR_BREVE[t]).join(' · ')}</b> ${esc(perTxt(x.c, x.o))}</span>`).join('')}</span>`; };
     // riga 2: riepilogo non modificabile (i prezzi si cambiano nella finestra "Prezzi variabili…")
     const prezziTd = k => { const pz = prezziSrv()[k] || {}; const vt = varTxt(k), u = S.srvUnita(st, k);
       const ul = u.giornaliero ? 'al giorno' : u.settimanale ? `a settimana${u.coeff !== 1 ? ` · dalla 2ª sett. × ${String(u.coeff).replace('.', ',')}` : ''}` : 'a soggiorno';
@@ -2177,8 +2177,9 @@ window.SDBStore.ready.then(function () {
         const un = d.querySelector('#pv-u').value; o0.unita = un; o0.v2 = true; delete o0.volte;
         if (un === 'ore' && !pers) { const h = String(d.querySelector('#pv-h').value).trim().replace(',', '.'); if (h !== '' && Number(h) >= 0) o0.ore = Number(h); else delete o0.ore; } else delete o0.ore;
         if (pers) { leggiG(); o0.figure = gz.map(f => ({ id: f.id, it: f.it, en: f.en, da: f.da || 1, vendita: f.vendita, ore: f.ore })); if (acq) gz.forEach(f => { if (typeof f.acquisto === 'number') acqK[k + '@h:' + f.id] = f.acquisto; }); } if (un === 'settimana') { const ct = String(d.querySelector('#pv-c').value).trim().replace(',', '.'), cv = Number(ct); o0.coeff = ct !== '' && cv >= 0 ? cv : (typeof o0.coeff === 'number' ? o0.coeff : 1); }
-        const tutte = S.TARIFFE.map(t => t.key), offT = tutte.filter(t => d.querySelector(`[data-po="${t}"]`).value !== 'no'), sepT = tutte.filter(t => d.querySelector(`[data-po="${t}"]`).value === 'sep');
+        const tutte = S.TARIFFE.map(t => t.key), offT = tutte.filter(t => !['no', 'escl'].includes(d.querySelector(`[data-po="${t}"]`).value)), esclT = tutte.filter(t => d.querySelector(`[data-po="${t}"]`).value === 'escl'), sepT = tutte.filter(t => d.querySelector(`[data-po="${t}"]`).value === 'sep');
         o0.predef = offT.length > 0; if (!offT.length || offT.length === tutte.length) delete o0.predefTar; else o0.predefTar = offT;
+        if (esclT.length) o0.esclTar = esclT; else delete o0.esclTar;
         delete o0.quota; if (sepT.length) { o0.quotaTar = {}; sepT.forEach(t => { o0.quotaTar[t] = 'separato'; }); } else delete o0.quotaTar;
         let carV = null; if (S.isVoceKey(k)) carV = carDi('*'); else { const cs = tutte.map(carDi); o0.carico = cs[0]; o0.incluso = cs[0] !== 'parte'; if (cs.every(c => c === cs[0])) delete o0.caricoTar; else { o0.caricoTar = {}; tutte.forEach((t, i) => { o0.caricoTar[t] = cs[i]; }); } }
         return { o0, acqK, err, carV }; };
@@ -2191,7 +2192,7 @@ window.SDBStore.ready.then(function () {
         if (S.isVoceKey(k)) drawCat(); else drawSrv(); toast('Salvato'); };
       const carDi = t => (d.querySelector(`[data-pc="${t}"]`) || d.querySelector('[data-pc="*"]')).value;
       const opzOff = t => { const sl = d.querySelector(`[data-po="${t}"]`), v0 = sl.value || sl.dataset.v, cl = carDi(t) === 'parte';
-        sl.innerHTML = (cl ? [['no', 'Non di default'], ['tot', 'Totale unico'], ['sep', 'A parte']] : [['no', 'Non di default'], ['tot', 'Offerto']]).map(([v1, l]) => `<option value="${v1}">${l}</option>`).join('');
+        sl.innerHTML = (cl ? [['no', 'Non di default'], ['tot', 'Totale unico'], ['sep', 'A parte']] : [['no', 'Non di default'], ['tot', 'Offerto']]).concat(S.isVoceKey(k) ? [] : [['escl', 'Non incluso']]).map(([v1, l]) => `<option value="${v1}">${l}</option>`).join('');
         sl.value = !cl && v0 === 'sep' ? 'tot' : v0; };
       S.TARIFFE.forEach(t => opzOff(t.key));
       d.querySelector('.pv-pt').addEventListener('change', e => { const c = e.target.closest('[data-pc]'); if (!c) return; S.TARIFFE.forEach(t => { if (c.dataset.pc === '*' || c.dataset.pc === t.key) opzOff(t.key); }); });
