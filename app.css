@@ -1585,3 +1585,10 @@ html { overflow-x: clip; }
 .sec-prop { --sec-bg: #eaf1ec; --sec-ink: #3f6b4e; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .sec-prop { --sec-bg: #1c2a21; --sec-ink: #a9d3b6; } }
 :root[data-theme="dark"] .sec-prop { --sec-bg: #1c2a21; --sec-ink: #a9d3b6; }
+/* scheda villa: servizi compresi tutto / in parte */
+.v-srv { display: flex; flex-direction: column; gap: 6px; }
+.v-srv-i { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 4px 0; }
+.v-srv-i.on { padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+.v-srv-qs { display: flex; flex-wrap: wrap; gap: 6px 14px; flex-basis: 100%; }
+.v-srv-q { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+.v-srv-q input[inputmode] { width: 70px; text-align: right; }

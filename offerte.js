@@ -91,7 +91,7 @@
     // prezzo di un servizio per una villa: quello scritto qui nell'offerta (uguale per tutte), altrimenti quello della scheda villa, altrimenti Impostazioni
     // prezzo "di base" (senza modifiche nell'offerta): scheda villa, altrimenti Impostazioni; se settimanale, sulle settimane del periodo
     const prezzoSrvBase = (v, k) => { const pe = v ? perOf(v) : null, notti = pe && pe.from && pe.to ? S.diffDays(pe.from, pe.to) : 0;
-      const tempo = { giorni: giorniOre(k, pe), settimane: settOre(k), ore: oreH(k) };
+      const tempo = { giorni: giorniOre(k, pe), settimane: settOre(k), ore: oreH(k), villa: v };
       const pv = (v && v.prezziServizi || {})[k]; if (typeof pv === 'number') return S.srvPrezzo(st, k, pv, notti, tempo); const d = (st.prezziServizi || {})[k] || {};
       return S.srvPrezzoV(st, k, typeof d.vendita === 'number' ? d.vendita : null, notti, Object.assign({ villa: v, ospiti: ospK(k), over: o.srvOre[k] }, tempo)); };
     // servizi a ore: giorni della settimana in cui c'è il servizio (o.srvOre[k]._gg = [0..6], 0 = domenica; mancante = tutti) → giorni del soggiorno che cadono in quei giorni
@@ -133,6 +133,11 @@
     // servizi a ore (es. cuoco): il nome segue le figure presenti per gli ospiti della villa ("Chef and Butler")
     const figOff = (k, v) => S.oreCalc(st, k, 7, { villa: v, ospiti: ospK(k), over: o.srvOre[k] }).righe;
     // ore previste nell'offerta per i servizi a ore: "Chef 6 h/giorno × 14 gg = 84 h; Butler …" (per la prenotazione)
+    // parte compresa dal proprietario (solo uso interno: nella mail il servizio è intero)
+    const parteTxt = (v, k) => { const p = S.inclParte(v, k); if (!p) return ''; const u = S.srvUnita(st, k), nq = z => String(z).replace('.', ',');
+      const uni = S.isOre(st, k) ? (S.oreOrarie(st, k) ? 'h/giorno' : u.giornaliero ? 'gg' : u.settimanale ? 'sett.' : '') : u.orario ? 'h' : u.giornaliero ? 'gg' : u.settimanale ? 'sett.' : '';
+      const z = S.isOre(st, k) ? S.figureDi(st, k).filter(f => (p.fig || {})[f.id]).map(f => `${f.it} ${uni ? nq(p.fig[f.id]) + ' ' + uni : 'compreso'}`).join(', ') : `${nq(p.q)} ${uni}`;
+      return z ? 'A carico del proprietario: ' + z : ''; };
     const oreTxt = (k, v) => { if (!S.isOre(st, k) || S.isGiorn(st, k)) return null; const pe = perOf(v), n = pe && pe.from && pe.to ? S.diffDays(pe.from, pe.to) : 7;
       const r = S.oreCalc(st, k, n, { villa: v, ospiti: ospK(k), over: o.srvOre[k], giorni: giorniOre(k, pe), settimane: settOre(k) });
       const un = r.unita === 'settimana' ? 'sett.' : r.unita === 'soggiorno' ? '' : 'gg', uh = r.unita === 'settimana' ? 'h/sett.' : r.unita === 'soggiorno' ? 'h' : 'h/giorno';
@@ -203,7 +208,7 @@
     // o messo "a parte", il listino si rifà con la stessa formula (agenzia e arrotondamento) senza quel servizio
     const inListinoOff = (v, k) => S.predefSet(st, k, o.tariff) && S.quotaTarDi(st, k, o.tariff) === 'totale' && S.caricoDef(st, v, k, o.tariff) === 'parte';
     const prezzoListinoSrv = (v, k) => { const n = (S.TAR_SETT[o.tariff] || 1) * 7, pv = (v.prezziServizi || {})[k], d = (st.prezziServizi || {})[k] || {};
-      const z = typeof pv === 'number' ? S.srvPrezzo(st, k, pv, n) : S.srvPrezzoV(st, k, typeof d.vendita === 'number' ? d.vendita : null, n, { villa: v }); return typeof z === 'number' ? z : 0; };
+      const z = typeof pv === 'number' ? S.srvPrezzo(st, k, pv, n, { villa: v }) : S.srvPrezzoV(st, k, typeof d.vendita === 'number' ? d.vendita : null, n, { villa: v }); return typeof z === 'number' ? z : 0; };
     const srvToltiListino = v => srvList().filter(x => inListinoOff(v, x.key) && (!srvDi(x.key).on || !inclusoPer(v, x.key)));
     const listinoOf = v => { const x = S.priceAt(v, o.tariff, o.idx, 'listino'); const p = v.pricing && v.pricing[o.tariff];
       if (typeof x !== 'number' || !p) return x; const tolti = srvToltiListino(v); if (!tolti.length) return x;
@@ -426,7 +431,7 @@
       $('#off-riep').innerHTML = vv.length ? vv.map(v => ogniP(pi => { const pr = prezzoDi(v), et = extraTot(v), inc = srvInclVilla(v), ag = srvAparte(v), li = listinoOf(v);
         const affIn = `<input class="off-rp" data-rp="${esc(v.id)}" inputmode="numeric" value="${esc(o.prezzi[v.id] !== undefined ? o.prezzi[v.id] : typeof li === 'number' ? String(li) : '')}" placeholder="su richiesta">${typeof li === 'number' && pr !== null && pr !== li ? `<small class="note off-mod">listino ${esc(S.money(li))}</small>` : ''}`;
         const rsIn = x => { const b0 = prezzoSrvBase(v, x.key), cur = (o.srvVilla[v.id] || {})[x.key]; const val0 = cur !== undefined ? cur : typeof x.eur === 'number' ? String(x.eur) : '';
-          return `<label class="off-rs-l"><span>${esc(x.label)}</span><input class="off-rs" data-rs="${esc(v.id)}|${esc(x.key)}" inputmode="numeric" value="${esc(val0)}" placeholder="—">${typeof b0 === 'number' && typeof x.eur === 'number' && x.eur !== b0 ? `<small class="note off-mod">scheda ${esc(S.money(b0))}</small>` : ''}</label>`; };
+          return `<label class="off-rs-l"><span>${esc(x.label)}${S.inclParte(v, x.key) ? ` <small class="note" title="${esc(parteTxt(v, x.key))}">· in parte proprietario</small>` : ''}</span><input class="off-rs" data-rs="${esc(v.id)}|${esc(x.key)}" inputmode="numeric" value="${esc(val0)}" placeholder="—">${typeof b0 === 'number' && typeof x.eur === 'number' && x.eur !== b0 ? `<small class="note off-mod">scheda ${esc(S.money(b0))}</small>` : ''}</label>`; };
         const tag = k => { const c = S.caricoDef(st, v, k, o.tariff); return c === 'proprietario' ? ' <small class="note">· proprietario</small>' : c === 'esmeralda' ? ' <small class="note">· omaggio</small>' : ''; };
         // listino: i servizi che di norma (Impostazioni, scheda villa) sono già compresi in questo periodo; barrati se tolti o messi a parte in questa offerta
         const isDef = k => S.predefSet(st, k) && S.predefSet(st, k, o.tariff) && inclVilla(v, k);
@@ -846,7 +851,7 @@
               voci: srvList().filter(x => x.voce && haServ(v, x.key)).map(x => x.label),
               // servizi dell'offerta per la prenotazione (Prenota): carico e prezzo di vendita (solo a carico del cliente)
               srvPren: srvList().filter(x => !x.voce && inOfferta(v, x.key)).map(x => { const c = caricoOff(v, x.key), pr = prezzoSrv(v, x.key);
-                return { k: x.key, carico: c, vendita: c === 'parte' && typeof pr === 'number' ? pr : null, incluso: inclusoPer(v, x.key), quota: c === 'parte' ? (inclusoPer(v, x.key) ? 'totale' : quotaOff(x.key)) : null, ore: oreTxt(x.key, v), oreH: S.srvUnita(st, x.key).orario ? (oreH(x.key) ?? (((st.prezziServizi || {})[x.key] || {}).ore || null)) : null }; }),
+                return { k: x.key, carico: c, vendita: c === 'parte' && typeof pr === 'number' ? pr : null, incluso: inclusoPer(v, x.key), quota: c === 'parte' ? (inclusoPer(v, x.key) ? 'totale' : quotaOff(x.key)) : null, ore: oreTxt(x.key, v), parte: parteTxt(v, x.key) || null, oreH: S.srvUnita(st, x.key).orario ? (oreH(x.key) ?? (((st.prezziServizi || {})[x.key] || {}).ore || null)) : null }; }),
               servizi: srvAparte(v).map(x => { const b0 = prezzoSrvBase(v, x.key); return { k: x.key, label: x.label, prezzo: typeof x.eur === 'number' ? x.eur : null, base: typeof b0 === 'number' ? b0 : null }; }) }; });
     async function salvaStorico(tipo, html) {
       if (!store.saveOfferta) return;
@@ -977,7 +982,7 @@
         const srvPre = {}; let venSrv = 0;
         if (sp) { srvPre.serviziDett = {}; srvPre.servizi = [];
           sp.forEach(q => { if (base.includes(q.k)) srvPre[q.k] = true; else srvPre.servizi.push(q.k);
-            srvPre.serviziDett[q.k] = { carico: q.carico, incluso: q.carico !== 'parte', acquisto: null, vendita: q.vendita, quota: q.carico === 'parte' ? (q.quota === 'separato' ? 'separato' : 'totale') : null, orePreviste: q.ore || null, ore: typeof q.oreH === 'number' ? q.oreH : null, note: '' }; if (typeof q.vendita === 'number') venSrv += q.vendita; }); }
+            srvPre.serviziDett[q.k] = { carico: q.carico, incluso: q.carico !== 'parte', acquisto: null, vendita: q.vendita, quota: q.carico === 'parte' ? (q.quota === 'separato' ? 'separato' : 'totale') : null, orePreviste: q.ore || null, ore: typeof q.oreH === 'number' ? q.oreH : null, note: q.parte || '' }; if (typeof q.vendita === 'number') venSrv += q.vendita; }); }
         const tot = typeof z.r.prezzo === 'number' ? z.r.prezzo : null, aff = tot == null ? undefined : sp ? Math.max(0, tot - venSrv) : tot;
         ctx.openBooking({ villaId: z.v.id, from, to,
           pre: Object.assign({ cliente: x.cliente || '', telefono: x.telefono || null, email: x.email || null, leader: x.cliente || x.telefono ? { nome: x.cliente || '', tel: x.telefono || '' } : null, ospiti: (() => { const a = x.stato ? Object.values(x.stato.srvOsp || {}).map(Number).filter(n => n > 0) : []; return a.length ? Math.max(...a) : x.stato && Number(x.stato.ospiti) > 0 ? Number(x.stato.ospiti) : null; })(), status: stato, prezzoVendita: aff, ...((() => { const id = x.agenziaId || (x.stato && x.stato.agenziaId); const a = id && (st.agenzie || []).find(y => y && y.id === id); return a ? { agenziaId: a.id, agenziaPerc: Number(a.perc) || 0 } : {}; })()), vociOfferta: Array.isArray(z.r.voci) ? z.r.voci : undefined, note: `Da offerta del ${dataBreve(x.quando)}${x.email ? ' · ' + x.email : ''}${x.telefono ? ' · ' + x.telefono : ''}` }, srvPre),

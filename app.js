@@ -134,7 +134,7 @@ window.SDBStore.ready.then(function () {
   const speseAuto = (v, t) => { const st = settings(), n = (S.TAR_SETT[t] || 1) * 7, det = []; let tot = 0;
     servizi(st.servizi).concat(vociPrezzo(st)).forEach(x => { if (!inListino(st, v, x.key, t)) return; const pv = (v.prezziServizi || {})[x.key], d = (st.prezziServizi || {})[x.key] || {};
       // prezzo della scheda villa così com'è; altrimenti quello di Impostazioni adattato alla villa (località, gruppi o fasce su capienza e camere)
-      const pz = typeof pv === 'number' ? S.srvPrezzo(st, x.key, pv, n) : S.srvPrezzoV(st, x.key, typeof d.vendita === 'number' ? d.vendita : null, n, { villa: v }); if (typeof pz !== 'number') { det.push([x.label, null]); return; } tot += pz; det.push([x.label, pz]); });
+      const pz = typeof pv === 'number' ? S.srvPrezzo(st, x.key, pv, n, { villa: v }) : S.srvPrezzoV(st, x.key, typeof d.vendita === 'number' ? d.vendita : null, n, { villa: v }); if (typeof pz !== 'number') { det.push([x.label, null]); return; } tot += pz; det.push([x.label, pz]); });
     return { tot, det }; };
   const applicaSpese = v => { if (!speseAutoOn() || !v || !v.pricing) return false; let ch = false;
     S.TARIFFE.forEach(t => { const p = v.pricing[t.key]; if (!p) return; const s0 = speseAuto(v, t.key).tot; if (p.spese !== s0) { p.spese = s0; ch = true; } }); return ch; };
@@ -1418,8 +1418,8 @@ window.SDBStore.ready.then(function () {
       </div>
       <section class="card"><h2>Caratteristiche</h2><div class="grid">${FIELDS.caratteristiche.map(([k, l]) => inp(k, l)).join('')}</div></section>
       <section class="card"><h2>Servizi compresi nel prezzo</h2>
-        <p class="note">Spunta i servizi che in questa villa sono <b>a carico del proprietario</b> (compresi nel suo prezzo): nelle Offerte risultano inclusi e non si sommano, non entrano nelle spese servizi del listino e nella prenotazione partono come "A carico del proprietario". Gli altri seguono Impostazioni → Servizi (A carico di Esmeralda / A parte).</p>
-        <div class="v-srv" id="v-srv">${servizi(settings().servizi).map(x => `<label class="flag"><input type="checkbox" data-vsrv="${esc(x.key)}" ${(v.serviziInclusi || []).includes(x.key) ? 'checked' : ''} ${ro ? 'disabled' : ''}><span><b>${esc(x.label)}</b></span></label>`).join('')}</div>
+        <p class="note">Spunta i servizi che in questa villa sono <b>a carico del proprietario</b> (compresi nel suo prezzo). <b>Tutto</b>: nelle Offerte risultano inclusi e non si sommano, non entrano nelle spese servizi del listino e nella prenotazione partono come "A carico del proprietario". <b>In parte</b>: scrivi quanto dà il proprietario (es. governante 3 h al giorno); nelle Offerte il servizio si propone intero e il cliente paga solo la differenza (al cliente non si vede). Gli altri seguono Impostazioni → Servizi.</p>
+        <div class="v-srv" id="v-srv"></div>
       </section>
       <section class="card v-media"><h2>Link e media</h2><div class="grid wide">${FIELDS.link.filter(([k]) => !hiddenField(k)).map(([k, l]) => linkInp(k, l)).join('')}</div>
         <div class="v-sub" id="v-photos"><h3>Foto</h3>
@@ -1451,9 +1451,23 @@ window.SDBStore.ready.then(function () {
       clearTimeout(saveT); $('#saved').textContent = 'Modifiche in corso…';
       saveT = setTimeout(() => { store.upsertVilla(JSON.parse(JSON.stringify(v))); $('#saved').textContent = 'Salvato'; }, 350);
     };
-    $$('[data-vsrv]').forEach(el => el.addEventListener('change', () => {
-      v.serviziInclusi = $$('[data-vsrv]').filter(x => x.checked).map(x => x.dataset.vsrv); applicaSpese(v); save(); if ($('#prices')) drawPrices();
-    }));
+    // servizi compresi: tutto o in parte (villas.inclusiParte[k] = { q } o { fig: { idFigura: q } }, nell'unità del servizio)
+    const drawVsrv = () => { const stS = settings(); $('#v-srv').innerHTML = servizi(stS.servizi).map(x => { const k = x.key, on = (v.serviziInclusi || []).includes(k), p = (v.inclusiParte || {})[k], parte = on && !!p, u = S.srvUnita(stS, k), pers = S.isOre(stS, k);
+        const uni = pers ? (S.oreOrarie(stS, k) ? 'h al giorno' : u.giornaliero ? 'giorni' : u.settimanale ? 'settimane' : '') : u.orario ? 'ore' : u.giornaliero ? 'giorni' : u.settimanale ? 'settimane' : '';
+        const nq = z => typeof z === 'number' ? String(z).replace('.', ',') : '';
+        const campi = !parte ? '' : pers ? S.figureDi(stS, k).map(f => uni ? `<label class="v-srv-q"><span>${esc(f.it)}</span><input data-vpf="${esc(k)}|${esc(f.id)}" inputmode="decimal" value="${esc(nq((p.fig || {})[f.id]))}" placeholder="0" ${ro ? 'disabled' : ''}> ${uni}</label>` : `<label class="flag v-srv-q"><input type="checkbox" data-vpc="${esc(k)}|${esc(f.id)}" ${(p.fig || {})[f.id] ? 'checked' : ''} ${ro ? 'disabled' : ''}><span>${esc(f.it)} compreso</span></label>`).join('')
+          : uni ? `<label class="v-srv-q"><span>Dà il proprietario</span><input data-vpq="${esc(k)}" inputmode="decimal" value="${esc(nq(p.q))}" placeholder="0" ${ro ? 'disabled' : ''}> ${uni}</label>` : '<small class="note">a soggiorno: o tutto o niente</small>';
+        return `<div class="v-srv-i${on ? ' on' : ''}"><label class="flag"><input type="checkbox" data-vsrv="${esc(k)}" ${on ? 'checked' : ''} ${ro ? 'disabled' : ''}><span><b>${esc(x.label)}</b></span></label>${on ? `<div class="seg small v-srv-m" data-vpm="${esc(k)}">${[['tutto', 'Tutto'], ['parte', 'In parte']].map(([m, l]) => `<button type="button" data-m="${m}" class="${(m === 'parte') === parte ? 'on' : ''}" ${ro ? 'disabled' : ''}>${l}</button>`).join('')}</div>${campi ? `<div class="v-srv-qs">${campi}</div>` : ''}` : ''}</div>`; }).join(''); };
+    drawVsrv();
+    const vsrvSalva = () => { applicaSpese(v); save(); if ($('#prices')) drawPrices(); };
+    $('#v-srv').addEventListener('change', e => { const c = e.target.closest('[data-vsrv]'); if (c) { v.serviziInclusi = $$('[data-vsrv]').filter(x => x.checked).map(x => x.dataset.vsrv); if (!c.checked && v.inclusiParte) delete v.inclusiParte[c.dataset.vsrv]; drawVsrv(); vsrvSalva(); return; }
+      const fc = e.target.closest('[data-vpc]'); if (fc) { const [k, id] = fc.dataset.vpc.split('|'), p = v.inclusiParte[k]; p.fig = p.fig || {}; if (fc.checked) p.fig[id] = 1; else delete p.fig[id]; vsrvSalva(); return; }
+      const q = e.target.closest('[data-vpq],[data-vpf]'); if (!q) return; const n = String(q.value).trim().replace(',', '.'), val = n !== '' && Number(n) >= 0 ? Number(n) : null;
+      if (q.dataset.vpq) { const p = v.inclusiParte[q.dataset.vpq]; if (val == null) delete p.q; else p.q = val; }
+      else { const [k, id] = q.dataset.vpf.split('|'), p = v.inclusiParte[k]; p.fig = p.fig || {}; if (val == null) delete p.fig[id]; else p.fig[id] = val; }
+      vsrvSalva(); });
+    $('#v-srv').addEventListener('click', e => { const b = e.target.closest('[data-vpm] button'); if (!b) return; const k = b.closest('[data-vpm]').dataset.vpm; v.inclusiParte = v.inclusiParte || {};
+      if (b.dataset.m === 'parte') v.inclusiParte[k] = v.inclusiParte[k] || {}; else delete v.inclusiParte[k]; drawVsrv(); vsrvSalva(); });
     $$('[data-k]').forEach(el => el.addEventListener('input', () => {
       v[el.dataset.k] = el.value;
       if (el.dataset.k === 'name') $('#v-title').textContent = el.value || 'Senza nome';
@@ -1564,7 +1578,7 @@ window.SDBStore.ready.then(function () {
     // servizi non compresi nel prezzo: prezzo di vendita per questa villa (vuoto = predefinito di Impostazioni). Le Offerte lo usano.
     function srvPrezziHtml(sola) {
       const def = k => { const d = (st.prezziServizi || {})[k] || {}; const p = S.srvAdatta(st, k, typeof d.vendita === 'number' ? d.vendita : null, { villa: v }); return typeof p === 'number' ? p : null; };
-      const l = servizi(st.servizi).filter(x => !(v.serviziInclusi || []).includes(x.key));
+      const l = servizi(st.servizi).filter(x => !(v.serviziInclusi || []).includes(x.key) || S.inclParte(v, x.key));
       if (!l.length) return '';
       return `<div class="v-sub"><h3>Servizi non compresi nel prezzo</h3>
         <p class="note">Prezzo di vendita di ogni servizio per questa villa. Vuoto = prezzo predefinito di Impostazioni → Servizi e inclusioni. Le Offerte usano questi prezzi. I servizi compresi si scelgono in "Servizi compresi nel prezzo".</p>
